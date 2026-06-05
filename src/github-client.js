@@ -94,11 +94,15 @@ async function fetchTrelloUrl(repoFullName, prNumber) {
     try {
         const comments = await runGh(['api', `repos/${repoFullName}/issues/${prNumber}/comments`]);
         for (const comment of comments) {
-            const match = comment.body?.match(/https?:\/\/trello\.com\/\S+/);
-            if (match) { return match[0]; }
+            const match = comment.body?.match(/https?:\/\/trello\.com\/[^\s<>"']+/);
+            if (match) { return cleanTrailingUrlPunctuation(match[0]); }
         }
     } catch { /* ignore */ }
     return null;
+}
+
+function cleanTrailingUrlPunctuation(url) {
+    return url.replace(/[),.;:!?]+$/g, '');
 }
 
 module.exports = { fetchPrForSha };
