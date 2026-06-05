@@ -1,0 +1,37 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('kubeDashboard', {
+    fetchDeployments: async (config) => {
+        const response = await ipcRenderer.invoke('deployments:fetch', config);
+        if (!response.ok) {
+            throw response.error;
+        }
+        return response.result;
+    },
+    fetchPrForSha: async (sha, repoName, org) => {
+        const response = await ipcRenderer.invoke('pr:fetchForSha', sha, repoName, org);
+        if (!response.ok) { throw response.error; }
+        return response.result;
+    },
+    fetchFailedStep: async (config) => {
+        const response = await ipcRenderer.invoke('pipeline:failedStep', config);
+        if (!response.ok) { throw response.error; }
+        return response.result;
+    },
+    fetchPipelineRuns: async (config) => {
+        const response = await ipcRenderer.invoke('pipelines:fetch', config);
+        if (!response.ok) { throw response.error; }
+        return response.result;
+    },
+    fetchNamespaces: async (context) => {
+        const response = await ipcRenderer.invoke('namespaces:fetch', context);
+        if (!response.ok) { throw response.error; }
+        return response.result;
+    },
+    fetchContexts: async () => {
+        const response = await ipcRenderer.invoke('contexts:fetch');
+        if (!response.ok) { throw response.error; }
+        return response.result;
+    },
+    openExternal: (url) => ipcRenderer.invoke('external:open', url),
+});

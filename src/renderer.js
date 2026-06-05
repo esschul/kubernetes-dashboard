@@ -1,0 +1,750 @@
+'use strict';
+
+const STORAGE_KEYS = {
+    config: 'kube-dashboard:config',
+    activeFilter: 'kube-dashboard:filter',
+    sidebarCollapsed: 'kube-dashboard:sidebar-collapsed',
+    theme: 'kube-dashboard:theme',
+};
+
+// --- State ---
+let activeFilter = readStoredJson(STORAGE_KEYS.activeFilter, 'all');
+let refreshInProgress = false;
+let latestDeployments = [];
+const prCache = new Map(); // key: `${depName}/${gitSha}` → pr object or null
+let renderGeneration = 0;  // incremented on every render; guards stale async injections
+
+// --- Storage helpers ---
+function readStoredJson(key, fallback) {
+    try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+function loadConfig() {
+    return readStoredJson(STORAGE_KEYS.config, { context: '', namespace: '' });
+}
+
+function saveConfig(config) {
+    localStorage.setItem(STORAGE_KEYS.config, JSON.stringify(config));
+}
+
+// --- Theme ---
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    document.getElementById('themeToggle').textContent = theme === 'dark' ? '☀' : '☾';
+}
+
+const storedTheme = localStorage.getItem(STORAGE_KEYS.theme) || 'light';
+applyTheme(storedTheme);
+
+document.getElementById('themeToggle').addEventListener('click', () => {
+    const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    localStorage.setItem(STORAGE_KEYS.theme, next);
+    applyTheme(next);
+});
+
+// --- Sidebar collapse ---
+const appShell = document.getElementById('appShell');
+const sidebarToggle = document.getElementById('sidebarToggle');
+
+if (readStoredJson(STORAGE_KEYS.sidebarCollapsed, false)) {
+    appShell.classList.add('is-sidebar-collapsed');
+    sidebarToggle.textContent = '›';
+}
+
+sidebarToggle.addEventListener('click', () => {
+    const collapsed = appShell.classList.toggle('is-sidebar-collapsed');
+    sidebarToggle.textContent = collapsed ? '›' : '‹';
+    localStorage.setItem(STORAGE_KEYS.sidebarCollapsed, JSON.stringify(collapsed));
+});
+
+// --- Navigation ---
+document.querySelectorAll('.nav-item[data-view]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+        switchView(btn.dataset.view);
+    });
+});
+
+function switchView(view) {
+    document.querySelectorAll('.nav-item[data-view]').forEach((btn) => {
+        btn.classList.toggle('is-active', btn.dataset.view === view);
+    });
+    document.querySelectorAll('.view').forEach((el) => {
+        el.classList.toggle('hidden', el.id !== `${view}View`);
+    });
+    if (view === 'settings') {
+        populateSettingsForm().catch(() => {});
+    }
+    if (view === 'pipelines') {
+        refreshPipelines();
+    }
+}
+
+// --- Filter bar ---
+document.querySelectorAll('.filter-chip[data-filter]').forEach((chip) => {
+    chip.addEventListener('click', () => {
+        activeFilter = chip.dataset.filter;
+        localStorage.setItem(STORAGE_KEYS.activeFilter, JSON.stringify(activeFilter));
+        document.querySelectorAll('.filter-chip[data-filter]').forEach((c) => {
+            c.classList.toggle('is-active', c.dataset.filter === activeFilter);
+        });
+        renderDeploymentList(latestDeployments);
+    });
+});
+
+// Restore active filter chip
+document.querySelectorAll('.filter-chip[data-filter]').forEach((c) => {
+    c.classList.toggle('is-active', c.dataset.filter === activeFilter);
+});
+
+// --- Settings form ---
+async function populateSettingsForm() {
+    const config = loadConfig();
+    document.getElementById('githubOrgInput').value = config.githubOrg || '';
+    document.getElementById('azureOrgInput').value = config.azureOrg || '';
+    document.getElementById('azureProjectInput').value = config.azureProject || '';
+    const contextSelect = document.getElementById('contextInput');
+
+    try {
+        const contexts = await window.kubeDashboard.fetchContexts();
+        contextSelect.innerHTML = '<option value="">(current context)</option>';
+        for (const ctx of contexts) {
+            const opt = document.createElement('option');
+            opt.value = ctx;
+            opt.textContent = ctx;
+            contextSelect.appendChild(opt);
+        }
+    } catch {
+        // Leave the dropdown with just the default option if kubectl fails
+    }
+
+    contextSelect.value = config.context || '';
+    await populateNamespaces(config.context || '', config.namespace || '');
+}
+
+document.getElementById('contextInput').addEventListener('change', (e) => {
+    const currentNs = document.getElementById('namespaceInput').value;
+    populateNamespaces(e.target.value, currentNs).catch(() => {});
+});
+
+async function populateNamespaces(context, selectedNamespace = '') {
+    const nsSelect = document.getElementById('namespaceInput');
+    nsSelect.innerHTML = '<option value="">(all namespaces)</option>';
+    nsSelect.disabled = true;
+
+    try {
+        const namespaces = await window.kubeDashboard.fetchNamespaces(context);
+        for (const ns of namespaces) {
+            const opt = document.createElement('option');
+            opt.value = ns;
+            opt.textContent = ns;
+            nsSelect.appendChild(opt);
+        }
+        nsSelect.value = selectedNamespace;
+    } catch {
+        // Leave just the default option
+    } finally {
+        nsSelect.disabled = false;
+    }
+}
+
+document.getElementById('saveSettings').addEventListener('click', () => {
+    const config = {
+        context: document.getElementById('contextInput').value.trim(),
+        namespace: document.getElementById('namespaceInput').value.trim(),
+        githubOrg: document.getElementById('githubOrgInput').value.trim(),
+        azureOrg: document.getElementById('azureOrgInput').value.trim(),
+        azureProject: document.getElementById('azureProjectInput').value.trim(),
+    };
+    saveConfig(config);
+    updateContextLabel(config);
+    switchView('deployments');
+    refresh();
+});
+
+function updateContextLabel(config) {
+    const label = document.getElementById('contextLabel');
+    const parts = [];
+    if (config.context) { parts.push(config.context); }
+    if (config.namespace) { parts.push(config.namespace); }
+    label.textContent = parts.length ? parts.join(' / ') : 'Current context';
+}
+
+// --- Refresh logic ---
+document.getElementById('refreshButton').addEventListener('click', () => {
+    if (!refreshInProgress) { refresh(); }
+});
+
+async function refresh() {
+    if (refreshInProgress) { return; }
+    refreshInProgress = true;
+    document.getElementById('refreshButton').disabled = true;
+    setStatus('Refreshing…');
+
+    const config = loadConfig();
+    try {
+        const deployments = await window.kubeDashboard.fetchDeployments(config);
+        latestDeployments = deployments;
+        renderDeploymentList(deployments);
+        updateCounts(deployments);
+        const now = new Date().toLocaleTimeString();
+        setStatus(`Last refreshed at ${now} · ${deployments.length} deployment${deployments.length !== 1 ? 's' : ''}`);
+    } catch (err) {
+        showError(err);
+        setStatus('Refresh failed');
+    } finally {
+        refreshInProgress = false;
+        document.getElementById('refreshButton').disabled = false;
+    }
+}
+
+function setStatus(text) {
+    document.getElementById('statusPanel').textContent = text;
+}
+
+function showError(err) {
+    const list = document.getElementById('deploymentList');
+    const msg = err?.message || String(err);
+    const details = err?.details ? `\n\n${err.details}` : '';
+    list.innerHTML = `<div class="error-panel"><strong>Failed to fetch deployments</strong><pre>${escapeHtml(msg + details)}</pre></div>`;
+}
+
+// --- Counts ---
+function updateCounts(deployments) {
+    const failing = deployments.filter((d) => isFailingStatus(d.status)).length;
+    const count = document.getElementById('deploymentsCount');
+    if (failing > 0) {
+        count.textContent = `${failing} failing`;
+        count.style.background = '#ffe0de';
+        count.style.color = '#b42318';
+    } else {
+        count.textContent = deployments.length;
+        count.style.background = '';
+        count.style.color = '';
+    }
+}
+
+function isFailingStatus(status) {
+    return ['error', 'crash-loop', 'failed', 'unavailable'].includes(status);
+}
+
+// --- Filter ---
+function matchesFilter(dep) {
+    if (activeFilter === 'all') { return true; }
+    if (activeFilter === 'healthy') { return dep.status === 'healthy'; }
+    if (activeFilter === 'failing') { return isFailingStatus(dep.status); }
+    if (activeFilter === 'progressing') { return dep.status === 'progressing'; }
+    if (activeFilter === 'scaled-down') { return dep.status === 'scaled-down'; }
+    return true;
+}
+
+// --- Pipeline card clicks ---
+document.getElementById('pipelineList').addEventListener('click', (e) => {
+    const card = e.target.closest('.pipeline-card');
+    if (card?.dataset.url) { window.kubeDashboard.openExternal(card.dataset.url); }
+});
+
+// --- Card expand/collapse + PR links ---
+document.getElementById('deploymentList').addEventListener('click', (e) => {
+    // Handle PR link clicks without toggling expand
+    const link = e.target.closest('.pr-row-link, .trello-link');
+    if (link) {
+        e.stopPropagation();
+        window.kubeDashboard.openExternal(link.dataset.url);
+        return;
+    }
+
+    const card = e.target.closest('.deployment-card');
+    if (!card) { return; }
+    const expand = card.querySelector('.pod-expand');
+    const chevron = card.querySelector('.expand-chevron');
+    if (!expand) { return; }
+    const isOpen = !expand.classList.contains('hidden');
+    expand.classList.toggle('hidden', isOpen);
+    if (chevron) { chevron.textContent = isOpen ? '›' : '˅'; }
+    card.classList.toggle('is-expanded', !isOpen);
+});
+
+// --- Rendering ---
+function updateFilterCounts(deployments) {
+    const counts = {
+        all: deployments.length,
+        healthy: deployments.filter((d) => d.status === 'healthy').length,
+        failing: deployments.filter((d) => isFailingStatus(d.status)).length,
+        progressing: deployments.filter((d) => d.status === 'progressing').length,
+    };
+    document.querySelectorAll('.filter-chip[data-filter]').forEach((chip) => {
+        const count = counts[chip.dataset.filter] ?? 0;
+        let span = chip.querySelector('span');
+        if (!span) {
+            span = document.createElement('span');
+            chip.appendChild(span);
+        }
+        span.textContent = count;
+    });
+}
+
+function renderDeploymentList(deployments) {
+    const list = document.getElementById('deploymentList');
+    updateFilterCounts(deployments);
+    const filtered = deployments.filter(matchesFilter);
+
+    if (filtered.length === 0) {
+        const msg = deployments.length === 0
+            ? 'No deployments found. Check your context and namespace in Settings.'
+            : 'No deployments match the current filter.';
+        list.innerHTML = `<p class="empty-state">${msg}</p>`;
+        return;
+    }
+
+    const gen = ++renderGeneration;
+    list.innerHTML = filtered.map(renderDeploymentCard).join('');
+
+    // Stagger PR lookups to avoid hammering the GitHub API.
+    // Cached results (repo already known + PR cached) resolve instantly;
+    // only uncached ones actually hit the network.
+    let delay = 0;
+    for (const dep of filtered) {
+        if (!dep.gitSha || !/^[0-9a-f]{7,}/i.test(dep.gitSha)) { continue; }
+        const cacheKey = `${dep.name}/${dep.gitSha}`;
+        if (prCache.has(cacheKey)) {
+            fetchAndInjectPr(dep, gen);
+        } else {
+            setTimeout(() => fetchAndInjectPr(dep, gen), delay);
+            delay += 400;
+        }
+    }
+}
+
+async function fetchAndInjectPr(dep, gen) {
+    const cacheKey = `${dep.name}/${dep.gitSha}`;
+    const cardKey = `${dep.namespace}/${dep.name}`;
+    const card = document.querySelector(`.deployment-card[data-name="${CSS.escape(cardKey)}"]`);
+    // Bail if a newer render has replaced this card
+    if (!card || gen !== renderGeneration) { return; }
+    // Also verify the card still reflects the same SHA we fetched for
+    if (card.dataset.sha !== dep.gitSha) { return; }
+
+    if (prCache.has(cacheKey)) {
+        const cached = prCache.get(cacheKey);
+        if (cached) {
+            injectPrRow(card, cached, dep.gitSha);
+        } else {
+            const row = card.querySelector('.pr-row');
+            if (row) { row.remove(); }
+        }
+        return;
+    }
+
+    const config = loadConfig();
+    if (!config.githubOrg) {
+        const row = card.querySelector('.pr-row');
+        if (row) { row.remove(); }
+        return;
+    }
+
+    try {
+        const pr = await window.kubeDashboard.fetchPrForSha(dep.gitSha, dep.imageRepoName, config.githubOrg);
+        prCache.set(cacheKey, pr);
+        if (pr) {
+            injectPrRow(card, pr, dep.gitSha);
+        } else {
+            const row = card.querySelector('.pr-row');
+            if (row) { row.remove(); }
+        }
+    } catch (err) {
+        const row = card.querySelector('.pr-row');
+        if (row) {
+            const errStr = String(err?.message ?? err ?? '');
+            const isRateLimit = errStr.includes('rate limit') || errStr.includes('403');
+            row.innerHTML = `<span class="pr-loading">${isRateLimit ? '⏱ GitHub rate limit — will retry on next refresh' : 'Could not load commit info'}</span>`;
+        }
+    }
+}
+
+function injectPrRow(card, pr, sha) {
+    const existing = card.querySelector('.pr-row');
+    if (existing) {
+        existing.innerHTML = renderPrRow(pr, sha);
+        existing.classList.remove('pr-row--loading');
+    } else {
+        const row = document.createElement('div');
+        row.className = 'pr-row';
+        row.innerHTML = renderPrRow(pr, sha);
+        card.querySelector('.deployment-card-top').insertAdjacentElement('afterend', row);
+    }
+
+    // Inject Trello link into the pill row if present
+    const placeholder = card.querySelector('.trello-placeholder');
+    if (placeholder && pr.trelloUrl) {
+        const trello = document.createElement('span');
+        trello.className = 'trello-link';
+        trello.dataset.url = pr.trelloUrl;
+        trello.textContent = 'Trello ↗';
+        placeholder.replaceWith(trello);
+    } else if (placeholder) {
+        placeholder.remove();
+    }
+}
+
+function renderPrRow(pr, sha) {
+    const shortSha = sha ? sha.slice(0, 8) : '';
+    const mergedLabel = pr.mergedAt ? `Merged ${formatRelativeTime(pr.mergedAt)}` : pr.state;
+    return `
+        <div class="pr-row-link" data-url="${escapeHtml(pr.url)}">
+            <span class="pr-title">${escapeHtml(pr.title)}</span>
+            <span class="pr-meta">#${pr.number} · ${escapeHtml(pr.author)} · ${escapeHtml(mergedLabel)} · <code>${escapeHtml(shortSha)}</code></span>
+        </div>`;
+}
+
+function renderDeploymentCard(dep) {
+    const statusClass = dep.status.replace(/[^a-z-]/g, '');
+    const statusLabel = getStatusLabel(dep.status);
+    const deployedLabel = dep.deployedAt ? formatRelativeTime(dep.deployedAt) : 'unknown';
+    const deployedAbsolute = dep.deployedAt ? new Date(dep.deployedAt).toLocaleString() : '';
+    const agePillClass = getAgePillClass(dep.deployedAt);
+    const imageTag = getImageTag(dep.image);
+    const isLocalBuild = imageTag && imageTag.startsWith('local-build');
+    const failuresHtml = dep.failures.length > 0 && dep.status !== 'healthy' ? renderFailures(dep.failures) : '';
+
+    return `
+    <div class="deployment-card" data-name="${escapeHtml(dep.namespace + '/' + dep.name)}" data-sha="${escapeHtml(dep.gitSha || '')}"">
+        <div class="deployment-card-top">
+            <div class="deployment-name-row">
+                <span class="eyebrow-inline">${escapeHtml(dep.namespace)}</span>
+                <h3>${escapeHtml(dep.name)}</h3>
+                ${isLocalBuild ? `<span class="local-build-badge" title="${escapeHtml(dep.image || '')}">local build</span>` : ''}
+            </div>
+            <div class="deployment-pill-row">
+                <span class="trello-placeholder"></span>
+                <span class="status-pill is-${escapeHtml(statusClass)}">${escapeHtml(statusLabel)}</span>
+                <span class="age-pill ${agePillClass}" title="${escapeHtml(deployedAbsolute)}">${escapeHtml(deployedLabel)}</span>
+                <span class="expand-chevron">›</span>
+            </div>
+        </div>
+        ${dep.gitSha && /^[0-9a-f]{7,}/i.test(dep.gitSha) ? `<div class="pr-row pr-row--loading"><span class="pr-loading">Loading commit info…</span></div>` : ''}
+        ${failuresHtml}
+        <div class="pod-expand hidden">
+            ${renderPodTable(dep)}
+        </div>
+    </div>`;
+}
+
+
+function renderPodTable(dep) {
+    if (dep.pods.length === 0) {
+        return '<p class="pod-empty">No pods found</p>';
+    }
+    const rows = dep.pods.map((pod) => {
+        const statusClass = getPodStatusClass(pod.status);
+        const age = pod.startTime ? formatRelativeTime(pod.startTime) : '—';
+        const restartLabel = pod.restarts > 0
+            ? `<span class="pod-restarts">${pod.restarts} restart${pod.restarts !== 1 ? 's' : ''}</span>`
+            : '';
+        return `<div class="pod-row">
+            <span class="pod-name">${escapeHtml(pod.name)}</span>
+            <span class="pod-status ${statusClass}">${escapeHtml(pod.status)}</span>
+            ${restartLabel}
+            <span class="pod-age">${age}</span>
+        </div>`;
+    }).join('');
+    return `<div class="pod-table">${rows}</div>`;
+}
+
+function getPodStatusClass(status) {
+    if (status === 'Running') { return 'is-running'; }
+    if (status === 'Pending' || status === 'ContainerCreating' || status === 'PodInitializing') { return 'is-pending'; }
+    if (status === 'Completed' || status === 'Succeeded') { return 'is-completed'; }
+    return 'is-error';
+}
+
+function renderFailures(failures) {
+    const items = failures.slice(0, 5).map((f) => {
+        if (f.type === 'crash-loop') {
+            return `<li><span class="failure-label">CrashLoopBackOff</span> · ${escapeHtml(f.container)} in ${escapeHtml(f.pod)} · ${f.restarts} restart${f.restarts !== 1 ? 's' : ''}</li>`;
+        }
+        if (f.type === 'oom') {
+            return `<li><span class="failure-label">OOMKilled</span> · ${escapeHtml(f.container)} in ${escapeHtml(f.pod)} · ${f.restarts} restart${f.restarts !== 1 ? 's' : ''}</li>`;
+        }
+        if (f.type === 'image-pull') {
+            return `<li><span class="failure-label">ImagePullBackOff</span> · ${escapeHtml(f.message)}</li>`;
+        }
+        if (f.type === 'event') {
+            const countLabel = f.count > 1 ? ` (×${f.count})` : '';
+            return `<li>${escapeHtml(f.message)}${countLabel}</li>`;
+        }
+        return `<li>${escapeHtml(f.message)}</li>`;
+    });
+    const more = failures.length > 5 ? `<li>…and ${failures.length - 5} more</li>` : '';
+    return `<div class="failures-list"><strong>Issues detected</strong><ul>${items.join('')}${more}</ul></div>`;
+}
+
+// --- Utilities ---
+function escapeHtml(str) {
+    if (!str) { return ''; }
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function getStatusLabel(status) {
+    const labels = {
+        healthy: 'Healthy',
+        progressing: 'Progressing',
+        'crash-loop': 'CrashLoopBackOff',
+        error: 'Error',
+        failed: 'Failed',
+        unavailable: 'Unavailable',
+        'scaled-down': 'Scaled down',
+    };
+    return labels[status] || status;
+}
+
+function getImageTag(image) {
+    if (!image) { return null; }
+    const parts = image.split(':');
+    const tag = parts.length >= 2 ? parts[parts.length - 1] : null;
+    if (!tag) { return null; }
+    // Truncate digest SHAs (sha256:abc123...) to 8 chars
+    if (/^[0-9a-f]{12,}$/i.test(tag)) { return tag.slice(0, 8); }
+    if (tag.startsWith('sha256:')) { return 'sha256:' + tag.slice(7, 15); }
+    return tag;
+}
+
+function formatRelativeTime(isoString) {
+    const now = Date.now();
+    const then = new Date(isoString).getTime();
+    const diffMs = now - then;
+    const diffMin = Math.floor(diffMs / 60_000);
+    if (diffMin < 1) { return 'just now'; }
+    if (diffMin < 60) { return `${diffMin}m ago`; }
+    const diffH = Math.floor(diffMin / 60);
+    if (diffH < 24) { return `${diffH}h ago`; }
+    const diffD = Math.floor(diffH / 24);
+    return `${diffD}d ago`;
+}
+
+
+function getAgePillClass(isoString) {
+    if (!isoString) { return 'age-pill is-none'; }
+    const diffH = (Date.now() - new Date(isoString).getTime()) / 3_600_000;
+    if (diffH < 1) { return 'age-pill is-fresh'; }
+    if (diffH < 24) { return 'age-pill is-notice'; }
+    if (diffH < 72) { return 'age-pill is-warning'; }
+    return 'age-pill is-critical';
+}
+
+// --- Pipelines ---
+let pipelinesRefreshInProgress = false;
+let activePipelineFilter = 'all';
+
+document.getElementById('pipelinesRefreshButton').addEventListener('click', () => {
+    if (!pipelinesRefreshInProgress) { refreshPipelines(); }
+});
+
+document.getElementById('pipelineFilterBar').addEventListener('click', (e) => {
+    const chip = e.target.closest('.filter-chip[data-pipeline-filter]');
+    if (!chip) { return; }
+    activePipelineFilter = chip.dataset.pipelineFilter;
+    document.querySelectorAll('.filter-chip[data-pipeline-filter]').forEach((c) => {
+        c.classList.toggle('is-active', c.dataset.pipelineFilter === activePipelineFilter);
+    });
+    if (window._lastPipelineRuns) { renderPipelineList(window._lastPipelineRuns); }
+});
+
+async function refreshPipelines() {
+    if (pipelinesRefreshInProgress) { return; }
+    pipelinesRefreshInProgress = true;
+    document.getElementById('pipelinesRefreshButton').disabled = true;
+    document.getElementById('pipelinesStatusPanel').textContent = 'Refreshing…';
+
+    const config = loadConfig();
+    try {
+        const runs = await window.kubeDashboard.fetchPipelineRuns({
+            org: config.azureOrg,
+            project: config.azureProject,
+        });
+        renderPipelineList(runs);
+
+        // Count only for the user's team
+        const teamRuns = config.namespace
+            ? runs.filter((r) => r.team === config.namespace)
+            : runs;
+
+        // Deduplicate by pipeline name (latest run per pipeline)
+        const latestByName = new Map();
+        for (const r of teamRuns) {
+            if (!latestByName.has(r.name)) { latestByName.set(r.name, r); }
+        }
+        const teamPipelines = [...latestByName.values()];
+
+        const failed = teamPipelines.filter((r) => r.result === 'failed').length;
+        const running = teamPipelines.filter((r) => r.status === 'inProgress').length;
+        const now = new Date().toLocaleTimeString();
+        document.getElementById('pipelinesStatusPanel').textContent =
+            `Last refreshed at ${now} · ${teamPipelines.length} pipeline${teamPipelines.length !== 1 ? 's' : ''} today`;
+        const count = document.getElementById('pipelinesCount');
+        if (failed > 0) {
+            count.textContent = `${failed} failed`;
+            count.style.background = '#ffe0de';
+            count.style.color = '#b42318';
+        } else if (running > 0) {
+            count.textContent = `${running} running`;
+            count.style.background = '#fff6d9';
+            count.style.color = '#856300';
+        } else {
+            count.textContent = teamPipelines.length;
+            count.style.background = '';
+            count.style.color = '';
+        }
+    } catch (err) {
+        document.getElementById('pipelineList').innerHTML =
+            `<div class="error-panel"><strong>Failed to fetch pipelines</strong><pre>${escapeHtml(err?.message || String(err))}</pre></div>`;
+        document.getElementById('pipelinesStatusPanel').textContent = 'Refresh failed';
+    } finally {
+        pipelinesRefreshInProgress = false;
+        document.getElementById('pipelinesRefreshButton').disabled = false;
+    }
+}
+
+function renderPipelineList(runs) {
+    window._lastPipelineRuns = runs;
+    const list = document.getElementById('pipelineList');
+
+    const pConfig = loadConfig();
+    let filtered = pConfig.namespace
+        ? runs.filter((r) => r.team === pConfig.namespace)
+        : runs;
+
+    // Update chip counts
+    const deduped = (arr) => [...new Map(arr.map((r) => [r.name, r])).values()];
+    const chipCounts = {
+        all: deduped(filtered).length,
+        failed: deduped(filtered.filter((r) => r.result === 'failed')).length,
+        succeeded: deduped(filtered.filter((r) => r.result === 'succeeded')).length,
+    };
+    document.querySelectorAll('.filter-chip[data-pipeline-filter]').forEach((chip) => {
+        const span = chip.querySelector('span');
+        if (span) { span.textContent = chipCounts[chip.dataset.pipelineFilter] ?? 0; }
+    });
+
+    if (activePipelineFilter === 'failed') {
+        filtered = filtered.filter((r) => r.result === 'failed');
+    } else if (activePipelineFilter === 'succeeded') {
+        filtered = filtered.filter((r) => r.result === 'succeeded');
+    }
+
+    if (filtered.length === 0) {
+        list.innerHTML = '<p class="empty-state">No pipeline runs today.</p>';
+        return;
+    }
+
+    // Group by pipeline name, latest run per pipeline
+    const grouped = new Map();
+    for (const run of filtered) {
+        if (!grouped.has(run.name)) { grouped.set(run.name, run); }
+    }
+
+    list.innerHTML = [...grouped.values()].map(renderPipelineGroup).join('');
+
+    // Fetch failure reasons for failed pipelines
+    const pipelineConfig = loadConfig();
+    for (const run of grouped.values()) {
+        if (run.result === 'failed') { fetchAndInjectFailedStep(run, pipelineConfig); }
+    }
+}
+
+async function fetchAndInjectFailedStep(run, config) {
+    try {
+        const step = await window.kubeDashboard.fetchFailedStep({
+            org: config.azureOrg,
+            project: config.azureProject,
+            buildId: run.id,
+        });
+        if (!step) { return; }
+        const card = document.querySelector(`.pipeline-card[data-id="${run.id}"]`);
+        if (!card) { return; }
+        const metaRow = card.querySelector('.pipeline-meta-row');
+        if (metaRow) {
+            const el = document.createElement('span');
+            el.className = 'pipeline-failed-step';
+            el.textContent = `Failed at: ${step}`;
+            metaRow.appendChild(el);
+        }
+    } catch { /* ignore */ }
+}
+
+function renderPipelineGroup(run) {
+    const statusClass = getPipelineStatusClass(run);
+    const statusLabel = getPipelineStatusLabel(run);
+    const startLabel = run.startTime ? formatRelativeTime(run.startTime) : '—';
+    const startAbsolute = run.startTime ? new Date(run.startTime).toLocaleTimeString() : '';
+    const duration = run.finishTime && run.startTime
+        ? formatDuration(new Date(run.finishTime) - new Date(run.startTime))
+        : null;
+
+    return `
+    <div class="pipeline-card" data-url="${escapeHtml(run.url)}" data-id="${run.id}">
+        <div class="deployment-card-top">
+            <div class="deployment-name-row">
+                <h3>${escapeHtml(run.name)}</h3>
+            </div>
+            <div class="deployment-pill-row">
+                <span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span>
+                <span class="age-pill" title="${escapeHtml(startAbsolute)}">${escapeHtml(startLabel)}</span>
+            </div>
+        </div>
+        <div class="pipeline-meta-row">
+            ${run.sourceBranch ? `<span class="branch-pill">${escapeHtml(run.sourceBranch)}</span>` : ''}
+            ${run.trigger && run.trigger !== run.sourceBranch ? `<span class="pipeline-meta-text">${escapeHtml(run.trigger)}</span>` : ''}
+            ${duration ? `<span class="pipeline-meta-text">${escapeHtml(duration)}</span>` : ''}
+        </div>
+    </div>`;
+}
+
+function getPipelineStatusClass(run) {
+    if (run.status === 'inProgress' || run.status === 'notStarted') { return 'is-progressing'; }
+    if (run.result === 'succeeded') { return 'is-healthy'; }
+    if (run.result === 'failed') { return 'is-failed'; }
+    if (run.result === 'canceled') { return 'is-scaled-down'; }
+    if (run.result === 'partiallySucceeded') { return 'is-progressing'; }
+    return 'is-none';
+}
+
+function getPipelineStatusLabel(run) {
+    if (run.status === 'inProgress') { return 'Running'; }
+    if (run.status === 'notStarted') { return 'Queued'; }
+    if (run.status === 'cancelling') { return 'Cancelling'; }
+    if (run.result === 'succeeded') { return 'Succeeded'; }
+    if (run.result === 'failed') { return 'Failed'; }
+    if (run.result === 'canceled') { return 'Canceled'; }
+    if (run.result === 'partiallySucceeded') { return 'Partial'; }
+    return run.status || '—';
+}
+
+function formatDuration(ms) {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    if (minutes === 0) { return `${seconds}s`; }
+    return `${minutes}m ${seconds}s`;
+}
+
+// --- Init ---
+const initialConfig = loadConfig();
+updateContextLabel(initialConfig);
+populateSettingsForm();
+
+if (!initialConfig.context && !initialConfig.namespace) {
+    switchView('settings');
+    populateSettingsForm().catch(() => {});
+} else {
+    refresh();
+    setInterval(refresh, 60_000);
+}

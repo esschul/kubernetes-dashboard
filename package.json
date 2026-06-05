@@ -1,0 +1,38 @@
+{
+  "name": "kubernetes-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Electron dashboard for Kubernetes deployments using kubectl",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "lint": "eslint .",
+    "check": "node --check src/kubectl-client.js && node --check src/main.js && node --check src/preload.js && node --check src/renderer.js",
+    "build:icon": "bash scripts/build-mac-icon.sh",
+    "build:mac": "electron-builder --mac dmg"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "electron": "^42.3.1",
+    "electron-builder": "^26.8.1",
+    "electron-reload": "^2.0.0-alpha.1",
+    "eslint": "^10.4.1",
+    "globals": "^17.6.0"
+  },
+  "build": {
+    "appId": "no.posten.kubernetes-dashboard",
+    "productName": "Kubernetes Dashboard",
+    "files": [
+      "src/**/*",
+      "assets/icon.png",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "assets/icon.icns",
+      "target": [
+        "dmg"
+      ]
+    }
+  }
+}

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kubernetes Dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app-shell" id="appShell">
+    <aside class="sidebar">
+        <div>
+            <div class="sidebar-header">
+                <div>
+                    <p class="eyebrow">Kubernetes</p>
+                    <h1 class="sidebar-title">Dashboard</h1>
+                    <p class="context-label" id="contextLabel">No context set</p>
+                </div>
+            </div>
+            <nav class="nav">
+                <button class="nav-item is-active" data-view="deployments">
+                    <div class="nav-icon">
+                        <svg viewBox="0 0 24 24"><path d="M13 2.05V4.07C15.94 4.55 18.5 6.15 20.19 8.5L21.96 7.5C19.96 4.72 17.17 2.8 13 2.05M11 2.06C6.92 2.8 3.96 5.17 2.04 7.5L3.81 8.5C5.5 6.15 8.06 4.55 11 4.07V2.06M2.05 9.5C1.39 11.15 1 12.92 1 14.77C1 16.63 1.4 18.41 2.07 20.06L3.84 19.06C3.31 17.75 3 16.3 3 14.77C3 13.24 3.31 11.79 3.84 10.5L2.05 9.5M21.95 9.5L20.16 10.5C20.69 11.79 21 13.24 21 14.77C21 16.3 20.69 17.75 20.16 19.06L21.93 20.06C22.6 18.41 23 16.63 23 14.77C23 12.92 22.61 11.15 21.95 9.5M12 9A3 3 0 0 0 9 12A3 3 0 0 0 12 15A3 3 0 0 0 15 12A3 3 0 0 0 12 9M12 17C9.25 17 7 18.57 7 20.5V22H17V20.5C17 18.57 14.75 17 12 17Z"/></svg>
+                    </div>
+                    <span class="nav-label">Deployments</span>
+                    <span class="nav-count" id="deploymentsCount"></span>
+                </button>
+                <button class="nav-item" data-view="pipelines">
+                    <div class="nav-icon">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+                    </div>
+                    <span class="nav-label">Pipelines</span>
+                    <span class="nav-count" id="pipelinesCount"></span>
+                </button>
+                <button class="nav-item" data-view="settings">
+                    <div class="nav-icon">
+                        <svg viewBox="0 0 24 24"><path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></svg>
+                    </div>
+                    <span class="nav-label">Settings</span>
+                </button>
+            </nav>
+        </div>
+        <div>
+            <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar">‹</button>
+            <button class="theme-button" id="themeToggle" title="Toggle theme">☀️</button>
+        </div>
+    </aside>
+
+    <main class="content">
+        <!-- Deployments view -->
+        <div class="view" id="deploymentsView">
+            <div class="topbar">
+                <div>
+                    <h2 id="viewTitle">Deployments</h2>
+                    <p class="status-panel" id="statusPanel">Loading…</p>
+                </div>
+                <div style="display:flex;gap:10px;align-items:center;flex-shrink:0;">
+                    <button class="primary-button" id="refreshButton">Refresh</button>
+                </div>
+            </div>
+            <div class="filter-bar" id="filterBar">
+                <button class="filter-chip is-active" data-filter="all">All <span></span></button>
+                <button class="filter-chip" data-filter="healthy">Healthy <span></span></button>
+                <button class="filter-chip" data-filter="failing">Failing <span></span></button>
+                <button class="filter-chip" data-filter="progressing">Progressing <span></span></button>
+            </div>
+            <div class="deployment-list" id="deploymentList"></div>
+        </div>
+
+        <!-- Pipelines view -->
+        <div class="view hidden" id="pipelinesView">
+            <div class="topbar">
+                <div>
+                    <h2>Pipelines</h2>
+                    <p class="status-panel" id="pipelinesStatusPanel">Loading…</p>
+                </div>
+                <button class="primary-button" id="pipelinesRefreshButton">Refresh</button>
+            </div>
+            <div class="filter-bar" id="pipelineFilterBar">
+                <button class="filter-chip is-active" data-pipeline-filter="all">All <span></span></button>
+                <button class="filter-chip" data-pipeline-filter="failed">Failed <span></span></button>
+                <button class="filter-chip" data-pipeline-filter="succeeded">Succeeded <span></span></button>
+            </div>
+            <div class="pipeline-list" id="pipelineList"></div>
+        </div>
+
+        <!-- Settings view -->
+        <div class="view hidden" id="settingsView">
+            <div class="topbar">
+                <h2>Settings</h2>
+            </div>
+            <div class="panel settings-form" id="settingsForm">
+                <label>
+                    kubectl context
+                    <select id="contextInput">
+                        <option value="">(current context)</option>
+                    </select>
+                </label>
+                <label>
+                    Namespace
+                    <select id="namespaceInput">
+                        <option value="">(select a namespace)</option>
+                    </select>
+                </label>
+                <label>
+                    GitHub org
+                    <input type="text" id="githubOrgInput" placeholder="e.g. my-org" />
+                    <span class="form-help">Used to look up PRs for each deployment.</span>
+                </label>
+                <label>
+                    Azure DevOps org URL
+                    <input type="text" id="azureOrgInput" placeholder="e.g. https://dev.azure.com/my-org" />
+                </label>
+                <label>
+                    Azure DevOps project
+                    <input type="text" id="azureProjectInput" placeholder="e.g. my-project" />
+                </label>
+                <div class="settings-actions">
+                    <button class="primary-button" id="saveSettings">Save &amp; Refresh</button>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="renderer.js"></script>
+</body>
+</html>
