@@ -77,7 +77,7 @@ function switchView(view) {
         el.classList.toggle('hidden', el.id !== `${view}View`);
     });
     if (view === 'settings') {
-        populateSettingsForm().catch(() => {});
+        populateSettingsForm();
     }
     if (view === 'pipelines') {
         refreshPipelines();
@@ -102,54 +102,13 @@ document.querySelectorAll('.filter-chip[data-filter]').forEach((c) => {
 });
 
 // --- Settings form ---
-async function populateSettingsForm() {
+function populateSettingsForm() {
     const config = loadConfig();
+    document.getElementById('contextInput').value = config.context || '';
+    document.getElementById('namespaceInput').value = config.namespace || '';
     document.getElementById('githubOrgInput').value = config.githubOrg || '';
     document.getElementById('azureOrgInput').value = config.azureOrg || '';
     document.getElementById('azureProjectInput').value = config.azureProject || '';
-    const contextSelect = document.getElementById('contextInput');
-
-    try {
-        const contexts = await window.kubeDashboard.fetchContexts();
-        contextSelect.innerHTML = '<option value="">(current context)</option>';
-        for (const ctx of contexts) {
-            const opt = document.createElement('option');
-            opt.value = ctx;
-            opt.textContent = ctx;
-            contextSelect.appendChild(opt);
-        }
-    } catch {
-        // Leave the dropdown with just the default option if kubectl fails
-    }
-
-    contextSelect.value = config.context || '';
-    await populateNamespaces(config.context || '', config.namespace || '');
-}
-
-document.getElementById('contextInput').addEventListener('change', (e) => {
-    const currentNs = document.getElementById('namespaceInput').value;
-    populateNamespaces(e.target.value, currentNs).catch(() => {});
-});
-
-async function populateNamespaces(context, selectedNamespace = '') {
-    const nsSelect = document.getElementById('namespaceInput');
-    nsSelect.innerHTML = '<option value="">(all namespaces)</option>';
-    nsSelect.disabled = true;
-
-    try {
-        const namespaces = await window.kubeDashboard.fetchNamespaces(context);
-        for (const ns of namespaces) {
-            const opt = document.createElement('option');
-            opt.value = ns;
-            opt.textContent = ns;
-            nsSelect.appendChild(opt);
-        }
-        nsSelect.value = selectedNamespace;
-    } catch {
-        // Leave just the default option
-    } finally {
-        nsSelect.disabled = false;
-    }
 }
 
 document.getElementById('saveSettings').addEventListener('click', () => {
@@ -162,6 +121,10 @@ document.getElementById('saveSettings').addEventListener('click', () => {
     };
     saveConfig(config);
     updateContextLabel(config);
+    if (!config.namespace) {
+        setStatus('Set a namespace in Settings before refreshing deployments.');
+        return;
+    }
     switchView('deployments');
     refresh();
 });
@@ -181,11 +144,20 @@ document.getElementById('refreshButton').addEventListener('click', () => {
 
 async function refresh() {
     if (refreshInProgress) { return; }
+    const config = loadConfig();
+    if (!config.namespace) {
+        latestDeployments = [];
+        renderDeploymentList([]);
+        updateCounts([]);
+        setStatus('Set a namespace in Settings before refreshing deployments.');
+        switchView('settings');
+        return;
+    }
+
     refreshInProgress = true;
     document.getElementById('refreshButton').disabled = true;
     setStatus('Refreshing…');
 
-    const config = loadConfig();
     try {
         const deployments = await window.kubeDashboard.fetchDeployments(config);
         latestDeployments = deployments;
@@ -741,9 +713,8 @@ const initialConfig = loadConfig();
 updateContextLabel(initialConfig);
 populateSettingsForm();
 
-if (!initialConfig.context && !initialConfig.namespace) {
+if (!initialConfig.namespace) {
     switchView('settings');
-    populateSettingsForm().catch(() => {});
 } else {
     refresh();
     setInterval(refresh, 60_000);

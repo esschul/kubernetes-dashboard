@@ -3,6 +3,7 @@ const { promisify } = require('node:util');
 const { app } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
+const { resolveCommand } = require('./command-paths');
 
 const execFileAsync = promisify(execFile);
 
@@ -35,7 +36,7 @@ function saveRepoCache() {
 loadRepoCache();
 
 async function runGh(args) {
-    const ghPath = process.env.GH_PATH || 'gh';
+    const ghPath = resolveCommand('gh', 'GH_PATH');
     const { stdout } = await execFileAsync(ghPath, args, {
         timeout: 15_000,
         maxBuffer: 5 * 1024 * 1024,

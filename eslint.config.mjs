@@ -3,7 +3,7 @@ import globals from 'globals';
 
 export default [
     {
-        files: ['src/main.js', 'src/preload.js', 'src/kubectl-client.js', 'src/github-client.js', 'src/azure-client.js'],
+        files: ['src/main.js', 'src/preload.js', 'src/command-paths.js', 'src/kubectl-client.js', 'src/github-client.js', 'src/azure-client.js'],
         languageOptions: {
             ecmaVersion: 2022,
             sourceType: 'commonjs',

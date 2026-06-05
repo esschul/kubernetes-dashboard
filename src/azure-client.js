@@ -1,10 +1,11 @@
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
+const { resolveCommand } = require('./command-paths');
 
 const execFileAsync = promisify(execFile);
 
 async function runAz(args) {
-    const { stdout } = await execFileAsync('az', args, {
+    const { stdout } = await execFileAsync(resolveCommand('az', 'AZ_PATH'), args, {
         timeout: 30_000,
         maxBuffer: 10 * 1024 * 1024,
     });

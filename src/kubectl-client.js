@@ -1,10 +1,11 @@
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
+const { resolveCommand } = require('./command-paths');
 
 const execFileAsync = promisify(execFile);
 
 async function runKubectl(args, options = {}) {
-    const kubectlPath = process.env.KUBECTL_PATH || 'kubectl';
+    const kubectlPath = resolveCommand('kubectl', 'KUBECTL_PATH');
     const { stdout } = await execFileAsync(kubectlPath, args, {
         timeout: 30_000,
         maxBuffer: 20 * 1024 * 1024,

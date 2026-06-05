@@ -92,15 +92,11 @@
             <div class="panel settings-form" id="settingsForm">
                 <label>
                     kubectl context
-                    <select id="contextInput">
-                        <option value="">(current context)</option>
-                    </select>
+                    <input type="text" id="contextInput" placeholder="Leave empty for current context" />
                 </label>
                 <label>
                     Namespace
-                    <select id="namespaceInput">
-                        <option value="">(select a namespace)</option>
-                    </select>
+                    <input type="text" id="namespaceInput" placeholder="e.g. my-team" />
                 </label>
                 <label>
                     GitHub org
