@@ -1,5 +1,5 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
-if (process.env.NODE_ENV !== 'production') { require('electron-reload')(__dirname); }
+if (!app.isPackaged) { require('electron-reload')(__dirname); }
 const path = require('node:path');
 const { fetchDeployments, fetchContexts, fetchNamespaces } = require('./kubectl-client');
 const { fetchPrForSha } = require('./github-client');
