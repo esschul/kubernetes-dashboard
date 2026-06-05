@@ -25,7 +25,7 @@ function readStoredJson(key, fallback) {
 }
 
 function loadConfig() {
-    return readStoredJson(STORAGE_KEYS.config, { kubectlPath: '', context: '', namespace: '' });
+    return readStoredJson(STORAGE_KEYS.config, { context: '', namespace: '' });
 }
 
 function saveConfig(config) {
@@ -104,9 +104,8 @@ document.querySelectorAll('.filter-chip[data-filter]').forEach((c) => {
 // --- Settings form ---
 function populateSettingsForm() {
     const config = loadConfig();
-    document.getElementById('kubectlPathInput').value = config.kubectlPath || '';
-    document.getElementById('contextInput').value = config.context || '';
-    document.getElementById('namespaceInput').value = config.namespace || '';
+    ensureSelectOption('contextInput', config.context || '');
+    ensureSelectOption('namespaceInput', config.namespace || '');
     document.getElementById('githubOrgInput').value = config.githubOrg || '';
     document.getElementById('azureOrgInput').value = config.azureOrg || '';
     document.getElementById('azureProjectInput').value = config.azureProject || '';
@@ -116,9 +115,9 @@ document.getElementById('loadContexts').addEventListener('click', async () => {
     const button = document.getElementById('loadContexts');
     button.disabled = true;
     try {
-        const kubectlPath = document.getElementById('kubectlPathInput').value.trim();
-        const contexts = await window.kubeDashboard.fetchContexts({ kubectlPath });
-        replaceDatalistOptions('contextOptions', contexts);
+        const currentValue = document.getElementById('contextInput').value;
+        const contexts = await window.kubeDashboard.fetchContexts();
+        replaceSelectOptions('contextInput', contexts, '(current context)', currentValue);
         setStatus(`Loaded ${contexts.length} kubectl context${contexts.length !== 1 ? 's' : ''}.`);
     } catch (err) {
         setStatus(`Could not load kubectl contexts: ${err?.message || String(err)}`);
@@ -131,10 +130,10 @@ document.getElementById('loadNamespaces').addEventListener('click', async () => 
     const button = document.getElementById('loadNamespaces');
     button.disabled = true;
     try {
-        const context = document.getElementById('contextInput').value.trim();
-        const kubectlPath = document.getElementById('kubectlPathInput').value.trim();
-        const namespaces = await window.kubeDashboard.fetchNamespaces({ context, kubectlPath });
-        replaceDatalistOptions('namespaceOptions', namespaces);
+        const context = document.getElementById('contextInput').value;
+        const currentValue = document.getElementById('namespaceInput').value;
+        const namespaces = await window.kubeDashboard.fetchNamespaces({ context });
+        replaceSelectOptions('namespaceInput', namespaces, '(select a namespace)', currentValue);
         setStatus(`Loaded ${namespaces.length} namespace${namespaces.length !== 1 ? 's' : ''}.`);
     } catch (err) {
         setStatus(`Could not load namespaces: ${err?.message || String(err)}`);
@@ -143,21 +142,32 @@ document.getElementById('loadNamespaces').addEventListener('click', async () => 
     }
 });
 
-function replaceDatalistOptions(id, values) {
-    const list = document.getElementById(id);
-    list.replaceChildren();
+function replaceSelectOptions(id, values, emptyLabel, selectedValue) {
+    const select = document.getElementById(id);
+    select.replaceChildren(new Option(emptyLabel, ''));
     for (const value of values) {
-        const option = document.createElement('option');
-        option.value = value;
-        list.appendChild(option);
+        select.appendChild(new Option(value, value));
     }
+    if (selectedValue) { ensureSelectOption(id, selectedValue); }
+    select.value = selectedValue || '';
+}
+
+function ensureSelectOption(id, value) {
+    const select = document.getElementById(id);
+    if (!value) {
+        select.value = '';
+        return;
+    }
+    if (![...select.options].some((option) => option.value === value)) {
+        select.appendChild(new Option(value, value));
+    }
+    select.value = value;
 }
 
 document.getElementById('saveSettings').addEventListener('click', () => {
     const config = {
-        kubectlPath: document.getElementById('kubectlPathInput').value.trim(),
-        context: document.getElementById('contextInput').value.trim(),
-        namespace: document.getElementById('namespaceInput').value.trim(),
+        context: document.getElementById('contextInput').value,
+        namespace: document.getElementById('namespaceInput').value,
         githubOrg: document.getElementById('githubOrgInput').value.trim(),
         azureOrg: document.getElementById('azureOrgInput').value.trim(),
         azureProject: document.getElementById('azureProjectInput').value.trim(),

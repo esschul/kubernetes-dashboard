@@ -91,24 +91,22 @@
             </div>
             <div class="panel settings-form" id="settingsForm">
                 <label>
-                    kubectl path
-                    <input type="text" id="kubectlPathInput" placeholder="/opt/homebrew/bin/kubectl" />
-                </label>
-                <label>
                     kubectl context
                     <div class="input-with-action">
-                        <input type="text" id="contextInput" list="contextOptions" placeholder="Leave empty for current context" />
+                        <select id="contextInput">
+                            <option value="">(current context)</option>
+                        </select>
                         <button class="secondary-button" id="loadContexts" type="button">Load</button>
                     </div>
-                    <datalist id="contextOptions"></datalist>
                 </label>
                 <label>
                     Namespace
                     <div class="input-with-action">
-                        <input type="text" id="namespaceInput" list="namespaceOptions" placeholder="e.g. my-team" />
+                        <select id="namespaceInput">
+                            <option value="">(select a namespace)</option>
+                        </select>
                         <button class="secondary-button" id="loadNamespaces" type="button">Load</button>
                     </div>
-                    <datalist id="namespaceOptions"></datalist>
                 </label>
                 <label>
                     GitHub org

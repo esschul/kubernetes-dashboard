@@ -16,7 +16,7 @@ async function runKubectl(args, options = {}) {
         return stdout;
     } catch (err) {
         if (err.code === 'ENOENT') {
-            throw new Error(`Could not find kubectl at "${kubectlPath}". Set the kubectl path in Settings.`, { cause: err });
+            throw new Error(`Could not find kubectl at "${kubectlPath}". Install kubectl in /opt/homebrew/bin or /usr/local/bin.`, { cause: err });
         }
         throw err;
     }
