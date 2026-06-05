@@ -67,18 +67,18 @@ app.whenReady().then(() => {
         }
     });
 
-    ipcMain.handle('namespaces:fetch', async (_event, context) => {
+    ipcMain.handle('namespaces:fetch', async (_event, config) => {
         try {
-            const result = await fetchNamespaces(context);
+            const result = await fetchNamespaces(config);
             return { ok: true, result };
         } catch (err) {
             return { ok: false, error: { message: err.message } };
         }
     });
 
-    ipcMain.handle('contexts:fetch', async () => {
+    ipcMain.handle('contexts:fetch', async (_event, config) => {
         try {
-            const result = await fetchContexts();
+            const result = await fetchContexts(config);
             return { ok: true, result };
         } catch (err) {
             return { ok: false, error: { message: err.message } };

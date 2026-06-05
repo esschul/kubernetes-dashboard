@@ -23,13 +23,13 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
         if (!response.ok) { throw response.error; }
         return response.result;
     },
-    fetchNamespaces: async (context) => {
-        const response = await ipcRenderer.invoke('namespaces:fetch', context);
+    fetchNamespaces: async (config) => {
+        const response = await ipcRenderer.invoke('namespaces:fetch', config);
         if (!response.ok) { throw response.error; }
         return response.result;
     },
-    fetchContexts: async () => {
-        const response = await ipcRenderer.invoke('contexts:fetch');
+    fetchContexts: async (config) => {
+        const response = await ipcRenderer.invoke('contexts:fetch', config);
         if (!response.ok) { throw response.error; }
         return response.result;
     },

@@ -5,25 +5,34 @@ const { resolveCommand } = require('./command-paths');
 const execFileAsync = promisify(execFile);
 
 async function runKubectl(args, options = {}) {
-    const kubectlPath = resolveCommand('kubectl', 'KUBECTL_PATH');
-    const { stdout } = await execFileAsync(kubectlPath, args, {
-        timeout: 30_000,
-        maxBuffer: 20 * 1024 * 1024,
-        ...options,
-    });
-    return stdout;
+    const { kubectlPath: configuredKubectlPath, ...execOptions } = options;
+    const kubectlPath = configuredKubectlPath || resolveCommand('kubectl', 'KUBECTL_PATH');
+    try {
+        const { stdout } = await execFileAsync(kubectlPath, args, {
+            timeout: 30_000,
+            maxBuffer: 20 * 1024 * 1024,
+            ...execOptions,
+        });
+        return stdout;
+    } catch (err) {
+        if (err.code === 'ENOENT') {
+            throw new Error(`Could not find kubectl at "${kubectlPath}". Set the kubectl path in Settings.`, { cause: err });
+        }
+        throw err;
+    }
 }
 
-async function fetchDeployments({ context, namespace }) {
+async function fetchDeployments({ context, namespace, kubectlPath }) {
     if (!namespace) { throw new Error('Namespace is required. Please set a namespace in Settings.'); }
     const nsArgs = ['--namespace', namespace];
     const ctxArgs = context ? ['--context', context] : [];
 
+    const kubectlOptions = { kubectlPath };
     const [deploymentsRaw, podsRaw, eventsRaw, replicaSetsRaw] = await Promise.all([
-        runKubectl([...ctxArgs, 'get', 'deployments', ...nsArgs, '-o', 'json']),
-        runKubectl([...ctxArgs, 'get', 'pods', ...nsArgs, '-o', 'json']),
-        runKubectl([...ctxArgs, 'get', 'events', ...nsArgs, '-o', 'json']).catch(() => '{"items":[]}'),
-        runKubectl([...ctxArgs, 'get', 'replicasets', ...nsArgs, '-o', 'json']).catch(() => '{"items":[]}'),
+        runKubectl([...ctxArgs, 'get', 'deployments', ...nsArgs, '-o', 'json'], kubectlOptions),
+        runKubectl([...ctxArgs, 'get', 'pods', ...nsArgs, '-o', 'json'], kubectlOptions),
+        runKubectl([...ctxArgs, 'get', 'events', ...nsArgs, '-o', 'json'], kubectlOptions).catch(() => '{"items":[]}'),
+        runKubectl([...ctxArgs, 'get', 'replicasets', ...nsArgs, '-o', 'json'], kubectlOptions).catch(() => '{"items":[]}'),
     ]);
 
     const deployments = JSON.parse(deploymentsRaw).items || [];
@@ -293,14 +302,16 @@ function collectFailures(dep, pods, events) {
     return failures;
 }
 
-async function fetchNamespaces(context) {
+async function fetchNamespaces(config = {}) {
+    const context = typeof config === 'string' ? config : config.context;
+    const kubectlPath = typeof config === 'string' ? '' : config.kubectlPath;
     const ctxArgs = context ? ['--context', context] : [];
-    const stdout = await runKubectl([...ctxArgs, 'get', 'namespaces', '-o', 'jsonpath={.items[*].metadata.name}']);
+    const stdout = await runKubectl([...ctxArgs, 'get', 'namespaces', '-o', 'jsonpath={.items[*].metadata.name}'], { kubectlPath });
     return stdout.split(/\s+/).map((s) => s.trim()).filter(Boolean).sort();
 }
 
-async function fetchContexts() {
-    const stdout = await runKubectl(['config', 'get-contexts', '-o', 'name']);
+async function fetchContexts(config = {}) {
+    const stdout = await runKubectl(['config', 'get-contexts', '-o', 'name'], { kubectlPath: config.kubectlPath });
     return stdout.split('\n').map((s) => s.trim()).filter(Boolean);
 }
 

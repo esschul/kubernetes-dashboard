@@ -25,7 +25,7 @@ function readStoredJson(key, fallback) {
 }
 
 function loadConfig() {
-    return readStoredJson(STORAGE_KEYS.config, { context: '', namespace: '' });
+    return readStoredJson(STORAGE_KEYS.config, { kubectlPath: '', context: '', namespace: '' });
 }
 
 function saveConfig(config) {
@@ -104,6 +104,7 @@ document.querySelectorAll('.filter-chip[data-filter]').forEach((c) => {
 // --- Settings form ---
 function populateSettingsForm() {
     const config = loadConfig();
+    document.getElementById('kubectlPathInput').value = config.kubectlPath || '';
     document.getElementById('contextInput').value = config.context || '';
     document.getElementById('namespaceInput').value = config.namespace || '';
     document.getElementById('githubOrgInput').value = config.githubOrg || '';
@@ -111,8 +112,50 @@ function populateSettingsForm() {
     document.getElementById('azureProjectInput').value = config.azureProject || '';
 }
 
+document.getElementById('loadContexts').addEventListener('click', async () => {
+    const button = document.getElementById('loadContexts');
+    button.disabled = true;
+    try {
+        const kubectlPath = document.getElementById('kubectlPathInput').value.trim();
+        const contexts = await window.kubeDashboard.fetchContexts({ kubectlPath });
+        replaceDatalistOptions('contextOptions', contexts);
+        setStatus(`Loaded ${contexts.length} kubectl context${contexts.length !== 1 ? 's' : ''}.`);
+    } catch (err) {
+        setStatus(`Could not load kubectl contexts: ${err?.message || String(err)}`);
+    } finally {
+        button.disabled = false;
+    }
+});
+
+document.getElementById('loadNamespaces').addEventListener('click', async () => {
+    const button = document.getElementById('loadNamespaces');
+    button.disabled = true;
+    try {
+        const context = document.getElementById('contextInput').value.trim();
+        const kubectlPath = document.getElementById('kubectlPathInput').value.trim();
+        const namespaces = await window.kubeDashboard.fetchNamespaces({ context, kubectlPath });
+        replaceDatalistOptions('namespaceOptions', namespaces);
+        setStatus(`Loaded ${namespaces.length} namespace${namespaces.length !== 1 ? 's' : ''}.`);
+    } catch (err) {
+        setStatus(`Could not load namespaces: ${err?.message || String(err)}`);
+    } finally {
+        button.disabled = false;
+    }
+});
+
+function replaceDatalistOptions(id, values) {
+    const list = document.getElementById(id);
+    list.replaceChildren();
+    for (const value of values) {
+        const option = document.createElement('option');
+        option.value = value;
+        list.appendChild(option);
+    }
+}
+
 document.getElementById('saveSettings').addEventListener('click', () => {
     const config = {
+        kubectlPath: document.getElementById('kubectlPathInput').value.trim(),
         context: document.getElementById('contextInput').value.trim(),
         namespace: document.getElementById('namespaceInput').value.trim(),
         githubOrg: document.getElementById('githubOrgInput').value.trim(),
@@ -712,10 +755,5 @@ function formatDuration(ms) {
 const initialConfig = loadConfig();
 updateContextLabel(initialConfig);
 populateSettingsForm();
-
-if (!initialConfig.namespace) {
-    switchView('settings');
-} else {
-    refresh();
-    setInterval(refresh, 60_000);
-}
+setStatus('Save settings to refresh deployments.');
+switchView('settings');

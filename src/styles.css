@@ -51,6 +51,11 @@ button {
     cursor: pointer;
 }
 
+button:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+
 .app-shell {
     display: grid;
     grid-template-columns: 250px minmax(0, 1fr);
@@ -896,6 +901,10 @@ h3 {
     opacity: 0.65;
 }
 
+.secondary-button:hover {
+    background: var(--panel-muted);
+}
+
 .error-panel {
     margin-bottom: 16px;
     padding: 16px;
@@ -943,6 +952,12 @@ input, select {
     border-radius: 9px;
     background: var(--panel-muted);
     color: var(--text);
+}
+
+.input-with-action {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
 }
 
 .hidden {
