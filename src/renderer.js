@@ -83,6 +83,9 @@ function switchView(view) {
     if (view === 'pipelines') {
         refreshPipelines();
     }
+    if (view === 'pull-requests') {
+        refreshPullRequests();
+    }
 }
 
 // --- Filter bar ---
@@ -108,6 +111,7 @@ function populateSettingsForm() {
     ensureSelectOption('contextInput', config.context || '');
     ensureSelectOption('namespaceInput', config.namespace || '');
     document.getElementById('githubOrgInput').value = config.githubOrg || '';
+    document.getElementById('githubTopicInput').value = config.githubTopic || '';
     document.getElementById('azureOrgInput').value = config.azureOrg || '';
     document.getElementById('azureProjectInput').value = config.azureProject || '';
     document.getElementById('envProdInput').value = config.envContexts?.prod || '';
@@ -206,6 +210,7 @@ document.getElementById('saveSettings').addEventListener('click', () => {
         context: document.getElementById('contextInput').value,
         namespace: document.getElementById('namespaceInput').value,
         githubOrg: document.getElementById('githubOrgInput').value.trim(),
+        githubTopic: document.getElementById('githubTopicInput').value.trim(),
         azureOrg: document.getElementById('azureOrgInput').value.trim(),
         azureProject: document.getElementById('azureProjectInput').value.trim(),
         envContexts: {
@@ -887,6 +892,188 @@ function formatDuration(ms) {
     const seconds = totalSeconds % 60;
     if (minutes === 0) { return `${seconds}s`; }
     return `${minutes}m ${seconds}s`;
+}
+
+// --- Pull Requests ---
+let prRefreshInProgress = false;
+let activePrTab = 'open';  // 'open' | 'merged' | 'dependabot'
+let activePrFilter = 'all';
+let latestPrData = null;
+
+document.getElementById('prRefreshButton').addEventListener('click', () => {
+    if (!prRefreshInProgress) { refreshPullRequests(true); }
+});
+
+document.getElementById('prTabSwitcher').addEventListener('click', (e) => {
+    const btn = e.target.closest('.env-btn[data-pr-tab]');
+    if (!btn) { return; }
+    activePrTab = btn.dataset.prTab;
+    document.querySelectorAll('.env-btn[data-pr-tab]').forEach((b) => {
+        b.classList.toggle('is-active', b.dataset.prTab === activePrTab);
+    });
+    activePrFilter = 'all';
+    document.querySelectorAll('.filter-chip[data-pr-filter]').forEach((c) => {
+        c.classList.toggle('is-active', c.dataset.prFilter === 'all');
+    });
+    if (latestPrData) { renderPrView(latestPrData); }
+});
+
+document.getElementById('prFilterBar').addEventListener('click', (e) => {
+    const chip = e.target.closest('.filter-chip[data-pr-filter]');
+    if (!chip) { return; }
+    activePrFilter = chip.dataset.prFilter;
+    document.querySelectorAll('.filter-chip[data-pr-filter]').forEach((c) => {
+        c.classList.toggle('is-active', c.dataset.prFilter === activePrFilter);
+    });
+    if (latestPrData) { renderPrView(latestPrData); }
+});
+
+document.getElementById('prList').addEventListener('click', (e) => {
+    const card = e.target.closest('.pr-card[data-url]');
+    if (card) { window.kubeDashboard.openExternal(card.dataset.url); }
+});
+
+async function refreshPullRequests(force = false) {
+    if (prRefreshInProgress) { return; }
+    // Don't re-fetch if we have fresh data and this isn't a forced refresh
+    if (latestPrData && !force) { renderPrView(latestPrData); return; }
+
+    const config = loadConfig();
+    if (!config.githubOrg || !config.githubTopic) {
+        document.getElementById('prList').innerHTML = '<p class="empty-state">Set GitHub org and repo topic in Settings to load pull requests.</p>';
+        document.getElementById('prStatusPanel').textContent = 'Not configured';
+        return;
+    }
+
+    prRefreshInProgress = true;
+    document.getElementById('prRefreshButton').disabled = true;
+    document.getElementById('prStatusPanel').textContent = 'Loading…';
+
+    try {
+        const data = await window.kubeDashboard.fetchPullRequests({ org: config.githubOrg, topic: config.githubTopic });
+        latestPrData = data;
+        renderPrView(data);
+        const now = new Date().toLocaleTimeString();
+        document.getElementById('prStatusPanel').textContent = `${data.repositories.length} repo${data.repositories.length !== 1 ? 's' : ''} · Updated ${now}`;
+        updatePrNavCount(data);
+    } catch (err) {
+        document.getElementById('prList').innerHTML = `<div class="error-panel"><strong>Failed to load pull requests</strong><pre>${escapeHtml(err?.message || String(err))}</pre></div>`;
+        document.getElementById('prStatusPanel').textContent = 'Refresh failed';
+    } finally {
+        prRefreshInProgress = false;
+        document.getElementById('prRefreshButton').disabled = false;
+    }
+}
+
+function updatePrNavCount(data) {
+    const count = document.getElementById('pullRequestsCount');
+    const open = data.pullRequests.length;
+    if (open > 0) {
+        count.textContent = open;
+        count.style.background = '';
+        count.style.color = '';
+    } else {
+        count.textContent = '';
+    }
+}
+
+function getPrsForTab(data) {
+    if (activePrTab === 'merged') { return [...data.mergedPullRequests, ...data.mergedDependabotPullRequests]; }
+    if (activePrTab === 'dependabot') { return data.dependabotPullRequests; }
+    return data.pullRequests;
+}
+
+function matchesPrFilter(pr) {
+    if (activePrFilter === 'approved') { return pr.reviewDecision === 'APPROVED' && !pr.isDraft; }
+    if (activePrFilter === 'changes-requested') { return pr.reviewDecision === 'CHANGES_REQUESTED' && !pr.isDraft; }
+    if (activePrFilter === 'draft') { return Boolean(pr.isDraft); }
+    if (activePrFilter === 'checks-failing') { return pr.checkStatus === 'failure'; }
+    return true;
+}
+
+function renderPrView(data) {
+    const list = document.getElementById('prList');
+    const prs = getPrsForTab(data);
+    const isMergedTab = activePrTab === 'merged';
+    const isDependabotTab = activePrTab === 'dependabot';
+
+    // Update filter chip counts (only relevant for open tab)
+    const showFilters = !isMergedTab;
+    document.getElementById('prFilterBar').style.display = showFilters ? '' : 'none';
+    if (showFilters) {
+        document.querySelectorAll('.filter-chip[data-pr-filter]').forEach((chip) => {
+            const f = chip.dataset.prFilter;
+            const span = chip.querySelector('span');
+            if (!span) { return; }
+            if (f === 'all') { span.textContent = prs.length; return; }
+            span.textContent = prs.filter((pr) => matchesPrFilter({ ...pr, _filter: f, checkStatus: pr.checkStatus, reviewDecision: pr.reviewDecision, isDraft: pr.isDraft })).length;
+            // recalc properly
+            const counts = {
+                'approved': prs.filter((p) => p.reviewDecision === 'APPROVED' && !p.isDraft).length,
+                'changes-requested': prs.filter((p) => p.reviewDecision === 'CHANGES_REQUESTED' && !p.isDraft).length,
+                'draft': prs.filter((p) => p.isDraft).length,
+                'checks-failing': prs.filter((p) => p.checkStatus === 'failure').length,
+            };
+            span.textContent = counts[f] ?? 0;
+        });
+    }
+
+    const filtered = activePrFilter === 'all' || isMergedTab ? prs : prs.filter(matchesPrFilter);
+
+    if (filtered.length === 0) {
+        const msg = isMergedTab ? 'No pull requests merged today.' :
+            isDependabotTab ? 'No open Dependabot pull requests.' :
+                activePrFilter === 'all' ? 'No open pull requests.' : 'No pull requests match this filter.';
+        list.innerHTML = `<p class="empty-state">${msg}</p>`;
+        return;
+    }
+
+    list.innerHTML = filtered.map((pr) => renderPrCard(pr, isMergedTab)).join('');
+}
+
+function renderPrCard(pr, isMerged = false) {
+    const reviewLabel = isMerged ? 'Merged' : getPrReviewLabel(pr);
+    const reviewClass = isMerged ? 'is-merged' : getPrReviewClass(pr);
+    const checkClass = { success: 'is-success', failure: 'is-failure', pending: 'is-pending', none: 'is-none' }[pr.checkStatus] || 'is-none';
+    const dateLabel = isMerged ? `Merged ${formatRelativeTime(pr.mergedAt)}` : `Updated ${formatRelativeTime(pr.updatedAt)}`;
+    const ageDetails = !isMerged ? getPrAgeDetails(pr.createdAt) : null;
+
+    return `
+    <div class="pr-card deployment-card" data-url="${escapeHtml(pr.url)}">
+        <div class="deployment-card-top">
+            <div class="deployment-name-row">
+                <span class="eyebrow-inline">${escapeHtml(pr.repository)}</span>
+                <h3>${escapeHtml(pr.title)}</h3>
+            </div>
+            <div class="deployment-pill-row">
+                ${ageDetails ? `<span class="age-pill ${ageDetails.cssClass}">${escapeHtml(ageDetails.label)}</span>` : ''}
+                <span class="check-pill ${checkClass}">${escapeHtml(pr.checkStatusLabel || 'No checks')}</span>
+                <span class="status-pill ${reviewClass}">${escapeHtml(reviewLabel)}</span>
+            </div>
+        </div>
+        <div class="pr-meta-row">
+            <span class="pr-meta">#${pr.number} · ${escapeHtml(pr.author?.login || 'unknown')} · ${escapeHtml(dateLabel)}</span>
+            ${pr.commentActivityCount > 0 ? `<span class="branch-pill">${pr.commentActivityCount} comment${pr.commentActivityCount !== 1 ? 's' : ''}</span>` : ''}
+        </div>
+    </div>`;
+}
+
+function getPrReviewLabel(pr) {
+    if (pr.isDraft) { return 'Draft'; }
+    return { APPROVED: 'Approved', CHANGES_REQUESTED: 'Changes requested', REVIEW_REQUIRED: 'Review required' }[pr.reviewDecision] || 'Open';
+}
+
+function getPrReviewClass(pr) {
+    if (pr.isDraft) { return 'is-draft'; }
+    return { APPROVED: 'is-approved', CHANGES_REQUESTED: 'is-changes-requested', REVIEW_REQUIRED: 'is-pending' }[pr.reviewDecision] || 'is-open';
+}
+
+function getPrAgeDetails(createdAt) {
+    if (!createdAt) { return null; }
+    const days = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000));
+    const cssClass = days >= 30 ? 'age-pill is-critical' : days >= 14 ? 'age-pill is-warning' : days >= 7 ? 'age-pill is-notice' : 'age-pill is-fresh';
+    const label = days === 0 ? 'Opened today' : `${days}d old`;
+    return { cssClass, label };
 }
 
 // --- Init ---

@@ -1053,3 +1053,115 @@ input, select {
         flex-wrap: wrap;
     }
 }
+
+/* ── Pull Request view ───────────────────────────────────────────── */
+
+.pr-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 24px 24px;
+}
+
+.pr-card {
+    cursor: pointer;
+}
+
+.pr-card:hover {
+    border-color: var(--accent);
+}
+
+.pr-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0 2px;
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+
+/* Check status pills */
+.check-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    border: 1px solid var(--line);
+    background: var(--panel-muted);
+    color: var(--muted);
+}
+
+.check-pill.is-success {
+    background: #d1fae5;
+    border-color: #6ee7b7;
+    color: #065f46;
+}
+.check-pill.is-failure {
+    background: #ffe0de;
+    border-color: #fca5a5;
+    color: #991b1b;
+}
+.check-pill.is-pending {
+    background: #fef9c3;
+    border-color: #fde68a;
+    color: #78350f;
+}
+
+:root[data-theme="dark"] .check-pill.is-success {
+    background: #064e3b;
+    border-color: #059669;
+    color: #6ee7b7;
+}
+:root[data-theme="dark"] .check-pill.is-failure {
+    background: #450a0a;
+    border-color: #b91c1c;
+    color: #fca5a5;
+}
+:root[data-theme="dark"] .check-pill.is-pending {
+    background: #422006;
+    border-color: #b45309;
+    color: #fde68a;
+}
+
+/* PR review status overrides on status-pill */
+.status-pill.is-approved {
+    background: #d1fae5;
+    border-color: #6ee7b7;
+    color: #065f46;
+}
+.status-pill.is-changes-requested {
+    background: #ffe0de;
+    border-color: #fca5a5;
+    color: #991b1b;
+}
+.status-pill.is-draft {
+    background: var(--panel-muted);
+    border-color: var(--line);
+    color: var(--muted);
+}
+.status-pill.is-open {
+    background: #dbeafe;
+    border-color: #93c5fd;
+    color: #1e40af;
+}
+.status-pill.is-merged {
+    background: #ede9fe;
+    border-color: #c4b5fd;
+    color: #5b21b6;
+}
+
+:root[data-theme="dark"] .status-pill.is-approved {
+    background: #064e3b; border-color: #059669; color: #6ee7b7;
+}
+:root[data-theme="dark"] .status-pill.is-changes-requested {
+    background: #450a0a; border-color: #b91c1c; color: #fca5a5;
+}
+:root[data-theme="dark"] .status-pill.is-open {
+    background: #1e3a5f; border-color: #3b82f6; color: #93c5fd;
+}
+:root[data-theme="dark"] .status-pill.is-merged {
+    background: #2e1065; border-color: #7c3aed; color: #ddd6fe;
+}

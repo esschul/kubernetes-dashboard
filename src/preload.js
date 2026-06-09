@@ -33,5 +33,10 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
         if (!response.ok) { throw response.error; }
         return response.result;
     },
+    fetchPullRequests: async (config) => {
+        const response = await ipcRenderer.invoke('prs:fetch', config);
+        if (!response.ok) { throw response.error; }
+        return response.result;
+    },
     openExternal: (url) => ipcRenderer.invoke('external:open', url),
 });

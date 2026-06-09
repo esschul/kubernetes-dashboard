@@ -14,6 +14,7 @@ const path = require('node:path');
 const { fetchDeployments, fetchContexts, fetchNamespaces } = require('./kubectl-client');
 const { fetchPrForSha } = require('./github-client');
 const { fetchPipelineRuns, fetchFailedStep } = require('./azure-client');
+const { fetchPullRequests } = require('./pr-client');
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -89,6 +90,15 @@ app.whenReady().then(() => {
     ipcMain.handle('contexts:fetch', async (_event, config) => {
         try {
             const result = await fetchContexts(config);
+            return { ok: true, result };
+        } catch (err) {
+            return { ok: false, error: { message: err.message } };
+        }
+    });
+
+    ipcMain.handle('prs:fetch', async (_event, config) => {
+        try {
+            const result = await fetchPullRequests(config);
             return { ok: true, result };
         } catch (err) {
             return { ok: false, error: { message: err.message } };
