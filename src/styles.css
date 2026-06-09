@@ -924,6 +924,58 @@ h3 {
     color: var(--muted);
 }
 
+.env-switcher {
+    display: flex;
+    gap: 6px;
+}
+
+.env-btn {
+    padding: 8px 14px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--panel);
+    color: var(--text);
+    font-weight: 700;
+    font-size: 0.86rem;
+}
+
+.env-btn:hover {
+    background: var(--panel-muted);
+}
+
+.env-btn.is-active {
+    border-color: #a78bfa;
+    background: #ede9fe;
+    color: #5b21b6;
+}
+
+:root[data-theme="dark"] .env-btn.is-active {
+    border-color: #7c3aed;
+    background: #2e1065;
+    color: #ddd6fe;
+}
+
+.settings-section-heading {
+    font-size: 0.78rem;
+    font-weight: 750;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+}
+
+.env-mapping-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.env-mapping-grid label {
+    gap: 6px;
+    font-size: 0.86rem;
+}
+
 .settings-form {
     display: grid;
     gap: 18px;

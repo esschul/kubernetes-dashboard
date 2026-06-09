@@ -11,6 +11,7 @@ async function runKubectl(args, options = {}) {
         const { stdout } = await execFileAsync(kubectlPath, args, {
             timeout: 30_000,
             maxBuffer: 20 * 1024 * 1024,
+            env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() },
             ...execOptions,
         });
         return stdout;
@@ -311,8 +312,17 @@ async function fetchNamespaces(config = {}) {
 }
 
 async function fetchContexts(config = {}) {
-    const stdout = await runKubectl(['config', 'get-contexts', '-o', 'name'], { kubectlPath: config.kubectlPath });
-    return stdout.split('\n').map((s) => s.trim()).filter(Boolean);
+    const stdout = await runKubectl(['config', 'get-contexts', '--no-headers'], { kubectlPath: config.kubectlPath });
+    return stdout.split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+            const isCurrent = line.startsWith('*');
+            const cols = line.replace(/^\*\s*/, '').trim().split(/\s{2,}/);
+            const name = cols[0] || '';
+            const cluster = cols[1] || '';
+            return { name, cluster, isCurrent };
+        });
 }
 
 module.exports = { fetchDeployments, fetchContexts, fetchNamespaces };

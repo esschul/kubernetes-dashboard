@@ -78,6 +78,7 @@ function switchView(view) {
     });
     if (view === 'settings') {
         populateSettingsForm();
+        loadClusterSettingsIfEmpty();
     }
     if (view === 'pipelines') {
         refreshPipelines();
@@ -109,38 +110,74 @@ function populateSettingsForm() {
     document.getElementById('githubOrgInput').value = config.githubOrg || '';
     document.getElementById('azureOrgInput').value = config.azureOrg || '';
     document.getElementById('azureProjectInput').value = config.azureProject || '';
+    document.getElementById('envProdInput').value = config.envContexts?.prod || '';
+    document.getElementById('envQaInput').value = config.envContexts?.qa || '';
+    document.getElementById('envTestInput').value = config.envContexts?.test || '';
 }
 
-document.getElementById('loadContexts').addEventListener('click', async () => {
-    const button = document.getElementById('loadContexts');
-    button.disabled = true;
-    try {
-        const currentValue = document.getElementById('contextInput').value;
-        const contexts = await window.kubeDashboard.fetchContexts();
-        replaceSelectOptions('contextInput', contexts, '(current context)', currentValue);
-        setStatus(`Loaded ${contexts.length} kubectl context${contexts.length !== 1 ? 's' : ''}.`);
-    } catch (err) {
-        setStatus(`Could not load kubectl contexts: ${err?.message || String(err)}`);
-    } finally {
-        button.disabled = false;
-    }
+document.getElementById('contextInput').addEventListener('change', () => {
+    loadNamespacesForSelectedContext().catch((err) => {
+        setStatus(`Could not load namespaces: ${err?.message || String(err)}`);
+    });
 });
 
-document.getElementById('loadNamespaces').addEventListener('click', async () => {
-    const button = document.getElementById('loadNamespaces');
-    button.disabled = true;
+async function loadClusterSettingsIfEmpty() {
+    const contextSelect = document.getElementById('contextInput');
     try {
-        const context = document.getElementById('contextInput').value;
-        const currentValue = document.getElementById('namespaceInput').value;
-        const namespaces = await window.kubeDashboard.fetchNamespaces({ context });
-        replaceSelectOptions('namespaceInput', namespaces, '(select a namespace)', currentValue);
-        setStatus(`Loaded ${namespaces.length} namespace${namespaces.length !== 1 ? 's' : ''}.`);
+        const currentValue = contextSelect.value;
+        const contexts = await window.kubeDashboard.fetchContexts();
+        const options = [new Option('(current context)', ''),
+            ...contexts.map((ctx) => new Option(`${ctx.isCurrent ? '* ' : '  '}${ctx.name}`, ctx.name))];
+        contextSelect.replaceChildren(...options);
+        contextSelect.value = currentValue || '';
+
+        // Populate env mapping selects — read saved values from config, not from the (empty) selects
+        const savedConfig = loadConfig();
+        const envMap = { envProdInput: savedConfig.envContexts?.prod, envQaInput: savedConfig.envContexts?.qa, envTestInput: savedConfig.envContexts?.test };
+        for (const [id, savedValue] of Object.entries(envMap)) {
+            const sel = document.getElementById(id);
+            sel.replaceChildren(new Option('(none)', ''),
+                ...contexts.map((ctx) => new Option(ctx.name, ctx.name)));
+            sel.value = savedValue || '';
+        }
+
+        await loadNamespacesForSelectedContext();
     } catch (err) {
-        setStatus(`Could not load namespaces: ${err?.message || String(err)}`);
-    } finally {
-        button.disabled = false;
+        setStatus(`Could not load kubectl settings: ${err?.message || String(err)}`);
     }
+}
+
+function renderEnvSwitcher(config) {
+    const switcher = document.getElementById('envSwitcher');
+    const envs = config?.envContexts || {};
+    const buttons = Object.entries({ Prod: envs.prod, QA: envs.qa, Test: envs.test })
+        .filter(([, ctx]) => ctx);
+
+    if (buttons.length === 0) { switcher.innerHTML = ''; return; }
+
+    switcher.innerHTML = buttons.map(([label, ctx]) => {
+        const isActive = (config?.context || '') === ctx;
+        return `<button class="env-btn ${isActive ? 'is-active' : ''}" data-context="${escapeHtml(ctx)}">${label}</button>`;
+    }).join('');
+}
+
+document.getElementById('envSwitcher').addEventListener('click', (e) => {
+    const btn = e.target.closest('.env-btn');
+    if (!btn) { return; }
+    const config = loadConfig();
+    config.context = btn.dataset.context;
+    saveConfig(config);
+    updateContextLabel(config);
+    renderEnvSwitcher(config);
+    refresh();
 });
+
+async function loadNamespacesForSelectedContext() {
+    const context = document.getElementById('contextInput').value;
+    const currentNamespace = document.getElementById('namespaceInput').value;
+    const namespaces = await window.kubeDashboard.fetchNamespaces({ context });
+    replaceSelectOptions('namespaceInput', namespaces, '(select a namespace)', currentNamespace);
+}
 
 function replaceSelectOptions(id, values, emptyLabel, selectedValue) {
     const select = document.getElementById(id);
@@ -171,9 +208,15 @@ document.getElementById('saveSettings').addEventListener('click', () => {
         githubOrg: document.getElementById('githubOrgInput').value.trim(),
         azureOrg: document.getElementById('azureOrgInput').value.trim(),
         azureProject: document.getElementById('azureProjectInput').value.trim(),
+        envContexts: {
+            prod: document.getElementById('envProdInput').value,
+            qa: document.getElementById('envQaInput').value,
+            test: document.getElementById('envTestInput').value,
+        },
     };
     saveConfig(config);
     updateContextLabel(config);
+    renderEnvSwitcher(config);
     if (!config.namespace) {
         setStatus('Set a namespace in Settings before refreshing deployments.');
         return;
@@ -269,6 +312,11 @@ function matchesFilter(dep) {
 
 // --- Pipeline card clicks ---
 document.getElementById('pipelineList').addEventListener('click', (e) => {
+    const link = e.target.closest('.pr-row-link, .trello-link');
+    if (link) {
+        window.kubeDashboard.openExternal(link.dataset.url);
+        return;
+    }
     const card = e.target.closest('.pipeline-card');
     if (card?.dataset.url) { window.kubeDashboard.openExternal(card.dataset.url); }
 });
@@ -568,6 +616,8 @@ function getAgePillClass(isoString) {
 // --- Pipelines ---
 let pipelinesRefreshInProgress = false;
 let activePipelineFilter = 'all';
+let pipelineRenderGeneration = 0;
+const pipelinePrCache = new Map(); // key: `pipeline/${repoName}/${sha}` → pr or null
 
 document.getElementById('pipelinesRefreshButton').addEventListener('click', () => {
     if (!pipelinesRefreshInProgress) { refreshPipelines(); }
@@ -676,12 +726,25 @@ function renderPipelineList(runs) {
         if (!grouped.has(run.name)) { grouped.set(run.name, run); }
     }
 
+    pipelineRenderGeneration++;
+    const gen = pipelineRenderGeneration;
+
     list.innerHTML = [...grouped.values()].map(renderPipelineGroup).join('');
 
-    // Fetch failure reasons for failed pipelines
+    // Fetch failure reasons and PR info async
     const pipelineConfig = loadConfig();
+    let stagger = 0;
     for (const run of grouped.values()) {
         if (run.result === 'failed') { fetchAndInjectFailedStep(run, pipelineConfig); }
+        if (run.sourceVersion && run.repoName && pipelineConfig.githubOrg) {
+            const isCached = pipelinePrCache.has(`pipeline/${run.repoName}/${run.sourceVersion}`);
+            setTimeout(() => fetchAndInjectPipelinePr(run, gen, pipelineConfig), isCached ? 0 : stagger);
+            if (!isCached) { stagger += 400; }
+        } else {
+            // No sha/repo – remove loading placeholder
+            const card = list.querySelector(`.pipeline-card[data-id="${run.id}"]`);
+            if (card) { card.querySelector('.pr-row')?.remove(); }
+        }
     }
 }
 
@@ -705,6 +768,66 @@ async function fetchAndInjectFailedStep(run, config) {
     } catch { /* ignore */ }
 }
 
+async function fetchAndInjectPipelinePr(run, gen, config) {
+    const cacheKey = `pipeline/${run.repoName}/${run.sourceVersion}`;
+    const card = document.querySelector(`.pipeline-card[data-id="${run.id}"]`);
+    if (!card) { return; }
+
+    if (pipelinePrCache.has(cacheKey)) {
+        const cached = pipelinePrCache.get(cacheKey);
+        if (cached) {
+            injectPipelinePrRow(card, cached, run.sourceVersion);
+        } else {
+            card.querySelector('.pr-row')?.remove();
+        }
+        return;
+    }
+
+    try {
+        const pr = await window.kubeDashboard.fetchPrForSha(run.sourceVersion, run.repoName, config.githubOrg);
+        pipelinePrCache.set(cacheKey, pr);
+        if (gen !== pipelineRenderGeneration) { return; }
+        const freshCard = document.querySelector(`.pipeline-card[data-id="${run.id}"]`);
+        if (!freshCard) { return; }
+        if (pr) {
+            injectPipelinePrRow(freshCard, pr, run.sourceVersion);
+        } else {
+            freshCard.querySelector('.pr-row')?.remove();
+        }
+    } catch {
+        const c = document.querySelector(`.pipeline-card[data-id="${run.id}"]`);
+        c?.querySelector('.pr-row')?.remove();
+    }
+}
+
+function injectPipelinePrRow(card, pr, sha) {
+    const existing = card.querySelector('.pr-row');
+    const html = renderPrRow(pr, sha);
+    if (existing) {
+        existing.innerHTML = html;
+        existing.classList.remove('pr-row--loading');
+    } else {
+        const row = document.createElement('div');
+        row.className = 'pr-row';
+        row.innerHTML = html;
+        card.querySelector('.deployment-card-top').insertAdjacentElement('afterend', row);
+    }
+
+    // Trello link
+    const placeholder = card.querySelector('.trello-placeholder');
+    if (placeholder) {
+        if (pr.trelloUrl) {
+            const trello = document.createElement('span');
+            trello.className = 'trello-link';
+            trello.dataset.url = pr.trelloUrl;
+            trello.textContent = 'Trello ↗';
+            placeholder.replaceWith(trello);
+        } else {
+            placeholder.remove();
+        }
+    }
+}
+
 function renderPipelineGroup(run) {
     const statusClass = getPipelineStatusClass(run);
     const statusLabel = getPipelineStatusLabel(run);
@@ -714,6 +837,9 @@ function renderPipelineGroup(run) {
         ? formatDuration(new Date(run.finishTime) - new Date(run.startTime))
         : null;
 
+    const config = loadConfig();
+    const hasSha = run.sourceVersion && run.repoName && config.githubOrg;
+
     return `
     <div class="pipeline-card" data-url="${escapeHtml(run.url)}" data-id="${run.id}">
         <div class="deployment-card-top">
@@ -721,10 +847,12 @@ function renderPipelineGroup(run) {
                 <h3>${escapeHtml(run.name)}</h3>
             </div>
             <div class="deployment-pill-row">
+                <span class="trello-placeholder"></span>
                 <span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span>
                 <span class="age-pill" title="${escapeHtml(startAbsolute)}">${escapeHtml(startLabel)}</span>
             </div>
         </div>
+        ${hasSha ? `<div class="pr-row pr-row--loading"><span class="pr-loading">Loading commit info…</span></div>` : ''}
         <div class="pipeline-meta-row">
             ${run.sourceBranch ? `<span class="branch-pill">${escapeHtml(run.sourceBranch)}</span>` : ''}
             ${run.trigger && run.trigger !== run.sourceBranch ? `<span class="pipeline-meta-text">${escapeHtml(run.trigger)}</span>` : ''}
@@ -764,6 +892,12 @@ function formatDuration(ms) {
 // --- Init ---
 const initialConfig = loadConfig();
 updateContextLabel(initialConfig);
+renderEnvSwitcher(initialConfig);
 populateSettingsForm();
-setStatus('Save settings to refresh deployments.');
-switchView('settings');
+if (initialConfig.namespace) {
+    switchView('deployments');
+    refreshDeployments();
+} else {
+    setStatus('Save settings to refresh deployments.');
+    switchView('settings');
+}

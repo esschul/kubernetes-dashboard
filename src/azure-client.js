@@ -8,6 +8,7 @@ async function runAz(args) {
     const { stdout } = await execFileAsync(resolveCommand('az', 'AZ_PATH'), args, {
         timeout: 30_000,
         maxBuffer: 10 * 1024 * 1024,
+        env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() },
     });
     return JSON.parse(stdout);
 }
@@ -47,8 +48,20 @@ async function fetchPipelineRuns({ org, project }) {
                 finishTime: r.finishTime || null,
                 url: `${org.replace(/\/$/, '')}/${encodeURIComponent(project)}/_build/results?buildId=${r.id}`,
                 team,
+                sourceVersion: r.sourceVersion || null,
+                repoName: r.repository?.name || deriveRepoName(r.definition?.name, team) || null,
             };
         });
+}
+
+// Pipeline definition names often include the team folder as a prefix, e.g. "bring.checkout-api"
+// Strip it so we end up with just the repo name part, e.g. "checkout-api"
+function deriveRepoName(definitionName, team) {
+    if (!definitionName) { return null; }
+    if (team && definitionName.toLowerCase().startsWith(`${team.toLowerCase()}.`)) {
+        return definitionName.slice(team.length + 1);
+    }
+    return definitionName;
 }
 
 function normalizeTrigger(reason, requestedBy, prNumber) {

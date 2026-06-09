@@ -55,6 +55,7 @@
                     <p class="status-panel" id="statusPanel">Loading…</p>
                 </div>
                 <div style="display:flex;gap:10px;align-items:center;flex-shrink:0;">
+                    <div class="env-switcher" id="envSwitcher"></div>
                     <button class="primary-button" id="refreshButton">Refresh</button>
                 </div>
             </div>
@@ -92,22 +93,22 @@
             <div class="panel settings-form" id="settingsForm">
                 <label>
                     kubectl context
-                    <div class="input-with-action">
-                        <select id="contextInput">
-                            <option value="">(current context)</option>
-                        </select>
-                        <button class="secondary-button" id="loadContexts" type="button">Load</button>
-                    </div>
+                    <select id="contextInput">
+                        <option value="">(current context)</option>
+                    </select>
                 </label>
                 <label>
                     Namespace
-                    <div class="input-with-action">
-                        <select id="namespaceInput">
-                            <option value="">(select a namespace)</option>
-                        </select>
-                        <button class="secondary-button" id="loadNamespaces" type="button">Load</button>
-                    </div>
+                    <select id="namespaceInput">
+                        <option value="">(select a namespace)</option>
+                    </select>
                 </label>
+                <div class="settings-section-heading">Environment shortcuts</div>
+                <div class="env-mapping-grid">
+                    <label>Prod <select id="envProdInput"><option value="">(none)</option></select></label>
+                    <label>QA <select id="envQaInput"><option value="">(none)</option></select></label>
+                    <label>Test <select id="envTestInput"><option value="">(none)</option></select></label>
+                </div>
                 <label>
                     GitHub org
                     <input type="text" id="githubOrgInput" placeholder="e.g. my-org" />

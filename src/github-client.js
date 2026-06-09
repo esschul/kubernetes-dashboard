@@ -40,6 +40,7 @@ async function runGh(args) {
     const { stdout } = await execFileAsync(ghPath, args, {
         timeout: 15_000,
         maxBuffer: 5 * 1024 * 1024,
+        env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() },
     });
     return JSON.parse(stdout);
 }
@@ -48,6 +49,17 @@ async function resolveRepo(repoName, sha, org) {
     const cacheKey = `${org}/${repoName}`;
     if (repoCache.has(cacheKey)) { return repoCache.get(cacheKey); }
 
+    // Fast path: try the repo name directly before doing an expensive search
+    try {
+        await runGh(['api', `repos/${org}/${repoName}/commits/${sha}`, '--jq', '.sha']);
+        // If that didn't throw, the commit exists in this repo
+        const repoFullName = `${org}/${repoName}`;
+        repoCache.set(cacheKey, repoFullName);
+        saveRepoCache();
+        return repoFullName;
+    } catch { /* repo doesn't exist or SHA not found — fall through to search */ }
+
+    // Slow path: search across all repos in the org
     const results = await runGh([
         'search', 'commits', sha,
         '--owner', org,

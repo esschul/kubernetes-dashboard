@@ -1,5 +1,15 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 if (!app.isPackaged) { require('electron-reload')(__dirname); }
+
+// Packaged Electron apps launch with a minimal PATH that lacks homebrew and
+// other user-installed tools. Extend it so kubectl, gh, az and their auth
+// plugins (kubelogin, etc.) can all be found as child processes.
+const EXTRA_PATHS = ['/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', '/usr/local/sbin'];
+const currentPath = process.env.PATH || '';
+const missingPaths = EXTRA_PATHS.filter((p) => !currentPath.split(':').includes(p));
+if (missingPaths.length > 0) {
+    process.env.PATH = [...missingPaths, currentPath].join(':');
+}
 const path = require('node:path');
 const { fetchDeployments, fetchContexts, fetchNamespaces } = require('./kubectl-client');
 const { fetchPrForSha } = require('./github-client');
