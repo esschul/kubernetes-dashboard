@@ -884,6 +884,20 @@ h3 {
     background: var(--panel-muted);
 }
 
+.theme-button svg {
+    width: 20px;
+    height: 20px;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.theme-button.is-spinning svg {
+    animation: spin 0.7s linear infinite;
+}
+
 .primary-button {
     border: 1px solid var(--accent);
     background: var(--accent);

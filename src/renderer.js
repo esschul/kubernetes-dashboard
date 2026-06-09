@@ -247,11 +247,17 @@ function setLastUpdated() {
     if (el) { el.textContent = `Updated ${new Date().toLocaleTimeString()}`; }
 }
 
-function refreshAll() {
-    refresh();
-    refreshPipelines();
-    refreshPullRequests(true);
+function setRefreshSpinning(spinning) {
+    document.getElementById('refreshAllButton')?.classList.toggle('is-spinning', spinning);
 }
+
+function refreshAll() {
+    setRefreshSpinning(true);
+    Promise.allSettled([refresh(), refreshPipelines(), refreshPullRequests(true)])
+        .then(() => setRefreshSpinning(false));
+}
+
+document.getElementById('refreshAllButton').addEventListener('click', refreshAll);
 
 
 async function refresh() {
