@@ -83,10 +83,10 @@ function switchView(view) {
     if (view === 'deployments' && !latestDeployments.length) {
         refresh();
     }
-    if (view === 'pipelines') {
+    if (view === 'pipelines' && !window._lastPipelineRuns) {
         refreshPipelines();
     }
-    if (view === 'pull-requests') {
+    if (view === 'pull-requests' && !latestPrData) {
         refreshPullRequests();
     }
 }
