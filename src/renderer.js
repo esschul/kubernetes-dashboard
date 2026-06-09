@@ -714,12 +714,13 @@ function renderPipelineList(runs) {
         ? runs.filter((r) => r.team === pConfig.namespace)
         : runs;
 
-    // Update chip counts
+    // Deduplicate first (latest run per pipeline), then count by status
     const deduped = (arr) => [...new Map(arr.map((r) => [r.name, r])).values()];
+    const latestRuns = deduped(filtered);
     const chipCounts = {
-        all: deduped(filtered).length,
-        failed: deduped(filtered.filter((r) => r.result === 'failed')).length,
-        succeeded: deduped(filtered.filter((r) => r.result === 'succeeded')).length,
+        all: latestRuns.length,
+        failed: latestRuns.filter((r) => r.result === 'failed').length,
+        succeeded: latestRuns.filter((r) => r.result === 'succeeded').length,
     };
     document.querySelectorAll('.filter-chip[data-pipeline-filter]').forEach((chip) => {
         const span = chip.querySelector('span');
