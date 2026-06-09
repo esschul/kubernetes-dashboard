@@ -62,10 +62,7 @@
                     <h2 id="viewTitle">Deployments</h2>
                     <p class="status-panel" id="statusPanel">Loading…</p>
                 </div>
-                <div style="display:flex;gap:10px;align-items:center;flex-shrink:0;">
-                    <div class="env-switcher" id="envSwitcher"></div>
-                    <button class="primary-button" id="refreshButton">Refresh</button>
-                </div>
+                <div class="env-switcher" id="envSwitcher"></div>
             </div>
             <div class="filter-bar" id="filterBar">
                 <button class="filter-chip is-active" data-filter="all">All <span></span></button>
@@ -83,7 +80,6 @@
                     <h2>Pipelines</h2>
                     <p class="status-panel" id="pipelinesStatusPanel">Loading…</p>
                 </div>
-                <button class="primary-button" id="pipelinesRefreshButton">Refresh</button>
             </div>
             <div class="filter-bar" id="pipelineFilterBar">
                 <button class="filter-chip is-active" data-pipeline-filter="all">All <span></span></button>
@@ -100,13 +96,10 @@
                     <h2>Pull Requests</h2>
                     <p class="status-panel" id="prStatusPanel">Loading…</p>
                 </div>
-                <div style="display:flex;gap:10px;align-items:center;flex-shrink:0;">
-                    <div class="env-switcher" id="prTabSwitcher">
-                        <button class="env-btn is-active" data-pr-tab="open">Open</button>
-                        <button class="env-btn" data-pr-tab="merged">Merged today</button>
-                        <button class="env-btn" data-pr-tab="dependabot">Dependabot</button>
-                    </div>
-                    <button class="primary-button" id="prRefreshButton">Refresh</button>
+                <div class="env-switcher" id="prTabSwitcher">
+                    <button class="env-btn is-active" data-pr-tab="open">Open</button>
+                    <button class="env-btn" data-pr-tab="merged">Merged today</button>
+                    <button class="env-btn" data-pr-tab="dependabot">Dependabot</button>
                 </div>
             </div>
             <div class="filter-bar" id="prFilterBar">

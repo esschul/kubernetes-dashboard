@@ -253,9 +253,6 @@ function refreshAll() {
     refreshPullRequests(true);
 }
 
-document.getElementById('refreshButton').addEventListener('click', () => {
-    if (!refreshInProgress) { refreshAll(); }
-});
 
 async function refresh() {
     if (refreshInProgress) { return; }
@@ -270,7 +267,6 @@ async function refresh() {
     }
 
     refreshInProgress = true;
-    document.getElementById('refreshButton').disabled = true;
     setStatus('Refreshing…');
 
     try {
@@ -286,7 +282,6 @@ async function refresh() {
         setStatus('Refresh failed');
     } finally {
         refreshInProgress = false;
-        document.getElementById('refreshButton').disabled = false;
     }
 }
 
@@ -639,9 +634,6 @@ let activePipelineFilter = 'all';
 let pipelineRenderGeneration = 0;
 const pipelinePrCache = new Map(); // key: `pipeline/${repoName}/${sha}` → pr or null
 
-document.getElementById('pipelinesRefreshButton').addEventListener('click', () => {
-    if (!pipelinesRefreshInProgress) { refreshAll(); }
-});
 
 document.getElementById('pipelineFilterBar').addEventListener('click', (e) => {
     const chip = e.target.closest('.filter-chip[data-pipeline-filter]');
@@ -656,7 +648,6 @@ document.getElementById('pipelineFilterBar').addEventListener('click', (e) => {
 async function refreshPipelines() {
     if (pipelinesRefreshInProgress) { return; }
     pipelinesRefreshInProgress = true;
-    document.getElementById('pipelinesRefreshButton').disabled = true;
     document.getElementById('pipelinesStatusPanel').textContent = 'Refreshing…';
 
     const config = loadConfig();
@@ -705,7 +696,6 @@ async function refreshPipelines() {
         document.getElementById('pipelinesStatusPanel').textContent = 'Refresh failed';
     } finally {
         pipelinesRefreshInProgress = false;
-        document.getElementById('pipelinesRefreshButton').disabled = false;
     }
 }
 
@@ -916,9 +906,6 @@ let activePrTab = 'open';  // 'open' | 'merged' | 'dependabot'
 let activePrFilter = 'all';
 let latestPrData = null;
 
-document.getElementById('prRefreshButton').addEventListener('click', () => {
-    if (!prRefreshInProgress) { refreshAll(); }
-});
 
 document.getElementById('prTabSwitcher').addEventListener('click', (e) => {
     const btn = e.target.closest('.env-btn[data-pr-tab]');
@@ -962,7 +949,6 @@ async function refreshPullRequests(force = false) {
     }
 
     prRefreshInProgress = true;
-    document.getElementById('prRefreshButton').disabled = true;
     document.getElementById('prStatusPanel').textContent = 'Loading…';
 
     try {
@@ -978,7 +964,6 @@ async function refreshPullRequests(force = false) {
         document.getElementById('prStatusPanel').textContent = 'Refresh failed';
     } finally {
         prRefreshInProgress = false;
-        document.getElementById('prRefreshButton').disabled = false;
     }
 }
 

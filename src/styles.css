@@ -417,6 +417,7 @@ h3 {
     flex-wrap: wrap;
     gap: 8px;
     flex-shrink: 0;
+    margin-bottom: 16px;
 }
 
 .filter-chip {
