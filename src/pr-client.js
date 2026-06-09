@@ -57,17 +57,32 @@ function normalizePr(pr, repository) {
     return { ...pr, ...getLatestCommentActivity(pr), ...normalizeCheckStatus(pr), repository };
 }
 
-async function fetchPullRequests({ org, topic }) {
-    if (!org || !topic) { throw new Error('GitHub org and topic are required. Set them in Settings.'); }
+// Cache the repo list — it rarely changes and costs a GraphQL API call each time
+const repoListCache = new Map(); // key: `${org}/${topic}` → { repos, fetchedAt }
+const REPO_LIST_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
-    const today = getLocalDateKey();
-    const repositories = await runGh([
+async function fetchRepoList(org, topic) {
+    const key = `${org}/${topic}`;
+    const cached = repoListCache.get(key);
+    if (cached && (Date.now() - cached.fetchedAt) < REPO_LIST_TTL_MS) {
+        return cached.repos;
+    }
+    const repos = await runGh([
         'repo', 'list', org,
         '--topic', topic,
         '--no-archived',
         '--limit', '100',
         '--json', 'nameWithOwner',
     ]);
+    repoListCache.set(key, { repos, fetchedAt: Date.now() });
+    return repos;
+}
+
+async function fetchPullRequests({ org, topic }) {
+    if (!org || !topic) { throw new Error('GitHub org and topic are required. Set them in Settings.'); }
+
+    const today = getLocalDateKey();
+    const repositories = await fetchRepoList(org, topic);
 
     const lists = await Promise.all(repositories.map(async ({ nameWithOwner }) => {
         const [open, merged] = await Promise.all([
