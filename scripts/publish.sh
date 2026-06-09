@@ -3,15 +3,16 @@ set -euo pipefail
 
 VERSION=$(node -p "require('./package.json').version")
 TAG="v${VERSION}"
-DMG="dist/Kubernetes Dashboard-${VERSION}.dmg"
+DMG=$(ls "dist/Kubernetes Dashboard-${VERSION}"*.dmg 2>/dev/null | head -1)
 
 echo "→ Building DMG for v${VERSION}…"
 npm run build:mac
 
-if [ ! -f "${DMG}" ]; then
-    echo "✗ DMG not found at: ${DMG}"
+if [ -z "${DMG}" ] || [ ! -f "${DMG}" ]; then
+    echo "✗ DMG not found in dist/ for version ${VERSION}"
     exit 1
 fi
+echo "→ Found DMG: ${DMG}"
 
 echo "→ Creating GitHub release ${TAG}…"
 if gh release view "${TAG}" &>/dev/null; then
