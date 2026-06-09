@@ -129,6 +129,7 @@ button:disabled {
 
 .app-shell.is-sidebar-collapsed .sidebar-title,
 .app-shell.is-sidebar-collapsed .context-label,
+.app-shell.is-sidebar-collapsed .updated-label,
 .app-shell.is-sidebar-collapsed .nav-label,
 .app-shell.is-sidebar-collapsed .eyebrow {
     display: none;
@@ -182,6 +183,13 @@ h3 {
 .context-label, .status-panel, .form-help {
     color: var(--muted);
     line-height: 1.5;
+}
+
+.updated-label {
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 4px;
+    opacity: 0.7;
 }
 
 .nav {

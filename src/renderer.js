@@ -242,6 +242,11 @@ function updateContextLabel(config) {
 }
 
 // --- Refresh logic ---
+function setLastUpdated() {
+    const el = document.getElementById('updatedLabel');
+    if (el) { el.textContent = `Updated ${new Date().toLocaleTimeString()}`; }
+}
+
 function refreshAll() {
     refresh();
     refreshPipelines();
@@ -274,7 +279,8 @@ async function refresh() {
         renderDeploymentList(deployments);
         updateCounts(deployments);
         const now = new Date().toLocaleTimeString();
-        setStatus(`Last refreshed at ${now} · ${deployments.length} deployment${deployments.length !== 1 ? 's' : ''}`);
+        setStatus(`${deployments.length} deployment${deployments.length !== 1 ? 's' : ''}`);
+        setLastUpdated();
     } catch (err) {
         showError(err);
         setStatus('Refresh failed');
@@ -677,7 +683,8 @@ async function refreshPipelines() {
         const running = teamPipelines.filter((r) => r.status === 'inProgress').length;
         const now = new Date().toLocaleTimeString();
         document.getElementById('pipelinesStatusPanel').textContent =
-            `Last refreshed at ${now} · ${teamPipelines.length} pipeline${teamPipelines.length !== 1 ? 's' : ''} today`;
+            `${teamPipelines.length} pipeline${teamPipelines.length !== 1 ? 's' : ''} today`;
+        setLastUpdated();
         const count = document.getElementById('pipelinesCount');
         if (failed > 0) {
             count.textContent = `${failed} failed`;
@@ -963,7 +970,8 @@ async function refreshPullRequests(force = false) {
         latestPrData = data;
         renderPrView(data);
         const now = new Date().toLocaleTimeString();
-        document.getElementById('prStatusPanel').textContent = `${data.repositories.length} repo${data.repositories.length !== 1 ? 's' : ''} · Updated ${now}`;
+        document.getElementById('prStatusPanel').textContent = `${data.repositories.length} repo${data.repositories.length !== 1 ? 's' : ''}`;
+        setLastUpdated();
         updatePrNavCount(data);
     } catch (err) {
         document.getElementById('prList').innerHTML = `<div class="error-panel"><strong>Failed to load pull requests</strong><pre>${escapeHtml(err?.message || String(err))}</pre></div>`;
@@ -1138,3 +1146,6 @@ if (initialConfig.githubOrg && initialConfig.githubTopic) {
 if (initialConfig.namespace) { refresh(); }
 if (initialConfig.azureOrg && initialConfig.azureProject) { refreshPipelines(); }
 if (initialConfig.githubOrg && initialConfig.githubTopic) { refreshPullRequests(true); }
+
+// Auto-refresh every 2 minutes
+setInterval(refreshAll, 2 * 60 * 1000);
