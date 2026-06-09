@@ -80,6 +80,9 @@ function switchView(view) {
         populateSettingsForm();
         loadClusterSettingsIfEmpty();
     }
+    if (view === 'deployments' && !latestDeployments.length) {
+        refresh();
+    }
     if (view === 'pipelines') {
         refreshPipelines();
     }
@@ -1118,8 +1121,11 @@ if (initialConfig.githubOrg && initialConfig.githubTopic) {
     switchView('pull-requests');
 } else if (initialConfig.namespace) {
     switchView('deployments');
-    refresh();
 } else {
     setStatus('Save settings to refresh deployments.');
     switchView('settings');
+}
+// Always pre-fetch deployments in the background if namespace is configured
+if (initialConfig.namespace) {
+    refresh();
 }
