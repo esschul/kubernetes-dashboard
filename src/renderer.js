@@ -896,7 +896,7 @@ renderEnvSwitcher(initialConfig);
 populateSettingsForm();
 if (initialConfig.namespace) {
     switchView('deployments');
-    refreshDeployments();
+    refresh();
 } else {
     setStatus('Save settings to refresh deployments.');
     switchView('settings');
