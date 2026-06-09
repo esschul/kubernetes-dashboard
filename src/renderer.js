@@ -1081,7 +1081,9 @@ const initialConfig = loadConfig();
 updateContextLabel(initialConfig);
 renderEnvSwitcher(initialConfig);
 populateSettingsForm();
-if (initialConfig.namespace) {
+if (initialConfig.githubOrg && initialConfig.githubTopic) {
+    switchView('pull-requests');
+} else if (initialConfig.namespace) {
     switchView('deployments');
     refresh();
 } else {
