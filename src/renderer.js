@@ -242,8 +242,14 @@ function updateContextLabel(config) {
 }
 
 // --- Refresh logic ---
+function refreshAll() {
+    refresh();
+    refreshPipelines();
+    refreshPullRequests(true);
+}
+
 document.getElementById('refreshButton').addEventListener('click', () => {
-    if (!refreshInProgress) { refresh(); }
+    if (!refreshInProgress) { refreshAll(); }
 });
 
 async function refresh() {
@@ -628,7 +634,7 @@ let pipelineRenderGeneration = 0;
 const pipelinePrCache = new Map(); // key: `pipeline/${repoName}/${sha}` → pr or null
 
 document.getElementById('pipelinesRefreshButton').addEventListener('click', () => {
-    if (!pipelinesRefreshInProgress) { refreshPipelines(); }
+    if (!pipelinesRefreshInProgress) { refreshAll(); }
 });
 
 document.getElementById('pipelineFilterBar').addEventListener('click', (e) => {
@@ -904,7 +910,7 @@ let activePrFilter = 'all';
 let latestPrData = null;
 
 document.getElementById('prRefreshButton').addEventListener('click', () => {
-    if (!prRefreshInProgress) { refreshPullRequests(true); }
+    if (!prRefreshInProgress) { refreshAll(); }
 });
 
 document.getElementById('prTabSwitcher').addEventListener('click', (e) => {
@@ -1128,7 +1134,7 @@ if (initialConfig.githubOrg && initialConfig.githubTopic) {
     setStatus('Save settings to refresh deployments.');
     switchView('settings');
 }
-// Always pre-fetch deployments in the background if namespace is configured
-if (initialConfig.namespace) {
-    refresh();
-}
+// Pre-fetch all data sources in parallel on startup
+if (initialConfig.namespace) { refresh(); }
+if (initialConfig.azureOrg && initialConfig.azureProject) { refreshPipelines(); }
+if (initialConfig.githubOrg && initialConfig.githubTopic) { refreshPullRequests(true); }
