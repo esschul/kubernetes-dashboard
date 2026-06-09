@@ -1085,7 +1085,7 @@ function renderPrCard(pr, isMerged = false) {
     const reviewClass = isMerged ? 'is-merged' : getPrReviewClass(pr);
     const checkClass = { success: 'is-success', failure: 'is-failure', pending: 'is-pending', none: 'is-none' }[pr.checkStatus] || 'is-none';
     const dateLabel = isMerged ? `Merged ${formatRelativeTime(pr.mergedAt)}` : `Updated ${formatRelativeTime(pr.updatedAt)}`;
-    const ageDetails = !isMerged ? getPrAgeDetails(pr.createdAt) : null;
+    const ageDetails = null; // age is a filter, not a badge
 
     const pipelineStatus = isMerged ? getPipelineStatusForPr(pr.number) : null;
     const deploymentStatus = isMerged ? getDeploymentStatusForPr(pr) : null;

@@ -1083,7 +1083,6 @@ input, select {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding: 0 24px 24px;
 }
 
 .pr-card {
