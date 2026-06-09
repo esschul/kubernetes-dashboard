@@ -715,8 +715,7 @@ function renderPipelineList(runs) {
         : runs;
 
     // Update chip counts
-    const groupKey = (r) => r.sourceBranch?.startsWith('PR #') ? r.sourceBranch : r.name;
-    const deduped = (arr) => [...new Map(arr.map((r) => [groupKey(r), r])).values()];
+    const deduped = (arr) => [...new Map(arr.map((r) => [r.name, r])).values()];
     const chipCounts = {
         all: deduped(filtered).length,
         failed: deduped(filtered.filter((r) => r.result === 'failed')).length,
@@ -738,12 +737,10 @@ function renderPipelineList(runs) {
         return;
     }
 
-    // Group by PR number for PR-triggered runs, by pipeline name otherwise.
-    // Runs arrive newest-first so the first entry wins (latest run).
+    // One card per pipeline definition — newest run wins (runs arrive newest-first).
     const grouped = new Map();
     for (const run of filtered) {
-        const key = run.sourceBranch?.startsWith('PR #') ? run.sourceBranch : run.name;
-        if (!grouped.has(key)) { grouped.set(key, run); }
+        if (!grouped.has(run.name)) { grouped.set(run.name, run); }
     }
 
     pipelineRenderGeneration++;
