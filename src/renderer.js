@@ -714,35 +714,33 @@ function renderPipelineList(runs) {
         ? runs.filter((r) => r.team === pConfig.namespace)
         : runs;
 
-    // Deduplicate first (latest run per pipeline), then count by status
-    const deduped = (arr) => [...new Map(arr.map((r) => [r.name, r])).values()];
-    const latestRuns = deduped(filtered);
+    // Always deduplicate first: one entry per pipeline = the latest run.
+    // Then apply status filter and counts on that deduplicated set.
+    const latestPerPipeline = [...new Map(filtered.map((r) => [r.name, r])).values()];
+
     const chipCounts = {
-        all: latestRuns.length,
-        failed: latestRuns.filter((r) => r.result === 'failed').length,
-        succeeded: latestRuns.filter((r) => r.result === 'succeeded').length,
+        all: latestPerPipeline.length,
+        failed: latestPerPipeline.filter((r) => r.result === 'failed').length,
+        succeeded: latestPerPipeline.filter((r) => r.result === 'succeeded').length,
     };
     document.querySelectorAll('.filter-chip[data-pipeline-filter]').forEach((chip) => {
         const span = chip.querySelector('span');
         if (span) { span.textContent = chipCounts[chip.dataset.pipelineFilter] ?? 0; }
     });
 
+    let toShow = latestPerPipeline;
     if (activePipelineFilter === 'failed') {
-        filtered = filtered.filter((r) => r.result === 'failed');
+        toShow = toShow.filter((r) => r.result === 'failed');
     } else if (activePipelineFilter === 'succeeded') {
-        filtered = filtered.filter((r) => r.result === 'succeeded');
+        toShow = toShow.filter((r) => r.result === 'succeeded');
     }
 
-    if (filtered.length === 0) {
+    if (toShow.length === 0) {
         list.innerHTML = '<p class="empty-state">No pipeline runs today.</p>';
         return;
     }
 
-    // One card per pipeline definition — newest run wins (runs arrive newest-first).
-    const grouped = new Map();
-    for (const run of filtered) {
-        if (!grouped.has(run.name)) { grouped.set(run.name, run); }
-    }
+    const grouped = new Map(toShow.map((r) => [r.name, r]));
 
     pipelineRenderGeneration++;
     const gen = pipelineRenderGeneration;
