@@ -994,7 +994,16 @@ function getPrsForTab(data) {
     return data.pullRequests;
 }
 
+function getLocalDateKey(value) {
+    const date = value ? new Date(value) : new Date();
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
 function matchesPrFilter(pr) {
+    if (activePrFilter === 'opened-today') { return getLocalDateKey(pr.createdAt) === getLocalDateKey(); }
     if (activePrFilter === 'approved') { return pr.reviewDecision === 'APPROVED' && !pr.isDraft; }
     if (activePrFilter === 'changes-requested') { return pr.reviewDecision === 'CHANGES_REQUESTED' && !pr.isDraft; }
     if (activePrFilter === 'draft') { return Boolean(pr.isDraft); }
@@ -1020,6 +1029,7 @@ function renderPrView(data) {
             span.textContent = prs.filter((pr) => matchesPrFilter({ ...pr, _filter: f, checkStatus: pr.checkStatus, reviewDecision: pr.reviewDecision, isDraft: pr.isDraft })).length;
             // recalc properly
             const counts = {
+                'opened-today': prs.filter((p) => getLocalDateKey(p.createdAt) === getLocalDateKey()).length,
                 'approved': prs.filter((p) => p.reviewDecision === 'APPROVED' && !p.isDraft).length,
                 'changes-requested': prs.filter((p) => p.reviewDecision === 'CHANGES_REQUESTED' && !p.isDraft).length,
                 'draft': prs.filter((p) => p.isDraft).length,
@@ -1118,9 +1128,9 @@ function getPrReviewClass(pr) {
 function getPrAgeDetails(createdAt) {
     if (!createdAt) { return null; }
     const days = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000));
-    const cssClass = days >= 30 ? 'age-pill is-critical' : days >= 14 ? 'age-pill is-warning' : days >= 7 ? 'age-pill is-notice' : 'age-pill is-fresh';
-    const label = days === 0 ? 'Opened today' : `${days}d old`;
-    return { cssClass, label };
+    if (days === 0) { return null; } // "Opened today" is a filter, not a badge
+    const cssClass = days >= 30 ? 'age-pill is-critical' : days >= 14 ? 'age-pill is-warning' : 'age-pill is-notice';
+    return { cssClass, label: `${days}d old` };
 }
 
 // --- Init ---
