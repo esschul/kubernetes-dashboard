@@ -1031,12 +1031,43 @@ function renderPrView(data) {
     list.innerHTML = filtered.map((pr) => renderPrCard(pr, isMergedTab)).join('');
 }
 
+function getPipelineStatusForPr(prNumber) {
+    const runs = window._lastPipelineRuns;
+    if (!runs) { return null; }
+    // Match pipeline runs triggered by this PR (sourceBranch = "PR #N")
+    const matching = runs.filter((r) => r.sourceBranch === `PR #${prNumber}` || r.trigger === `PR #${prNumber}`);
+    if (!matching.length) { return null; }
+    // Pick the most recent
+    const latest = matching.sort((a, b) => new Date(b.startTime) - new Date(a.startTime))[0];
+    if (latest.status === 'inProgress') { return { label: 'Pipeline running', cls: 'is-progressing' }; }
+    if (latest.result === 'succeeded') { return { label: 'Pipeline passed', cls: 'is-healthy' }; }
+    if (latest.result === 'failed') { return { label: 'Pipeline failed', cls: 'is-failed' }; }
+    if (latest.result === 'canceled') { return { label: 'Pipeline canceled', cls: 'is-scaled-down' }; }
+    return null;
+}
+
+function getDeploymentStatusForPr(pr) {
+    if (!latestDeployments.length) { return null; }
+    // Match by the last segment of the repo name, e.g. "bring/checkout-api" → "checkout-api"
+    const repoName = pr.repository?.split('/').pop()?.toLowerCase();
+    if (!repoName) { return null; }
+    const dep = latestDeployments.find((d) => d.imageRepoName?.toLowerCase() === repoName);
+    if (!dep) { return null; }
+    const statusLabel = getStatusLabel(dep.status);
+    const cls = dep.status === 'healthy' ? 'is-healthy' :
+        dep.status === 'progressing' ? 'is-progressing' : 'is-failed';
+    return { label: `Deployed · ${statusLabel}`, cls };
+}
+
 function renderPrCard(pr, isMerged = false) {
     const reviewLabel = isMerged ? 'Merged' : getPrReviewLabel(pr);
     const reviewClass = isMerged ? 'is-merged' : getPrReviewClass(pr);
     const checkClass = { success: 'is-success', failure: 'is-failure', pending: 'is-pending', none: 'is-none' }[pr.checkStatus] || 'is-none';
     const dateLabel = isMerged ? `Merged ${formatRelativeTime(pr.mergedAt)}` : `Updated ${formatRelativeTime(pr.updatedAt)}`;
     const ageDetails = !isMerged ? getPrAgeDetails(pr.createdAt) : null;
+
+    const pipelineStatus = isMerged ? getPipelineStatusForPr(pr.number) : null;
+    const deploymentStatus = isMerged ? getDeploymentStatusForPr(pr) : null;
 
     return `
     <div class="pr-card deployment-card" data-url="${escapeHtml(pr.url)}">
@@ -1047,6 +1078,8 @@ function renderPrCard(pr, isMerged = false) {
             </div>
             <div class="deployment-pill-row">
                 ${ageDetails ? `<span class="age-pill ${ageDetails.cssClass}">${escapeHtml(ageDetails.label)}</span>` : ''}
+                ${pipelineStatus ? `<span class="status-pill ${pipelineStatus.cls}">${escapeHtml(pipelineStatus.label)}</span>` : ''}
+                ${deploymentStatus ? `<span class="status-pill ${deploymentStatus.cls}">${escapeHtml(deploymentStatus.label)}</span>` : ''}
                 <span class="check-pill ${checkClass}">${escapeHtml(pr.checkStatusLabel || 'No checks')}</span>
                 <span class="status-pill ${reviewClass}">${escapeHtml(reviewLabel)}</span>
             </div>
