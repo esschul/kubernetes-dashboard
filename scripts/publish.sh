@@ -14,17 +14,10 @@ if [ -z "${DMG}" ] || [ ! -f "${DMG}" ]; then
 fi
 echo "→ Found DMG: ${DMG}"
 
-echo "→ Creating GitHub release ${TAG}…"
-if gh release view "${TAG}" &>/dev/null; then
-    echo "  Release ${TAG} already exists — uploading asset…"
-    gh release upload "${TAG}" "${DMG}" --clobber
-else
-    gh release create "${TAG}" "${DMG}" \
-        --title "Kubernetes Dashboard ${TAG}" \
-        --notes "Kubernetes Dashboard ${TAG}" \
-        --draft
-    echo "  Draft release ${TAG} created with DMG attached."
-    echo "  → Go to GitHub to publish it when ready."
-fi
+echo "→ Publishing GitHub release ${TAG}…"
+gh release delete "${TAG}" --yes 2>/dev/null || true
+gh release create "${TAG}" "${DMG}" \
+    --title "Kubernetes Dashboard ${TAG}" \
+    --notes "Kubernetes Dashboard ${TAG}"
 
 echo "✓ Done."
