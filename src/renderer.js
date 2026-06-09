@@ -1081,8 +1081,6 @@ function renderPrCard(pr, isMerged = false) {
             </div>
             <div class="deployment-pill-row">
                 ${ageDetails ? `<span class="age-pill ${ageDetails.cssClass}">${escapeHtml(ageDetails.label)}</span>` : ''}
-                ${pipelineStatus ? `<span class="status-pill ${pipelineStatus.cls}">${escapeHtml(pipelineStatus.label)}</span>` : ''}
-                ${deploymentStatus ? `<span class="status-pill ${deploymentStatus.cls}">${escapeHtml(deploymentStatus.label)}</span>` : ''}
                 <span class="check-pill ${checkClass}">${escapeHtml(pr.checkStatusLabel || 'No checks')}</span>
                 <span class="status-pill ${reviewClass}">${escapeHtml(reviewLabel)}</span>
             </div>
@@ -1091,6 +1089,11 @@ function renderPrCard(pr, isMerged = false) {
             <span class="pr-meta">#${pr.number} · ${escapeHtml(pr.author?.login || 'unknown')} · ${escapeHtml(dateLabel)}</span>
             ${pr.commentActivityCount > 0 ? `<span class="branch-pill">${pr.commentActivityCount} comment${pr.commentActivityCount !== 1 ? 's' : ''}</span>` : ''}
         </div>
+        ${pipelineStatus || deploymentStatus ? `
+        <div class="pr-infra-row">
+            ${pipelineStatus ? `<span class="pr-infra-item"><span class="pr-infra-label">Pipeline</span><span class="status-pill ${pipelineStatus.cls}">${escapeHtml(pipelineStatus.label.replace('Pipeline ', ''))}</span></span>` : ''}
+            ${deploymentStatus ? `<span class="pr-infra-item"><span class="pr-infra-label">Deployment</span><span class="status-pill ${deploymentStatus.cls}">${escapeHtml(deploymentStatus.label.replace('Deployed · ', ''))}</span></span>` : ''}
+        </div>` : ''}
     </div>`;
 }
 

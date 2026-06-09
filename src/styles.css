@@ -1080,6 +1080,28 @@ input, select {
     color: var(--muted);
 }
 
+.pr-infra-row {
+    display: flex;
+    gap: 16px;
+    padding: 8px 0 2px;
+    border-top: 1px solid var(--line);
+    margin-top: 6px;
+}
+
+.pr-infra-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.pr-infra-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
 /* Check status pills */
 .check-pill {
     display: inline-flex;
