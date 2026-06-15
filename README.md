@@ -30,9 +30,18 @@ A macOS desktop app for teams running services on Kubernetes. Combines pull requ
 ## Requirements
 
 - macOS (Apple Silicon)
-- [`kubectl`](https://kubernetes.io/docs/tasks/tools/) configured with your cluster contexts
-- [`gh`](https://cli.github.com/) authenticated with GitHub
-- [`az`](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) authenticated with Azure DevOps (for pipelines)
+- [`kubectl`](https://kubernetes.io/docs/tasks/tools/) — configured with your cluster contexts
+- [`gh`](https://cli.github.com/) — GitHub CLI, authenticated (`gh auth login`)
+- [`az`](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) — Azure CLI, authenticated (`az login`) with the [Azure DevOps extension](https://learn.microsoft.com/en-us/azure/devops/cli/get-started) installed (`az extension add --name azure-devops`)
+
+All three must be available on your `PATH`. If you use Homebrew:
+
+```bash
+brew install kubectl gh azure-cli
+az extension add --name azure-devops
+gh auth login
+az login
+```
 
 ## Installation
 
