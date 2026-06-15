@@ -12,9 +12,9 @@ if (missingPaths.length > 0) {
 }
 const path = require('node:path');
 const { fetchDeployments, fetchContexts, fetchNamespaces } = require('./kubectl-client');
-const { fetchPrForSha } = require('./github-client');
-const { fetchPipelineRuns, fetchFailedStep } = require('./azure-client');
-const { fetchPullRequests } = require('./pr-client');
+const { fetchPrForSha, fetchPrByNumber } = require('./github-client');
+const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors } = require('./azure-client');
+const { fetchPullRequests, clearPrListCache } = require('./pr-client');
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -60,9 +60,27 @@ app.whenReady().then(() => {
         }
     });
 
+    ipcMain.handle('pr:fetchByNumber', async (_event, prNumber, repoName, org) => {
+        try {
+            const result = await fetchPrByNumber(prNumber, repoName, org);
+            return { ok: true, result };
+        } catch (err) {
+            return { ok: false, error: err.message };
+        }
+    });
+
     ipcMain.handle('pipeline:failedStep', async (_event, config) => {
         try {
             const result = await fetchFailedStep(config);
+            return { ok: true, result };
+        } catch (err) {
+            return { ok: false, error: { message: err.message } };
+        }
+    });
+
+    ipcMain.handle('pipeline:logErrors', async (_event, config) => {
+        try {
+            const result = await fetchLogErrors(config);
             return { ok: true, result };
         } catch (err) {
             return { ok: false, error: { message: err.message } };
@@ -103,6 +121,11 @@ app.whenReady().then(() => {
         } catch (err) {
             return { ok: false, error: { message: err.message } };
         }
+    });
+
+    ipcMain.handle('prs:clearCache', () => {
+        clearPrListCache();
+        return { ok: true };
     });
 
     ipcMain.handle('external:open', (_event, url) => {

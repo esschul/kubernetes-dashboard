@@ -33,10 +33,21 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
         if (!response.ok) { throw response.error; }
         return response.result;
     },
+    fetchPrByNumber: async (prNumber, repoName, org) => {
+        const response = await ipcRenderer.invoke('pr:fetchByNumber', prNumber, repoName, org);
+        if (!response.ok) { throw response.error; }
+        return response.result;
+    },
     fetchPullRequests: async (config) => {
         const response = await ipcRenderer.invoke('prs:fetch', config);
         if (!response.ok) { throw response.error; }
         return response.result;
     },
+    fetchLogErrors: async (config) => {
+        const response = await ipcRenderer.invoke('pipeline:logErrors', config);
+        if (!response.ok) { throw response.error; }
+        return response.result;
+    },
+    clearPrCache: () => ipcRenderer.invoke('prs:clearCache'),
     openExternal: (url) => ipcRenderer.invoke('external:open', url),
 });

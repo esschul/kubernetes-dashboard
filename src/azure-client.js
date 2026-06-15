@@ -36,6 +36,7 @@ async function fetchPipelineRuns({ org, project }) {
             const trigger = normalizeTrigger(r.reason, r.requestedFor?.displayName, prNumber);
             const team = (r.definition?.path || '\\').replace(/\\/g, '').trim() || null;
 
+
             return {
                 id: r.id,
                 name: r.definition?.name || 'Unknown',
@@ -49,19 +50,21 @@ async function fetchPipelineRuns({ org, project }) {
                 url: `${org.replace(/\/$/, '')}/${encodeURIComponent(project)}/_build/results?buildId=${r.id}`,
                 team,
                 sourceVersion: r.sourceVersion || null,
-                repoName: r.repository?.name || deriveRepoName(r.definition?.name, team) || null,
+                repoName: normalizeRepoName(r.repository?.name || r.definition?.name) || null,
             };
         });
 }
 
-// Pipeline definition names often include the team folder as a prefix, e.g. "bring.checkout-api"
-// Strip it so we end up with just the repo name part, e.g. "checkout-api"
-function deriveRepoName(definitionName, team) {
-    if (!definitionName) { return null; }
-    if (team && definitionName.toLowerCase().startsWith(`${team.toLowerCase()}.`)) {
-        return definitionName.slice(team.length + 1);
-    }
-    return definitionName;
+// Pipeline definition names often include a team/org folder prefix, e.g. "acme.my-service"
+// Strip it so we end up with just the repo name part, e.g. "my-service"
+function normalizeRepoName(name) {
+    if (!name) { return null; }
+    // Strip org-prefix like "acme." from repo/definition names
+    return name.replace(/^[^.]+\./, '');
+}
+
+function deriveRepoName(definitionName) {
+    return normalizeRepoName(definitionName);
 }
 
 function normalizeTrigger(reason, requestedBy, prNumber) {
@@ -96,10 +99,40 @@ async function fetchFailedStep({ org, project, buildId }) {
         const failed = tasks.length > 0 ? tasks : jobs;
 
         if (failed.length === 0) { return null; }
-        return failed.map((r) => r.name).join(', ');
+        return {
+            stepName: failed.map((r) => r.name).join(', '),
+            logUrl: failed[0].log?.url || null,
+        };
     } catch {
         return null;
     }
 }
 
-module.exports = { fetchPipelineRuns, fetchFailedStep };
+async function fetchLogErrors({ org, logUrl }) {
+    if (!logUrl) { return []; }
+    try {
+        const url = logUrl.startsWith('http') ? logUrl : `${org.replace(/\/$/, '')}/${logUrl}`;
+        // Log content is plain text — az rest returns it as a JSON string, so parse accordingly
+        const { stdout } = await execFileAsync(
+            resolveCommand('az', 'AZ_PATH'),
+            ['rest', '--method', 'get', '--resource', '499b84ac-1321-427f-aa17-267ca6975798', '--url', url],
+            {
+                timeout: 30_000,
+                maxBuffer: 10 * 1024 * 1024,
+                env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() },
+            }
+        );
+        // az rest returns the log as a quoted JSON string or raw text depending on content-type
+        let text = stdout;
+        try { text = JSON.parse(stdout); } catch { /* raw text, use as-is */ }
+        const lines = String(text).split('\n');
+        return lines
+            .filter((l) => l.includes('[ERROR]'))
+            .map((l) => l.replace(/^\d{4}-\d{2}-\d{2}T[\d:.Z]+ /, '').trim())
+            .filter(Boolean);
+    } catch {
+        return [];
+    }
+}
+
+module.exports = { fetchPipelineRuns, fetchFailedStep, fetchLogErrors };

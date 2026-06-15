@@ -12,9 +12,8 @@
         <div>
             <div class="sidebar-header">
                 <div>
-                    <p class="eyebrow">Kubernetes</p>
+                    <p class="eyebrow" id="contextLabel">Dashboard</p>
                     <h1 class="sidebar-title">Dashboard</h1>
-                    <p class="context-label" id="contextLabel">No context set</p>
                     <p class="updated-label" id="updatedLabel"></p>
                 </div>
             </div>
@@ -72,6 +71,7 @@
                 <button class="filter-chip" data-filter="healthy">Healthy <span></span></button>
                 <button class="filter-chip" data-filter="failing">Failing <span></span></button>
                 <button class="filter-chip" data-filter="progressing">Progressing <span></span></button>
+                <button class="filter-chip" data-filter="has-trello">Trello <span></span></button>
             </div>
             <div class="deployment-list" id="deploymentList"></div>
         </div>
@@ -100,17 +100,21 @@
                     <p class="status-panel" id="prStatusPanel">Loading…</p>
                 </div>
                 <div class="env-switcher" id="prTabSwitcher">
-                    <button class="env-btn is-active" data-pr-tab="open">Open</button>
-                    <button class="env-btn" data-pr-tab="merged">Merged today</button>
-                    <button class="env-btn" data-pr-tab="dependabot">Dependabot</button>
+                    <button class="env-btn is-active" data-pr-tab="open">Open <span class="tab-count" id="tabCountOpen"></span></button>
+                    <button class="env-btn" data-pr-tab="merged">Merged today <span class="tab-count" id="tabCountMerged"></span></button>
+                    <button class="env-btn" data-pr-tab="merged-yesterday">Merged yesterday <span class="tab-count" id="tabCountMergedYesterday"></span></button>
+                    <button class="env-btn" data-pr-tab="dependabot">Dependabot <span class="tab-count" id="tabCountDependabot"></span></button>
                 </div>
             </div>
             <div class="filter-bar" id="prFilterBar">
                 <button class="filter-chip is-active" data-pr-filter="all">All <span></span></button>
+                <button class="filter-chip" data-pr-filter="human">Human <span></span></button>
+                <button class="filter-chip" data-pr-filter="dependabot">Dependabot <span></span></button>
                 <button class="filter-chip" data-pr-filter="opened-today">Opened today <span></span></button>
                 <button class="filter-chip" data-pr-filter="approved">Approved <span></span></button>
                 <button class="filter-chip" data-pr-filter="changes-requested">Changes requested <span></span></button>
                 <button class="filter-chip" data-pr-filter="draft">Draft <span></span></button>
+                <button class="filter-chip" data-pr-filter="checks-passing">Checks passing <span></span></button>
                 <button class="filter-chip" data-pr-filter="checks-failing">Checks failing <span></span></button>
             </div>
             <div class="pr-list" id="prList"></div>
@@ -121,43 +125,68 @@
             <div class="topbar">
                 <h2>Settings</h2>
             </div>
-            <div class="panel settings-form" id="settingsForm">
-                <label>
-                    kubectl context
-                    <select id="contextInput">
-                        <option value="">(current context)</option>
-                    </select>
-                </label>
-                <label>
-                    Namespace
-                    <select id="namespaceInput">
-                        <option value="">(select a namespace)</option>
-                    </select>
-                </label>
-                <div class="settings-section-heading">Environment shortcuts</div>
-                <div class="env-mapping-grid">
-                    <label>Prod <select id="envProdInput"><option value="">(none)</option></select></label>
-                    <label>QA <select id="envQaInput"><option value="">(none)</option></select></label>
-                    <label>Test <select id="envTestInput"><option value="">(none)</option></select></label>
+            <div class="settings-form" id="settingsForm">
+                <div class="settings-grid">
+                    <div class="settings-panel settings-panel--kubernetes panel">
+                        <div class="settings-section-heading">Kubernetes</div>
+                        <label>
+                            kubectl context
+                            <select id="contextInput">
+                                <option value="">(current context)</option>
+                            </select>
+                        </label>
+                        <label>
+                            Namespace
+                            <select id="namespaceInput">
+                                <option value="">(select a namespace)</option>
+                            </select>
+                        </label>
+                        <div class="settings-section-heading">Environment shortcuts</div>
+                        <label>Prod <select id="envProdInput"><option value="">(none)</option></select></label>
+                        <label>QA <select id="envQaInput"><option value="">(none)</option></select></label>
+                        <label>Test <select id="envTestInput"><option value="">(none)</option></select></label>
+                    </div>
+
+                    <div class="settings-panel settings-panel--right panel">
+                        <div class="settings-section-heading">GitHub</div>
+                        <label>
+                            Org
+                            <input type="text" id="githubOrgInput" placeholder="e.g. my-org" />
+                            <span class="form-help">Used to look up PRs for each deployment.</span>
+                        </label>
+                        <label>
+                            Repo topic
+                            <input type="text" id="githubTopicInput" placeholder="defaults to namespace name" />
+                            <span class="form-help">Repos tagged with this topic appear in Pull Requests.</span>
+                        </label>
+                        <label>
+                            Watched repos
+                            <textarea id="githubWatchedReposInput" rows="3" placeholder="iac-connectivity&#10;shared-config"></textarea>
+                            <span class="form-help">One repo name per line (same org). Only PRs labelled with your namespace name are shown.</span>
+                        </label>
+                    </div>
+
+                    <div class="settings-panel settings-panel--right panel">
+                        <div class="settings-section-heading">Azure DevOps</div>
+                        <label>
+                            Org URL
+                            <input type="text" id="azureOrgInput" placeholder="e.g. https://dev.azure.com/my-org" />
+                        </label>
+                        <label>
+                            Project
+                            <input type="text" id="azureProjectInput" placeholder="e.g. my-project" />
+                        </label>
+                    </div>
+
+                    <div class="settings-panel settings-panel--right panel">
+                        <div class="settings-section-heading">Datadog</div>
+                        <label>
+                            Site URL
+                            <input type="text" id="datadogSiteInput" placeholder="e.g. https://app.datadoghq.eu" />
+                            <span class="form-help">Used to link deployments to Datadog logs.</span>
+                        </label>
+                    </div>
                 </div>
-                <label>
-                    GitHub org
-                    <input type="text" id="githubOrgInput" placeholder="e.g. my-org" />
-                    <span class="form-help">Used to look up PRs for each deployment.</span>
-                </label>
-                <label>
-                    GitHub repo topic
-                    <input type="text" id="githubTopicInput" placeholder="e.g. my-team" />
-                    <span class="form-help">Repos tagged with this topic appear in the Pull Requests view.</span>
-                </label>
-                <label>
-                    Azure DevOps org URL
-                    <input type="text" id="azureOrgInput" placeholder="e.g. https://dev.azure.com/my-org" />
-                </label>
-                <label>
-                    Azure DevOps project
-                    <input type="text" id="azureProjectInput" placeholder="e.g. my-project" />
-                </label>
                 <div class="settings-actions">
                     <button class="primary-button" id="saveSettings">Save &amp; Refresh</button>
                 </div>

@@ -115,12 +115,49 @@ function populateSettingsForm() {
     ensureSelectOption('namespaceInput', config.namespace || '');
     document.getElementById('githubOrgInput').value = config.githubOrg || '';
     document.getElementById('githubTopicInput').value = config.githubTopic || '';
+    document.getElementById('githubWatchedReposInput').value = (config.githubWatchedRepos || []).join('\n');
+    document.getElementById('datadogSiteInput').value = config.datadogSite || '';
     document.getElementById('azureOrgInput').value = config.azureOrg || '';
     document.getElementById('azureProjectInput').value = config.azureProject || '';
     document.getElementById('envProdInput').value = config.envContexts?.prod || '';
     document.getElementById('envQaInput').value = config.envContexts?.qa || '';
     document.getElementById('envTestInput').value = config.envContexts?.test || '';
+    updateSaveButtonState();
 }
+
+function readFormConfig() {
+    return {
+        context: document.getElementById('contextInput').value,
+        namespace: document.getElementById('namespaceInput').value,
+        githubOrg: document.getElementById('githubOrgInput').value.trim(),
+        githubTopic: document.getElementById('githubTopicInput').value.trim(),
+        githubWatchedRepos: document.getElementById('githubWatchedReposInput').value
+            .split('\n').map((r) => r.trim()).filter(Boolean),
+        datadogSite: document.getElementById('datadogSiteInput').value.trim().replace(/\/$/, ''),
+        azureOrg: document.getElementById('azureOrgInput').value.trim(),
+        azureProject: document.getElementById('azureProjectInput').value.trim(),
+        envContexts: {
+            prod: document.getElementById('envProdInput').value,
+            qa: document.getElementById('envQaInput').value,
+            test: document.getElementById('envTestInput').value,
+        },
+    };
+}
+
+function updateSaveButtonState() {
+    const saved = loadConfig();
+    const current = readFormConfig();
+    const isDirty = JSON.stringify(saved) !== JSON.stringify(current);
+    document.getElementById('saveSettings').classList.toggle('is-dirty', isDirty);
+}
+
+// Watch all settings inputs for changes
+['contextInput', 'namespaceInput', 'githubOrgInput', 'githubTopicInput', 'githubWatchedReposInput', 'datadogSiteInput',
+    'azureOrgInput', 'azureProjectInput', 'envProdInput', 'envQaInput', 'envTestInput',
+].forEach((id) => {
+    document.getElementById(id)?.addEventListener('change', updateSaveButtonState);
+    document.getElementById(id)?.addEventListener('input', updateSaveButtonState);
+});
 
 document.getElementById('contextInput').addEventListener('change', () => {
     loadNamespacesForSelectedContext().catch((err) => {
@@ -176,8 +213,21 @@ document.getElementById('envSwitcher').addEventListener('click', (e) => {
     saveConfig(config);
     updateContextLabel(config);
     renderEnvSwitcher(config);
-    refresh();
+    clearAllLists();
+    refreshAll();
 });
+
+function clearAllLists() {
+    latestDeployments = [];
+    window._lastPipelineRuns = null;
+    latestPrData = null;
+    refreshInProgress = false;
+    pipelinesRefreshInProgress = false;
+    prRefreshInProgress = false;
+    document.getElementById('deploymentList').innerHTML = '';
+    document.getElementById('pipelineList').innerHTML = '';
+    document.getElementById('prList').innerHTML = '';
+}
 
 async function loadNamespacesForSelectedContext() {
     const context = document.getElementById('contextInput').value;
@@ -209,36 +259,26 @@ function ensureSelectOption(id, value) {
 }
 
 document.getElementById('saveSettings').addEventListener('click', () => {
-    const config = {
-        context: document.getElementById('contextInput').value,
-        namespace: document.getElementById('namespaceInput').value,
-        githubOrg: document.getElementById('githubOrgInput').value.trim(),
-        githubTopic: document.getElementById('githubTopicInput').value.trim(),
-        azureOrg: document.getElementById('azureOrgInput').value.trim(),
-        azureProject: document.getElementById('azureProjectInput').value.trim(),
-        envContexts: {
-            prod: document.getElementById('envProdInput').value,
-            qa: document.getElementById('envQaInput').value,
-            test: document.getElementById('envTestInput').value,
-        },
-    };
+    const config = readFormConfig();
+    const oldConfig = loadConfig();
     saveConfig(config);
+    updateSaveButtonState();
     updateContextLabel(config);
     renderEnvSwitcher(config);
     if (!config.namespace) {
         setStatus('Set a namespace in Settings before refreshing deployments.');
         return;
     }
+    if (config.namespace !== oldConfig.namespace) {
+        clearAllLists();
+    }
     switchView('deployments');
-    refresh();
+    refreshAll();
 });
 
 function updateContextLabel(config) {
     const label = document.getElementById('contextLabel');
-    const parts = [];
-    if (config.context) { parts.push(config.context); }
-    if (config.namespace) { parts.push(config.namespace); }
-    label.textContent = parts.length ? parts.join(' / ') : 'Current context';
+    label.textContent = (config.namespace || 'Kubernetes').toUpperCase();
 }
 
 // --- Refresh logic ---
@@ -253,6 +293,7 @@ function setRefreshSpinning(spinning) {
 
 function refreshAll() {
     setRefreshSpinning(true);
+    window.kubeDashboard.clearPrCache?.();
     Promise.allSettled([refresh(), refreshPipelines(), refreshPullRequests(true)])
         .then(() => setRefreshSpinning(false));
 }
@@ -322,30 +363,51 @@ function isFailingStatus(status) {
 }
 
 // --- Filter ---
+function depHasTrello(dep) {
+    const cacheKey = `${dep.name}/${dep.gitSha}`;
+    const pr = prCache.get(cacheKey);
+    return Boolean(pr?.trelloUrl);
+}
+
 function matchesFilter(dep) {
     if (activeFilter === 'all') { return true; }
     if (activeFilter === 'healthy') { return dep.status === 'healthy'; }
     if (activeFilter === 'failing') { return isFailingStatus(dep.status); }
     if (activeFilter === 'progressing') { return dep.status === 'progressing'; }
     if (activeFilter === 'scaled-down') { return dep.status === 'scaled-down'; }
+    if (activeFilter === 'has-trello') { return depHasTrello(dep); }
     return true;
 }
 
 // --- Pipeline card clicks ---
 document.getElementById('pipelineList').addEventListener('click', (e) => {
-    const link = e.target.closest('.pr-row-link, .trello-link');
-    if (link) {
-        window.kubeDashboard.openExternal(link.dataset.url);
+    const copyBtn = e.target.closest('.copy-errors-btn');
+    if (copyBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const errDiv = copyBtn.closest('.pipeline-errors');
+        const card = copyBtn.closest('.pipeline-card');
+        const errors = JSON.parse(errDiv?.dataset.errors || '[]');
+        const prNumber = card?.dataset.prNumber;
+        const prTitle = card?.dataset.prTitle;
+        const prUrl = card?.dataset.prUrl;
+        const prLabel = prNumber ? `GitHub PR #${prNumber}${prTitle ? ` - ${prTitle}` : ''}${prUrl ? ` (${prUrl})` : ''}` : '';
+        const text = `${prLabel}\n\nErrors:\n${errors.join('\n')}`.trim();
+        navigator.clipboard.writeText(text);
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
         return;
     }
-    const card = e.target.closest('.pipeline-card');
-    if (card?.dataset.url) { window.kubeDashboard.openExternal(card.dataset.url); }
+    const link = e.target.closest('.pr-row-link, .trello-link, .pipeline-link');
+    if (link) {
+        window.kubeDashboard.openExternal(link.dataset.url);
+    }
 });
 
 // --- Card expand/collapse + PR links ---
 document.getElementById('deploymentList').addEventListener('click', (e) => {
-    // Handle PR link clicks without toggling expand
-    const link = e.target.closest('.pr-row-link, .trello-link');
+    // Handle PR/Trello/Datadog link clicks without toggling expand
+    const link = e.target.closest('.pr-row-link, .trello-link, .datadog-link');
     if (link) {
         e.stopPropagation();
         window.kubeDashboard.openExternal(link.dataset.url);
@@ -370,6 +432,7 @@ function updateFilterCounts(deployments) {
         healthy: deployments.filter((d) => d.status === 'healthy').length,
         failing: deployments.filter((d) => isFailingStatus(d.status)).length,
         progressing: deployments.filter((d) => d.status === 'progressing').length,
+        'has-trello': deployments.filter(depHasTrello).length,
     };
     document.querySelectorAll('.filter-chip[data-filter]').forEach((chip) => {
         const count = counts[chip.dataset.filter] ?? 0;
@@ -446,6 +509,7 @@ async function fetchAndInjectPr(dep, gen) {
         prCache.set(cacheKey, pr);
         if (pr) {
             injectPrRow(card, pr, dep.gitSha);
+            if (pr.trelloUrl) { updateFilterCounts(latestDeployments); }
         } else {
             const row = card.querySelector('.pr-row');
             if (row) { row.remove(); }
@@ -495,6 +559,19 @@ function renderPrRow(pr, sha) {
         </div>`;
 }
 
+function getDatadogLogsUrl(serviceName) {
+    const config = loadConfig();
+    if (!config.datadogSite || !serviceName) { return null; }
+    const envContexts = config.envContexts || {};
+    const activeContext = config.context || '';
+    let env = 'prod';
+    if (activeContext && activeContext === envContexts.qa) { env = 'qa'; }
+    else if (activeContext && activeContext === envContexts.test) { env = 'test'; }
+    else if (activeContext && activeContext === envContexts.prod) { env = 'prod'; }
+    const query = encodeURIComponent(`env:${env} service:${serviceName}`);
+    return `${config.datadogSite}/logs?query=${query}&live=true&stream_sort=desc&viz=stream`;
+}
+
 function renderDeploymentCard(dep) {
     const statusClass = dep.status.replace(/[^a-z-]/g, '');
     const statusLabel = getStatusLabel(dep.status);
@@ -504,6 +581,7 @@ function renderDeploymentCard(dep) {
     const imageTag = getImageTag(dep.image);
     const isLocalBuild = imageTag && imageTag.startsWith('local-build');
     const failuresHtml = dep.failures.length > 0 && dep.status !== 'healthy' ? renderFailures(dep.failures) : '';
+    const datadogUrl = getDatadogLogsUrl(dep.name);
 
     return `
     <div class="deployment-card" data-name="${escapeHtml(dep.namespace + '/' + dep.name)}" data-sha="${escapeHtml(dep.gitSha || '')}"">
@@ -515,6 +593,7 @@ function renderDeploymentCard(dep) {
             </div>
             <div class="deployment-pill-row">
                 <span class="trello-placeholder"></span>
+                ${datadogUrl ? `<span class="datadog-link" data-url="${escapeHtml(datadogUrl)}">Logs ↗</span>` : ''}
                 <span class="status-pill is-${escapeHtml(statusClass)}">${escapeHtml(statusLabel)}</span>
                 <span class="age-pill ${agePillClass}" title="${escapeHtml(deployedAbsolute)}">${escapeHtml(deployedLabel)}</span>
                 <span class="expand-chevron">›</span>
@@ -716,7 +795,14 @@ function renderPipelineList(runs) {
 
     // Always deduplicate first: one entry per pipeline = the latest run.
     // Then apply status filter and counts on that deduplicated set.
-    const latestPerPipeline = [...new Map(filtered.map((r) => [r.name, r])).values()];
+    // NOTE: filtered is sorted newest-first, so we must keep the FIRST occurrence per name.
+    // new Map() keeps the LAST, so we filter with a Set instead.
+    const _seen = new Set();
+    const latestPerPipeline = filtered.filter((r) => {
+        if (_seen.has(r.name)) { return false; }
+        _seen.add(r.name);
+        return true;
+    });
 
     const chipCounts = {
         all: latestPerPipeline.length,
@@ -752,8 +838,13 @@ function renderPipelineList(runs) {
     let stagger = 0;
     for (const run of grouped.values()) {
         if (run.result === 'failed') { fetchAndInjectFailedStep(run, pipelineConfig); }
-        if (run.sourceVersion && run.repoName && pipelineConfig.githubOrg) {
-            const isCached = pipelinePrCache.has(`pipeline/${run.repoName}/${run.sourceVersion}`);
+        const hasSha = run.sourceVersion && run.repoName && pipelineConfig.githubOrg;
+        const hasPrNumber = run.sourceBranch?.startsWith('PR #') && run.repoName && pipelineConfig.githubOrg;
+        if (hasSha || hasPrNumber) {
+            const cacheKey = hasSha
+                ? `pipeline/${run.repoName}/${run.sourceVersion}`
+                : `pipeline/byNumber/${run.repoName}/${run.sourceBranch}`;
+            const isCached = pipelinePrCache.has(cacheKey);
             setTimeout(() => fetchAndInjectPipelinePr(run, gen, pipelineConfig), isCached ? 0 : stagger);
             if (!isCached) { stagger += 400; }
         } else {
@@ -766,26 +857,46 @@ function renderPipelineList(runs) {
 
 async function fetchAndInjectFailedStep(run, config) {
     try {
-        const step = await window.kubeDashboard.fetchFailedStep({
+        const result = await window.kubeDashboard.fetchFailedStep({
             org: config.azureOrg,
             project: config.azureProject,
             buildId: run.id,
         });
-        if (!step) { return; }
+        if (!result) { return; }
         const card = document.querySelector(`.pipeline-card[data-id="${run.id}"]`);
         if (!card) { return; }
         const metaRow = card.querySelector('.pipeline-meta-row');
         if (metaRow) {
             const el = document.createElement('span');
             el.className = 'pipeline-failed-step';
-            el.textContent = `Failed at: ${step}`;
+            el.textContent = `Failed at: ${result.stepName}`;
             metaRow.appendChild(el);
         }
+
+        if (!result.logUrl) { return; }
+        const errors = await window.kubeDashboard.fetchLogErrors({
+            org: config.azureOrg,
+            logUrl: result.logUrl,
+        });
+        if (!errors.length) { return; }
+        const freshCard = document.querySelector(`.pipeline-card[data-id="${run.id}"]`);
+        if (!freshCard) { return; }
+        const errDiv = document.createElement('details');
+        errDiv.className = 'pipeline-errors';
+        errDiv.innerHTML = `<summary class="pipeline-errors-summary">${errors.length} error${errors.length !== 1 ? 's' : ''}<button class="copy-errors-btn" title="Copy errors to clipboard">Copy</button></summary>`
+            + errors.map((e) => `<div class="pipeline-error-line">${escapeHtml(e)}</div>`).join('');
+        errDiv.dataset.errors = JSON.stringify(errors);
+        freshCard.appendChild(errDiv);
     } catch { /* ignore */ }
 }
 
 async function fetchAndInjectPipelinePr(run, gen, config) {
-    const cacheKey = `pipeline/${run.repoName}/${run.sourceVersion}`;
+    const hasSha = run.sourceVersion && run.repoName;
+    const prNumberMatch = run.sourceBranch?.match(/^PR #(\d+)$/);
+    const cacheKey = hasSha
+        ? `pipeline/${run.repoName}/${run.sourceVersion}`
+        : `pipeline/byNumber/${run.repoName}/${run.sourceBranch}`;
+
     const card = document.querySelector(`.pipeline-card[data-id="${run.id}"]`);
     if (!card) { return; }
 
@@ -800,7 +911,13 @@ async function fetchAndInjectPipelinePr(run, gen, config) {
     }
 
     try {
-        const pr = await window.kubeDashboard.fetchPrForSha(run.sourceVersion, run.repoName, config.githubOrg);
+        let pr = hasSha
+            ? await window.kubeDashboard.fetchPrForSha(run.sourceVersion, run.repoName, config.githubOrg)
+            : null;
+        // Fall back to PR number lookup if SHA lookup failed or SHA not available
+        if (!pr && prNumberMatch) {
+            pr = await window.kubeDashboard.fetchPrByNumber(prNumberMatch[1], run.repoName, config.githubOrg);
+        }
         pipelinePrCache.set(cacheKey, pr);
         if (gen !== pipelineRenderGeneration) { return; }
         const freshCard = document.querySelector(`.pipeline-card[data-id="${run.id}"]`);
@@ -828,6 +945,10 @@ function injectPipelinePrRow(card, pr, sha) {
         row.innerHTML = html;
         card.querySelector('.deployment-card-top').insertAdjacentElement('afterend', row);
     }
+    // Store PR info for copy button
+    card.dataset.prNumber = pr.number;
+    card.dataset.prTitle = pr.title || '';
+    card.dataset.prUrl = pr.url || '';
 
     // Trello link
     const placeholder = card.querySelector('.trello-placeholder');
@@ -855,9 +976,13 @@ function renderPipelineGroup(run) {
 
     const config = loadConfig();
     const hasSha = run.sourceVersion && run.repoName && config.githubOrg;
+    const prNumberMatch = run.sourceBranch?.match(/^PR #(\d+)$/);
+    const prGhUrl = prNumberMatch && run.repoName && config.githubOrg
+        ? `https://github.com/${config.githubOrg}/${run.repoName}/pull/${prNumberMatch[1]}`
+        : null;
 
     return `
-    <div class="pipeline-card" data-url="${escapeHtml(run.url)}" data-id="${run.id}">
+    <div class="pipeline-card" data-id="${run.id}">
         <div class="deployment-card-top">
             <div class="deployment-name-row">
                 <h3>${escapeHtml(run.name)}</h3>
@@ -866,11 +991,15 @@ function renderPipelineGroup(run) {
                 <span class="trello-placeholder"></span>
                 <span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span>
                 <span class="age-pill" title="${escapeHtml(startAbsolute)}">${escapeHtml(startLabel)}</span>
+                <span class="pipeline-link datadog-link" data-url="${escapeHtml(run.url)}">Pipeline ↗</span>
             </div>
         </div>
         ${hasSha ? `<div class="pr-row pr-row--loading"><span class="pr-loading">Loading commit info…</span></div>` : ''}
         <div class="pipeline-meta-row">
-            ${run.sourceBranch ? `<span class="branch-pill">${escapeHtml(run.sourceBranch)}</span>` : ''}
+            ${run.sourceBranch ? (prGhUrl
+                ? `<span class="branch-pill pipeline-link" data-url="${escapeHtml(prGhUrl)}">${escapeHtml(run.sourceBranch)} ↗</span>`
+                : `<span class="branch-pill">${escapeHtml(run.sourceBranch)}</span>`)
+            : ''}
             ${run.trigger && run.trigger !== run.sourceBranch ? `<span class="pipeline-meta-text">${escapeHtml(run.trigger)}</span>` : ''}
             ${duration ? `<span class="pipeline-meta-text">${escapeHtml(duration)}</span>` : ''}
         </div>
@@ -907,7 +1036,7 @@ function formatDuration(ms) {
 
 // --- Pull Requests ---
 let prRefreshInProgress = false;
-let activePrTab = 'open';  // 'open' | 'merged' | 'dependabot'
+let activePrTab = 'open';  // 'open' | 'merged' | 'merged-yesterday' | 'dependabot'
 let activePrFilter = 'all';
 let latestPrData = null;
 
@@ -937,6 +1066,12 @@ document.getElementById('prFilterBar').addEventListener('click', (e) => {
 });
 
 document.getElementById('prList').addEventListener('click', (e) => {
+    const link = e.target.closest('.pr-pipeline-link[data-url]');
+    if (link) {
+        e.stopPropagation();
+        window.kubeDashboard.openExternal(link.dataset.url);
+        return;
+    }
     const card = e.target.closest('.pr-card[data-url]');
     if (card) { window.kubeDashboard.openExternal(card.dataset.url); }
 });
@@ -947,8 +1082,9 @@ async function refreshPullRequests(force = false) {
     if (latestPrData && !force) { renderPrView(latestPrData); return; }
 
     const config = loadConfig();
-    if (!config.githubOrg || !config.githubTopic) {
-        document.getElementById('prList').innerHTML = '<p class="empty-state">Set GitHub org and repo topic in Settings to load pull requests.</p>';
+    const prTopic = config.githubTopic || config.namespace;
+    if (!config.githubOrg || !prTopic) {
+        document.getElementById('prList').innerHTML = '<p class="empty-state">Set GitHub org and namespace in Settings to load pull requests.</p>';
         document.getElementById('prStatusPanel').textContent = 'Not configured';
         return;
     }
@@ -957,7 +1093,12 @@ async function refreshPullRequests(force = false) {
     document.getElementById('prStatusPanel').textContent = 'Loading…';
 
     try {
-        const data = await window.kubeDashboard.fetchPullRequests({ org: config.githubOrg, topic: config.githubTopic });
+        const data = await window.kubeDashboard.fetchPullRequests({
+            org: config.githubOrg,
+            topic: prTopic,
+            watchedRepos: config.githubWatchedRepos || [],
+            namespace: config.namespace,
+        });
         latestPrData = data;
         renderPrView(data);
         const now = new Date().toLocaleTimeString();
@@ -975,17 +1116,25 @@ async function refreshPullRequests(force = false) {
 function updatePrNavCount(data) {
     const count = document.getElementById('pullRequestsCount');
     const open = data.pullRequests.length;
-    if (open > 0) {
-        count.textContent = open;
-        count.style.background = '';
-        count.style.color = '';
-    } else {
-        count.textContent = '';
+    count.textContent = open;
+    count.style.background = '';
+    count.style.color = '';
+
+    const tabCounts = {
+        tabCountOpen: data.pullRequests.length,
+        tabCountMerged: (data.mergedPullRequests?.length || 0) + (data.mergedDependabotPullRequests?.length || 0),
+        tabCountMergedYesterday: (data.mergedYesterdayPullRequests?.length || 0) + (data.mergedYesterdayDependabotPullRequests?.length || 0),
+        tabCountDependabot: data.dependabotPullRequests?.length || 0,
+    };
+    for (const [id, n] of Object.entries(tabCounts)) {
+        const el = document.getElementById(id);
+        if (el) { el.textContent = n; }
     }
 }
 
 function getPrsForTab(data) {
     if (activePrTab === 'merged') { return [...data.mergedPullRequests, ...data.mergedDependabotPullRequests]; }
+    if (activePrTab === 'merged-yesterday') { return [...(data.mergedYesterdayPullRequests || []), ...(data.mergedYesterdayDependabotPullRequests || [])]; }
     if (activePrTab === 'dependabot') { return data.dependabotPullRequests; }
     return data.pullRequests;
 }
@@ -998,11 +1147,17 @@ function getLocalDateKey(value) {
     return `${y}-${m}-${d}`;
 }
 
+const DEPENDABOT_LOGIN = 'app/dependabot';
+function isDependabotPr(pr) { return pr.author?.login === DEPENDABOT_LOGIN; }
+
 function matchesPrFilter(pr) {
+    if (activePrFilter === 'human') { return !isDependabotPr(pr); }
+    if (activePrFilter === 'dependabot') { return isDependabotPr(pr); }
     if (activePrFilter === 'opened-today') { return getLocalDateKey(pr.createdAt) === getLocalDateKey(); }
     if (activePrFilter === 'approved') { return pr.reviewDecision === 'APPROVED' && !pr.isDraft; }
     if (activePrFilter === 'changes-requested') { return pr.reviewDecision === 'CHANGES_REQUESTED' && !pr.isDraft; }
     if (activePrFilter === 'draft') { return Boolean(pr.isDraft); }
+    if (activePrFilter === 'checks-passing') { return pr.checkStatus === 'success'; }
     if (activePrFilter === 'checks-failing') { return pr.checkStatus === 'failure'; }
     return true;
 }
@@ -1010,62 +1165,99 @@ function matchesPrFilter(pr) {
 function renderPrView(data) {
     const list = document.getElementById('prList');
     const prs = getPrsForTab(data);
-    const isMergedTab = activePrTab === 'merged';
+    const isMergedTab = activePrTab === 'merged' || activePrTab === 'merged-yesterday';
     const isDependabotTab = activePrTab === 'dependabot';
 
-    // Update filter chip counts (only relevant for open tab)
-    const showFilters = !isMergedTab;
-    document.getElementById('prFilterBar').style.display = showFilters ? '' : 'none';
-    if (showFilters) {
-        document.querySelectorAll('.filter-chip[data-pr-filter]').forEach((chip) => {
-            const f = chip.dataset.prFilter;
-            const span = chip.querySelector('span');
-            if (!span) { return; }
-            if (f === 'all') { span.textContent = prs.length; return; }
-            span.textContent = prs.filter((pr) => matchesPrFilter({ ...pr, _filter: f, checkStatus: pr.checkStatus, reviewDecision: pr.reviewDecision, isDraft: pr.isDraft })).length;
-            // recalc properly
-            const counts = {
-                'opened-today': prs.filter((p) => getLocalDateKey(p.createdAt) === getLocalDateKey()).length,
-                'approved': prs.filter((p) => p.reviewDecision === 'APPROVED' && !p.isDraft).length,
-                'changes-requested': prs.filter((p) => p.reviewDecision === 'CHANGES_REQUESTED' && !p.isDraft).length,
-                'draft': prs.filter((p) => p.isDraft).length,
-                'checks-failing': prs.filter((p) => p.checkStatus === 'failure').length,
-            };
-            span.textContent = counts[f] ?? 0;
-        });
-    }
+    // Show only relevant filter chips per tab
+    const filterBar = document.getElementById('prFilterBar');
+    filterBar.style.display = '';
+    const openOnlyFilters = ['opened-today', 'approved', 'changes-requested', 'draft', 'checks-passing', 'checks-failing'];
+    const mergedOnlyFilters = ['human', 'dependabot'];
+    document.querySelectorAll('.filter-chip[data-pr-filter]').forEach((chip) => {
+        const f = chip.dataset.prFilter;
+        if (isMergedTab) {
+            chip.style.display = openOnlyFilters.includes(f) ? 'none' : '';
+        } else {
+            chip.style.display = mergedOnlyFilters.includes(f) ? 'none' : '';
+        }
+    });
 
-    const filtered = activePrFilter === 'all' || isMergedTab ? prs : prs.filter(matchesPrFilter);
+    const counts = {
+        'all': prs.length,
+        'human': prs.filter((p) => !isDependabotPr(p)).length,
+        'dependabot': prs.filter((p) => isDependabotPr(p)).length,
+        'opened-today': prs.filter((p) => getLocalDateKey(p.createdAt) === getLocalDateKey()).length,
+        'approved': prs.filter((p) => p.reviewDecision === 'APPROVED' && !p.isDraft).length,
+        'changes-requested': prs.filter((p) => p.reviewDecision === 'CHANGES_REQUESTED' && !p.isDraft).length,
+        'draft': prs.filter((p) => p.isDraft).length,
+        'checks-passing': prs.filter((p) => p.checkStatus === 'success').length,
+        'checks-failing': prs.filter((p) => p.checkStatus === 'failure').length,
+    };
+    document.querySelectorAll('.filter-chip[data-pr-filter]').forEach((chip) => {
+        const span = chip.querySelector('span');
+        if (span) { span.textContent = counts[chip.dataset.prFilter] ?? 0; }
+    });
+
+    const filtered = activePrFilter === 'all' ? prs : prs.filter(matchesPrFilter);
 
     if (filtered.length === 0) {
-        const msg = isMergedTab ? 'No pull requests merged today.' :
+        const msg = activePrTab === 'merged' ? 'No pull requests merged today.' :
+            activePrTab === 'merged-yesterday' ? 'No pull requests merged yesterday.' :
             isDependabotTab ? 'No open Dependabot pull requests.' :
                 activePrFilter === 'all' ? 'No open pull requests.' : 'No pull requests match this filter.';
         list.innerHTML = `<p class="empty-state">${msg}</p>`;
         return;
     }
 
-    list.innerHTML = filtered.map((pr) => renderPrCard(pr, isMergedTab)).join('');
+    const sorted = [...filtered].sort((a, b) => {
+        const ta = isMergedTab ? String(a.mergedAt) : String(a.updatedAt);
+        const tb = isMergedTab ? String(b.mergedAt) : String(b.updatedAt);
+        return tb.localeCompare(ta);
+    });
+    list.innerHTML = sorted.map((pr) => renderPrCard(pr, isMergedTab)).join('');
 }
 
-function getPipelineStatusForPr(prNumber) {
+function getPipelineStatusForPr(pr) {
     const runs = window._lastPipelineRuns;
     if (!runs) { return null; }
-    // Match pipeline runs triggered by this PR (sourceBranch = "PR #N")
-    const matching = runs.filter((r) => r.sourceBranch === `PR #${prNumber}` || r.trigger === `PR #${prNumber}`);
-    if (!matching.length) { return null; }
-    // Pick the most recent
-    const latest = matching.sort((a, b) => new Date(b.startTime) - new Date(a.startTime))[0];
-    if (latest.status === 'inProgress') { return { label: 'Pipeline running', cls: 'is-progressing' }; }
-    if (latest.result === 'succeeded') { return { label: 'Pipeline passed', cls: 'is-healthy' }; }
-    if (latest.result === 'failed') { return { label: 'Pipeline failed', cls: 'is-failed' }; }
-    if (latest.result === 'canceled') { return { label: 'Pipeline canceled', cls: 'is-scaled-down' }; }
+    const prNumber = pr.number;
+    const mergedAt = pr.mergedAt ? new Date(pr.mergedAt) : null;
+
+    // Strategy 1: direct PR run match (pre-merge CI check)
+    const prMatching = runs.filter((r) => r.sourceBranch === `PR #${prNumber}` || r.trigger === `PR #${prNumber}`);
+    if (prMatching.length) {
+        const latest = prMatching.sort((a, b) => new Date(b.startTime) - new Date(a.startTime))[0];
+        if (latest.status === 'inProgress') { return { label: 'Pipeline running', cls: 'is-progressing', url: latest.url }; }
+        if (latest.result === 'succeeded') { return { label: 'Pipeline passed', cls: 'is-healthy', url: latest.url }; }
+        if (latest.result === 'failed') { return { label: 'Pipeline failed', cls: 'is-failed', url: latest.url }; }
+        if (latest.result === 'canceled') { return { label: 'Pipeline canceled', cls: 'is-scaled-down', url: latest.url }; }
+    }
+
+    // Strategy 2: post-merge pipeline run for same repo (Batched CI / Commit on default branch after mergedAt)
+    if (mergedAt) {
+        const repoShort = pr.repository?.split('/').pop()?.toLowerCase();
+        const postMerge = runs.filter((r) => {
+            if (!repoShort) { return false; }
+            const runRepo = (r.repoName || '').toLowerCase();
+            if (runRepo !== repoShort) { return false; }
+            const runTime = r.startTime ? new Date(r.startTime) : null;
+            return runTime && runTime >= mergedAt;
+        }).sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+        if (postMerge.length) {
+            const latest = postMerge[0];
+            if (latest.status === 'inProgress') { return { label: 'Pipeline running', cls: 'is-progressing', url: latest.url }; }
+            if (latest.result === 'succeeded') { return { label: 'Pipeline passed', cls: 'is-healthy', url: latest.url }; }
+            if (latest.result === 'failed') { return { label: 'Pipeline failed', cls: 'is-failed', url: latest.url }; }
+            if (latest.result === 'canceled') { return { label: 'Pipeline canceled', cls: 'is-scaled-down', url: latest.url }; }
+        }
+    }
+
     return null;
 }
 
 function getDeploymentStatusForPr(pr) {
     if (!latestDeployments.length) { return null; }
-    // Match by the last segment of the repo name, e.g. "bring/checkout-api" → "checkout-api"
+    // Match by the last segment of the repo name, e.g. "acme/my-service" → "my-service"
     const repoName = pr.repository?.split('/').pop()?.toLowerCase();
     if (!repoName) { return null; }
     const dep = latestDeployments.find((d) => d.imageRepoName?.toLowerCase() === repoName);
@@ -1081,10 +1273,13 @@ function renderPrCard(pr, isMerged = false) {
     const reviewClass = isMerged ? 'is-merged' : getPrReviewClass(pr);
     const checkClass = { success: 'is-success', failure: 'is-failure', pending: 'is-pending', none: 'is-none' }[pr.checkStatus] || 'is-none';
     const dateLabel = isMerged ? `Merged ${formatRelativeTime(pr.mergedAt)}` : `Updated ${formatRelativeTime(pr.updatedAt)}`;
-    const ageDetails = null; // age is a filter, not a badge
+    const ageDetails = isMerged ? null : getPrAgeDetails(pr.createdAt);
 
-    const pipelineStatus = isMerged ? getPipelineStatusForPr(pr.number) : null;
+    const pipelineStatus = getPipelineStatusForPr(pr);
     const deploymentStatus = isMerged ? getDeploymentStatusForPr(pr) : null;
+    const pipelineLink = pipelineStatus?.url
+        ? `<span class="datadog-link pr-pipeline-link" data-url="${escapeHtml(pipelineStatus.url)}">Pipeline ↗</span>`
+        : '';
 
     return `
     <div class="pr-card deployment-card" data-url="${escapeHtml(pr.url)}">
@@ -1094,18 +1289,19 @@ function renderPrCard(pr, isMerged = false) {
                 <h3>${escapeHtml(pr.title)}</h3>
             </div>
             <div class="deployment-pill-row">
-                ${ageDetails ? `<span class="age-pill ${ageDetails.cssClass}">${escapeHtml(ageDetails.label)}</span>` : ''}
+                ${pipelineLink}
                 <span class="check-pill ${checkClass}">${escapeHtml(pr.checkStatusLabel || 'No checks')}</span>
                 <span class="status-pill ${reviewClass}">${escapeHtml(reviewLabel)}</span>
             </div>
         </div>
         <div class="pr-meta-row">
             <span class="pr-meta">#${pr.number} · ${escapeHtml(pr.author?.login || 'unknown')} · ${escapeHtml(dateLabel)}</span>
+            ${ageDetails ? `<span class="age-pill ${ageDetails.cssClass}">${escapeHtml(ageDetails.label)}</span>` : ''}
             ${pr.commentActivityCount > 0 ? `<span class="branch-pill">${pr.commentActivityCount} comment${pr.commentActivityCount !== 1 ? 's' : ''}</span>` : ''}
         </div>
-        ${pipelineStatus || deploymentStatus ? `
+        ${pipelineStatus && isMerged || deploymentStatus ? `
         <div class="pr-infra-row">
-            ${pipelineStatus ? `<span class="pr-infra-item"><span class="pr-infra-label">Pipeline</span><span class="status-pill ${pipelineStatus.cls}">${escapeHtml(pipelineStatus.label.replace('Pipeline ', ''))}</span></span>` : ''}
+            ${pipelineStatus && isMerged ? `<span class="pr-infra-item"><span class="pr-infra-label">Pipeline</span><span class="status-pill ${pipelineStatus.cls}">${escapeHtml(pipelineStatus.label.replace('Pipeline ', ''))}</span></span>` : ''}
             ${deploymentStatus ? `<span class="pr-infra-item"><span class="pr-infra-label">Deployment</span><span class="status-pill ${deploymentStatus.cls}">${escapeHtml(deploymentStatus.label.replace('Deployed · ', ''))}</span></span>` : ''}
         </div>` : ''}
     </div>`;
@@ -1123,10 +1319,12 @@ function getPrReviewClass(pr) {
 
 function getPrAgeDetails(createdAt) {
     if (!createdAt) { return null; }
-    const days = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000));
-    if (days === 0) { return null; } // "Opened today" is a filter, not a badge
-    const cssClass = days >= 30 ? 'age-pill is-critical' : days >= 14 ? 'age-pill is-warning' : 'age-pill is-notice';
-    return { cssClass, label: `${days}d old` };
+    const hours = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 3_600_000));
+    const days = Math.floor(hours / 24);
+    if (hours < 24) { return null; } // opened today — no badge needed
+    const label = `${days}d old`;
+    const cssClass = days >= 14 ? 'is-critical' : days >= 7 ? 'is-warning' : 'is-notice';
+    return { cssClass, label };
 }
 
 // --- Init ---
@@ -1134,7 +1332,8 @@ const initialConfig = loadConfig();
 updateContextLabel(initialConfig);
 renderEnvSwitcher(initialConfig);
 populateSettingsForm();
-if (initialConfig.githubOrg && initialConfig.githubTopic) {
+const initialPrTopic = initialConfig.githubTopic || initialConfig.namespace;
+if (initialConfig.githubOrg && initialPrTopic) {
     switchView('pull-requests');
 } else if (initialConfig.namespace) {
     switchView('deployments');
@@ -1145,7 +1344,7 @@ if (initialConfig.githubOrg && initialConfig.githubTopic) {
 // Pre-fetch all data sources in parallel on startup
 if (initialConfig.namespace) { refresh(); }
 if (initialConfig.azureOrg && initialConfig.azureProject) { refreshPipelines(); }
-if (initialConfig.githubOrg && initialConfig.githubTopic) { refreshPullRequests(true); }
+if (initialConfig.githubOrg && initialPrTopic) { refreshPullRequests(true); }
 
 // Auto-refresh every 2 minutes
 setInterval(refreshAll, 2 * 60 * 1000);

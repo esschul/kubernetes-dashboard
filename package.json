@@ -21,7 +21,7 @@
     "globals": "^17.6.0"
   },
   "build": {
-    "appId": "no.posten.kubernetes-dashboard",
+    "appId": "io.github.esschul.kubernetes-dashboard",
     "productName": "Kubernetes Dashboard",
     "files": [
       "src/**/*",
