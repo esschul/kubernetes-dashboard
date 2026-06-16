@@ -1450,3 +1450,30 @@ input, select {
     font-size: 0.85rem;
     color: var(--text);
 }
+
+.toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.toggle-row-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.toggle-row-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.toggle-checkbox {
+    width: 18px !important;
+    height: 18px;
+    flex-shrink: 0;
+    cursor: pointer;
+    accent-color: var(--accent, #3b82f6);
+}

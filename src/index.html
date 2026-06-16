@@ -200,11 +200,13 @@
 
                     <div class="settings-panel settings-panel--right panel">
                         <div class="settings-section-heading">Notifications</div>
-                        <label class="label--inline">
-                            <input type="checkbox" id="notificationsEnabledInput" />
-                            Notify me when a new human PR is opened
-                        </label>
-                        <span class="form-help">You'll get a desktop notification once per session per PR.</span>
+                        <div class="toggle-row">
+                            <div class="toggle-row-text">
+                                <span class="toggle-row-label">New human PRs</span>
+                                <span class="form-help">Desktop notification once per session per PR.</span>
+                            </div>
+                            <input type="checkbox" id="notificationsEnabledInput" class="toggle-checkbox" />
+                        </div>
                     </div>
                 </div>
                 <div class="settings-actions">

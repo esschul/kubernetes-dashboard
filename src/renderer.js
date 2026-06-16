@@ -25,7 +25,10 @@ function readStoredJson(key, fallback) {
 }
 
 function loadConfig() {
-    return readStoredJson(STORAGE_KEYS.config, { context: '', namespace: '' });
+    const cfg = readStoredJson(STORAGE_KEYS.config, { context: '', namespace: '' });
+    // azureTeam was added later — default to namespace for existing configs
+    if (cfg.azureTeam === undefined) { cfg.azureTeam = cfg.namespace || ''; }
+    return cfg;
 }
 
 function saveConfig(config) {
