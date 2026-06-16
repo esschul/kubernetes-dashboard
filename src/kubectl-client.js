@@ -248,6 +248,16 @@ function summarizePods(pods) {
 function collectFailures(dep, pods, events) {
     const failures = [];
 
+    // Deployment-level condition failures (e.g. ProgressDeadlineExceeded)
+    for (const condition of (dep.status.conditions || [])) {
+        if (condition.status === 'False' || condition.reason === 'ProgressDeadlineExceeded') {
+            const msg = condition.message || condition.reason;
+            if (msg) {
+                failures.push({ type: 'condition', message: msg });
+            }
+        }
+    }
+
     for (const pod of pods) {
         for (const cs of pod.containerStatuses) {
             if (cs.state?.waiting?.reason === 'CrashLoopBackOff') {
