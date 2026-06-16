@@ -182,6 +182,11 @@
                             Project
                             <input type="text" id="azureProjectInput" placeholder="e.g. my-project" />
                         </label>
+                        <label>
+                            Pipeline team
+                            <input type="text" id="azureTeamInput" placeholder="e.g. checkout (leave blank to use namespace)" />
+                            <span class="form-help">Filters the Pipelines view to your team's folder. Falls back to namespace if blank.</span>
+                        </label>
                     </div>
 
                     <div class="settings-panel settings-panel--right panel">
@@ -252,6 +257,7 @@ az login</pre>
                             <tr><td><strong>Watched repos</strong></td><td>Shared repos outside your topic (e.g. infra repos). One name per line. Only PRs labelled with your namespace are shown.</td></tr>
                             <tr><td><strong>Azure DevOps Org URL</strong></td><td>Your Azure DevOps organisation URL, e.g. <code>https://dev.azure.com/my-org</code>.</td></tr>
                             <tr><td><strong>Azure DevOps Project</strong></td><td>The project name inside your Azure organisation.</td></tr>
+                            <tr><td><strong>Pipeline team</strong></td><td>The Azure DevOps folder your team's pipelines live in (e.g. <code>checkout</code>). Falls back to your namespace if left blank. If a pipeline doesn't show up, go to Azure DevOps → Pipelines → ⋯ → Move and place it in your team's folder.</td></tr>
                             <tr><td><strong>Datadog Site URL</strong></td><td>Your Datadog site, e.g. <code>https://app.datadoghq.eu</code>. Used to generate log links on deployment cards.</td></tr>
                             <tr><td><strong>Environment shortcuts</strong></td><td>Map Prod / QA / Test to specific kubectl contexts for quick switching.</td></tr>
                         </tbody>

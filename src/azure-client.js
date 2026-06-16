@@ -127,7 +127,7 @@ async function fetchLogErrors({ org, logUrl }) {
         try { text = JSON.parse(stdout); } catch { /* raw text, use as-is */ }
         const lines = String(text).split('\n');
         return lines
-            .filter((l) => l.includes('[ERROR]'))
+            .filter((l) => l.includes('[ERROR]') || l.includes('##[error]'))
             .map((l) => l.replace(/^\d{4}-\d{2}-\d{2}T[\d:.Z]+ /, '').trim())
             .filter(Boolean);
     } catch {

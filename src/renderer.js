@@ -120,6 +120,7 @@ function populateSettingsForm() {
     document.getElementById('notificationsEnabledInput').checked = config.notificationsEnabled || false;
     document.getElementById('azureOrgInput').value = config.azureOrg || '';
     document.getElementById('azureProjectInput').value = config.azureProject || '';
+    document.getElementById('azureTeamInput').value = config.azureTeam || '';
     document.getElementById('envProdInput').value = config.envContexts?.prod || '';
     document.getElementById('envQaInput').value = config.envContexts?.qa || '';
     document.getElementById('envTestInput').value = config.envContexts?.test || '';
@@ -138,6 +139,7 @@ function readFormConfig() {
         notificationsEnabled: document.getElementById('notificationsEnabledInput').checked,
         azureOrg: document.getElementById('azureOrgInput').value.trim(),
         azureProject: document.getElementById('azureProjectInput').value.trim(),
+        azureTeam: document.getElementById('azureTeamInput').value.trim(),
         envContexts: {
             prod: document.getElementById('envProdInput').value,
             qa: document.getElementById('envQaInput').value,
@@ -155,7 +157,7 @@ function updateSaveButtonState() {
 
 // Watch all settings inputs for changes
 ['contextInput', 'namespaceInput', 'githubOrgInput', 'githubTopicInput', 'githubWatchedReposInput', 'datadogSiteInput',
-    'azureOrgInput', 'azureProjectInput', 'envProdInput', 'envQaInput', 'envTestInput', 'notificationsEnabledInput',
+    'azureOrgInput', 'azureProjectInput', 'azureTeamInput', 'envProdInput', 'envQaInput', 'envTestInput', 'notificationsEnabledInput',
 ].forEach((id) => {
     document.getElementById(id)?.addEventListener('change', updateSaveButtonState);
     document.getElementById(id)?.addEventListener('input', updateSaveButtonState);
@@ -745,9 +747,10 @@ async function refreshPipelines() {
         });
         renderPipelineList(runs);
 
-        // Count only for the user's team
-        const teamRuns = config.namespace
-            ? runs.filter((r) => r.team === config.namespace)
+        // Count only for the user's team (azureTeam takes priority, falls back to namespace)
+        const activeTeam = config.azureTeam || config.namespace;
+        const teamRuns = activeTeam
+            ? runs.filter((r) => r.team === activeTeam)
             : runs;
 
         // Deduplicate by pipeline name (latest run per pipeline)
@@ -791,8 +794,9 @@ function renderPipelineList(runs) {
     const list = document.getElementById('pipelineList');
 
     const pConfig = loadConfig();
-    let filtered = pConfig.namespace
-        ? runs.filter((r) => r.team === pConfig.namespace)
+    const activeTeam = pConfig.azureTeam || pConfig.namespace;
+    let filtered = activeTeam
+        ? runs.filter((r) => r.team === activeTeam)
         : runs;
 
     // Always deduplicate first: one entry per pipeline = the latest run.
