@@ -1357,6 +1357,8 @@ function getPrAgeDetails(createdAt) {
 }
 
 // --- Init ---
+if (Notification.permission === 'default') { Notification.requestPermission(); }
+
 const initialConfig = loadConfig();
 updateContextLabel(initialConfig);
 renderEnvSwitcher(initialConfig);
