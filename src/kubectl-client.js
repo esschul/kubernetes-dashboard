@@ -249,11 +249,16 @@ function collectFailures(dep, pods, events) {
     const failures = [];
 
     // Deployment-level condition failures (e.g. ProgressDeadlineExceeded)
-    for (const condition of (dep.status.conditions || [])) {
-        if (condition.status === 'False' || condition.reason === 'ProgressDeadlineExceeded') {
-            const msg = condition.message || condition.reason;
-            if (msg) {
-                failures.push({ type: 'condition', message: msg });
+    // Only surface if the condition is currently active (status=False or reason=ProgressDeadlineExceeded
+    // AND not subsequently recovered — i.e. Progressing is not True/NewReplicaSetAvailable)
+    const conditions = dep.status.conditions || [];
+    const progressing = conditions.find((c) => c.type === 'Progressing');
+    const progressingRecovered = progressing?.status === 'True' && progressing?.reason === 'NewReplicaSetAvailable';
+    if (!progressingRecovered) {
+        for (const condition of conditions) {
+            if (condition.status === 'False' || condition.reason === 'ProgressDeadlineExceeded') {
+                const msg = condition.message || condition.reason;
+                if (msg) { failures.push({ type: 'condition', message: msg }); }
             }
         }
     }
