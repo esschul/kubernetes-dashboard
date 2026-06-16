@@ -738,7 +738,7 @@ function notifyFailedPipelines(runs) {
     if (!config.pipelineNotificationsEnabled) { return; }
     const isFirstFetch = seenFailedPipelineIds.size === 0;
     for (const run of runs) {
-        if (run.result !== 'failed') { continue; }
+        if (run.result !== 'failed' || run.status !== 'completed') { continue; }
         if (!seenFailedPipelineIds.has(run.id)) {
             seenFailedPipelineIds.add(run.id);
             if (!isFirstFetch) {
