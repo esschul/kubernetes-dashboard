@@ -742,7 +742,8 @@ function notifyFailedPipelines(runs) {
         if (!seenFailedPipelineIds.has(run.id)) {
             seenFailedPipelineIds.add(run.id);
             if (!isFirstFetch) {
-                new Notification(`Pipeline failed: ${run.name}`, {
+                const bType = getPipelineBranchType(run);
+                new Notification(`Pipeline failed on ${bType}: ${run.name}`, {
                     body: run.team ? `${run.team} · ${run.sourceBranch || ''}` : (run.sourceBranch || ''),
                     silent: false,
                 });
@@ -1015,11 +1016,20 @@ function renderPipelineGroup(run) {
         ? `https://github.com/${config.githubOrg}/${run.repoName}/pull/${prNumberMatch[1]}`
         : null;
 
+    const isFailed = run.result === 'failed' && run.status === 'completed';
+    const branchType = isFailed ? getPipelineBranchType(run) : null;
+    const branchBadge = branchType === 'master'
+        ? `<span class="branch-type-badge branch-type-badge--master">master</span>`
+        : branchType === 'branch'
+        ? `<span class="branch-type-badge branch-type-badge--branch">branch</span>`
+        : '';
+
     return `
     <div class="pipeline-card" data-id="${run.id}">
         <div class="deployment-card-top">
             <div class="deployment-name-row">
                 <h3>${escapeHtml(run.name)}</h3>
+                ${branchBadge}
             </div>
             <div class="deployment-pill-row">
                 <span class="trello-placeholder"></span>
@@ -1038,6 +1048,19 @@ function renderPipelineGroup(run) {
             ${duration ? `<span class="pipeline-meta-text">${escapeHtml(duration)}</span>` : ''}
         </div>
     </div>`;
+}
+
+function getPipelineBranchType(run) {
+    const branch = run.sourceBranch || '';
+    if (/^PR #\d+$/.test(branch)) { return 'branch'; }
+    if (branch === 'master' || branch === 'main') { return 'master'; }
+    // Batched CI / individualCI on non-PR branch — treat non-feature branches as master
+    if (run.trigger === 'Batched CI' || run.trigger === 'Commit') {
+        return (branch && branch !== 'master' && branch !== 'main') ? 'branch' : 'master';
+    }
+    // Named feature branch
+    if (branch && branch !== 'master' && branch !== 'main') { return 'branch'; }
+    return 'master';
 }
 
 function getPipelineStatusClass(run) {

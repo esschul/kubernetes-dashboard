@@ -1013,6 +1013,37 @@ h3 {
     text-overflow: ellipsis;
 }
 
+.branch-type-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.branch-type-badge--master {
+    background: #ffe0de;
+    color: #b42318;
+    border: 1px solid #fca5a5;
+}
+
+.branch-type-badge--branch {
+    background: #fff6d9;
+    color: #856300;
+    border: 1px solid #fde68a;
+}
+
+:root[data-theme="dark"] .branch-type-badge--master {
+    background: #450a0a; color: #fca5a5; border-color: #b91c1c;
+}
+:root[data-theme="dark"] .branch-type-badge--branch {
+    background: #422006; color: #fde68a; border-color: #92400e;
+}
+
 .failures-list {
     margin-top: 12px;
     padding: 12px 14px;
