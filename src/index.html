@@ -45,6 +45,12 @@
                     </div>
                     <span class="nav-label">Settings</span>
                 </button>
+                <button class="nav-item" data-view="help">
+                    <div class="nav-icon">
+                        <svg viewBox="0 0 24 24"><path d="M11,18H13V16H11V18M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,6A4,4 0 0,0 8,10H10A2,2 0 0,1 12,8A2,2 0 0,1 14,10C14,12 11,11.75 11,15H13C13,12.75 16,12.5 16,10A4,4 0 0,0 12,6Z"/></svg>
+                    </div>
+                    <span class="nav-label">Help</span>
+                </button>
             </nav>
         </div>
         <div>
@@ -190,6 +196,69 @@
                 <div class="settings-actions">
                     <button class="primary-button" id="saveSettings">Save &amp; Refresh</button>
                 </div>
+            </div>
+        </div>
+        <!-- Help view -->
+        <div class="view hidden" id="helpView">
+            <div class="topbar">
+                <h2>Help &amp; Setup</h2>
+            </div>
+            <div class="help-content">
+
+                <div class="help-section panel">
+                    <div class="settings-section-heading">Required tools</div>
+                    <p class="help-text">This app shells out to three CLI tools. All must be installed and authenticated before the app can fetch data.</p>
+                    <div class="help-steps">
+                        <div class="help-step">
+                            <div class="help-step-title"><code>kubectl</code> — Kubernetes CLI</div>
+                            <div class="help-step-body">Used to fetch deployments, namespaces and pod status from your cluster.</div>
+                            <pre class="help-code">brew install kubectl</pre>
+                            <div class="help-step-body">Verify your contexts are set up: <code>kubectl config get-contexts</code></div>
+                        </div>
+                        <div class="help-step">
+                            <div class="help-step-title"><code>gh</code> — GitHub CLI</div>
+                            <div class="help-step-body">Used to fetch pull requests and CI check status from GitHub.</div>
+                            <pre class="help-code">brew install gh
+gh auth login</pre>
+                        </div>
+                        <div class="help-step">
+                            <div class="help-step-title"><code>az</code> — Azure CLI</div>
+                            <div class="help-step-body">Used to fetch pipeline runs and build logs from Azure DevOps. Also requires the Azure DevOps extension.</div>
+                            <pre class="help-code">brew install azure-cli
+az extension add --name azure-devops
+az login</pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="help-section panel">
+                    <div class="settings-section-heading">Settings reference</div>
+                    <table class="help-table">
+                        <thead><tr><th>Field</th><th>Description</th></tr></thead>
+                        <tbody>
+                            <tr><td><strong>kubectl context</strong></td><td>Which cluster to connect to. Defaults to your current context.</td></tr>
+                            <tr><td><strong>Namespace</strong></td><td>Your team's Kubernetes namespace. Used to scope deployments and as a default GitHub topic.</td></tr>
+                            <tr><td><strong>GitHub Org</strong></td><td>Your GitHub organisation name, e.g. <code>my-org</code>.</td></tr>
+                            <tr><td><strong>Repo topic</strong></td><td>GitHub topic tag shared by your team's repos. Defaults to the namespace name if left blank.</td></tr>
+                            <tr><td><strong>Watched repos</strong></td><td>Shared repos outside your topic (e.g. infra repos). One name per line. Only PRs labelled with your namespace are shown.</td></tr>
+                            <tr><td><strong>Azure DevOps Org URL</strong></td><td>Your Azure DevOps organisation URL, e.g. <code>https://dev.azure.com/my-org</code>.</td></tr>
+                            <tr><td><strong>Azure DevOps Project</strong></td><td>The project name inside your Azure organisation.</td></tr>
+                            <tr><td><strong>Datadog Site URL</strong></td><td>Your Datadog site, e.g. <code>https://app.datadoghq.eu</code>. Used to generate log links on deployment cards.</td></tr>
+                            <tr><td><strong>Environment shortcuts</strong></td><td>Map Prod / QA / Test to specific kubectl contexts for quick switching.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="help-section panel">
+                    <div class="settings-section-heading">GitHub repo topics</div>
+                    <p class="help-text">The Pull Requests view fetches PRs from all repos in your GitHub org that are tagged with your team's topic. To tag a repo, go to the repo on GitHub → About (gear icon) → Topics → add your topic name.</p>
+                </div>
+
+                <div class="help-section panel">
+                    <div class="settings-section-heading">Watched repos &amp; labels</div>
+                    <p class="help-text">For shared repos (e.g. an IaC or platform repo used by multiple teams), add the repo name under <strong>Watched repos</strong> in Settings. The app will only show PRs from those repos that have a GitHub label matching your namespace name. Ask the repo owner to add the label to relevant PRs.</p>
+                </div>
+
             </div>
         </div>
     </main>

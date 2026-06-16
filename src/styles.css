@@ -480,8 +480,114 @@ h3 {
     overflow-y: auto;
 }
 
-#deploymentsView.hidden, #pipelinesView.hidden, #pull-requestsView.hidden, #settingsView.hidden {
+#helpView {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+#deploymentsView.hidden, #pipelinesView.hidden, #pull-requestsView.hidden, #settingsView.hidden, #helpView.hidden {
     display: none;
+}
+
+.help-content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding-bottom: 32px;
+}
+
+.help-section {
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.help-section .settings-section-heading {
+    margin-bottom: 4px;
+}
+
+.help-text {
+    font-size: 0.9rem;
+    color: var(--text);
+    line-height: 1.6;
+    margin: 0;
+}
+
+.help-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.help-step {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 14px;
+    background: var(--panel-muted);
+    border-radius: 8px;
+}
+
+.help-step-title {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--text);
+}
+
+.help-step-body {
+    font-size: 0.86rem;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.help-code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.82rem;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 4px 0 0;
+    white-space: pre;
+    overflow-x: auto;
+}
+
+.help-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.87rem;
+}
+
+.help-table th {
+    text-align: left;
+    padding: 6px 10px;
+    border-bottom: 2px solid var(--line);
+    color: var(--muted);
+    font-weight: 700;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.help-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+    line-height: 1.5;
+}
+
+.help-table tr:last-child td {
+    border-bottom: none;
+}
+
+.help-table code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.82rem;
+    background: var(--panel-muted);
+    padding: 1px 5px;
+    border-radius: 4px;
 }
 
 .deployment-card {
