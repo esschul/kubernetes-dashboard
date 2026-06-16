@@ -24,7 +24,7 @@ async function fetchPipelineRuns({ org, project }) {
         '--org', org,
         '--project', project,
         '--query-order', 'QueueTimeDesc',
-        '--top', '100',
+        '--top', '500',
         '-o', 'json',
     ]);
 

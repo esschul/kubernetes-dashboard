@@ -117,6 +117,7 @@ function populateSettingsForm() {
     document.getElementById('githubTopicInput').value = config.githubTopic || '';
     document.getElementById('githubWatchedReposInput').value = (config.githubWatchedRepos || []).join('\n');
     document.getElementById('datadogSiteInput').value = config.datadogSite || '';
+    document.getElementById('notificationsEnabledInput').checked = config.notificationsEnabled || false;
     document.getElementById('azureOrgInput').value = config.azureOrg || '';
     document.getElementById('azureProjectInput').value = config.azureProject || '';
     document.getElementById('envProdInput').value = config.envContexts?.prod || '';
@@ -134,6 +135,7 @@ function readFormConfig() {
         githubWatchedRepos: document.getElementById('githubWatchedReposInput').value
             .split('\n').map((r) => r.trim()).filter(Boolean),
         datadogSite: document.getElementById('datadogSiteInput').value.trim().replace(/\/$/, ''),
+        notificationsEnabled: document.getElementById('notificationsEnabledInput').checked,
         azureOrg: document.getElementById('azureOrgInput').value.trim(),
         azureProject: document.getElementById('azureProjectInput').value.trim(),
         envContexts: {
@@ -153,7 +155,7 @@ function updateSaveButtonState() {
 
 // Watch all settings inputs for changes
 ['contextInput', 'namespaceInput', 'githubOrgInput', 'githubTopicInput', 'githubWatchedReposInput', 'datadogSiteInput',
-    'azureOrgInput', 'azureProjectInput', 'envProdInput', 'envQaInput', 'envTestInput',
+    'azureOrgInput', 'azureProjectInput', 'envProdInput', 'envQaInput', 'envTestInput', 'notificationsEnabledInput',
 ].forEach((id) => {
     document.getElementById(id)?.addEventListener('change', updateSaveButtonState);
     document.getElementById(id)?.addEventListener('input', updateSaveButtonState);
@@ -1039,6 +1041,26 @@ let prRefreshInProgress = false;
 let activePrTab = 'open';  // 'open' | 'merged' | 'merged-yesterday' | 'dependabot'
 let activePrFilter = 'all';
 let latestPrData = null;
+const seenPrKeys = new Set(); // tracks `repo/number` seen this session
+
+function notifyNewPrs(pullRequests) {
+    const config = loadConfig();
+    if (!config.notificationsEnabled) { return; }
+    const isFirstFetch = seenPrKeys.size === 0;
+    for (const pr of pullRequests) {
+        if (isDependabotPr(pr)) { continue; }
+        const key = `${pr.repository}/${pr.number}`;
+        if (!seenPrKeys.has(key)) {
+            seenPrKeys.add(key);
+            if (!isFirstFetch) {
+                new Notification(`New PR: ${pr.repository}`, {
+                    body: `#${pr.number} ${pr.title}`,
+                    silent: false,
+                });
+            }
+        }
+    }
+}
 
 
 document.getElementById('prTabSwitcher').addEventListener('click', (e) => {
@@ -1099,6 +1121,7 @@ async function refreshPullRequests(force = false) {
             watchedRepos: config.githubWatchedRepos || [],
             namespace: config.namespace,
         });
+        notifyNewPrs(data.pullRequests);
         latestPrData = data;
         renderPrView(data);
         const now = new Date().toLocaleTimeString();

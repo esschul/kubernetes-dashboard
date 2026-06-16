@@ -1440,3 +1440,12 @@ input, select {
 :root[data-theme="dark"] .status-pill.is-merged {
     background: #2e1065; border-color: #7c3aed; color: #ddd6fe;
 }
+
+.label--inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--text);
+}
