@@ -120,7 +120,7 @@ function populateSettingsForm() {
     document.getElementById('notificationsEnabledInput').checked = config.notificationsEnabled || false;
     document.getElementById('azureOrgInput').value = config.azureOrg || '';
     document.getElementById('azureProjectInput').value = config.azureProject || '';
-    document.getElementById('azureTeamInput').value = config.azureTeam || '';
+    document.getElementById('azureTeamInput').value = config.azureTeam ?? config.namespace ?? '';
     document.getElementById('envProdInput').value = config.envContexts?.prod || '';
     document.getElementById('envQaInput').value = config.envContexts?.qa || '';
     document.getElementById('envTestInput').value = config.envContexts?.test || '';
@@ -747,8 +747,7 @@ async function refreshPipelines() {
         });
         renderPipelineList(runs);
 
-        // Count only for the user's team (azureTeam takes priority, falls back to namespace)
-        const activeTeam = config.azureTeam || config.namespace;
+        const activeTeam = config.azureTeam || null;
         const teamRuns = activeTeam
             ? runs.filter((r) => r.team === activeTeam)
             : runs;
@@ -794,7 +793,7 @@ function renderPipelineList(runs) {
     const list = document.getElementById('pipelineList');
 
     const pConfig = loadConfig();
-    const activeTeam = pConfig.azureTeam || pConfig.namespace;
+    const activeTeam = pConfig.azureTeam || null;
     let filtered = activeTeam
         ? runs.filter((r) => r.team === activeTeam)
         : runs;
