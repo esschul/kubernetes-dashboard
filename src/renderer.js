@@ -121,6 +121,7 @@ function populateSettingsForm() {
     document.getElementById('githubWatchedReposInput').value = (config.githubWatchedRepos || []).join('\n');
     document.getElementById('datadogSiteInput').value = config.datadogSite || '';
     document.getElementById('notificationsEnabledInput').checked = config.notificationsEnabled || false;
+    document.getElementById('pipelineNotificationsEnabledInput').checked = config.pipelineNotificationsEnabled || false;
     document.getElementById('azureOrgInput').value = config.azureOrg || '';
     document.getElementById('azureProjectInput').value = config.azureProject || '';
     document.getElementById('azureTeamInput').value = config.azureTeam ?? config.namespace ?? '';
@@ -140,6 +141,7 @@ function readFormConfig() {
             .split('\n').map((r) => r.trim()).filter(Boolean),
         datadogSite: document.getElementById('datadogSiteInput').value.trim().replace(/\/$/, ''),
         notificationsEnabled: document.getElementById('notificationsEnabledInput').checked,
+        pipelineNotificationsEnabled: document.getElementById('pipelineNotificationsEnabledInput').checked,
         azureOrg: document.getElementById('azureOrgInput').value.trim(),
         azureProject: document.getElementById('azureProjectInput').value.trim(),
         azureTeam: document.getElementById('azureTeamInput').value.trim(),
@@ -160,7 +162,7 @@ function updateSaveButtonState() {
 
 // Watch all settings inputs for changes
 ['contextInput', 'namespaceInput', 'githubOrgInput', 'githubTopicInput', 'githubWatchedReposInput', 'datadogSiteInput',
-    'azureOrgInput', 'azureProjectInput', 'azureTeamInput', 'envProdInput', 'envQaInput', 'envTestInput', 'notificationsEnabledInput',
+    'azureOrgInput', 'azureProjectInput', 'azureTeamInput', 'envProdInput', 'envQaInput', 'envTestInput', 'notificationsEnabledInput', 'pipelineNotificationsEnabledInput',
 ].forEach((id) => {
     document.getElementById(id)?.addEventListener('change', updateSaveButtonState);
     document.getElementById(id)?.addEventListener('input', updateSaveButtonState);
@@ -268,7 +270,8 @@ function ensureSelectOption(id, value) {
 document.getElementById('saveSettings').addEventListener('click', () => {
     const config = readFormConfig();
     const oldConfig = loadConfig();
-    if (config.notificationsEnabled && !oldConfig.notificationsEnabled) {
+    if ((config.notificationsEnabled && !oldConfig.notificationsEnabled) ||
+        (config.pipelineNotificationsEnabled && !oldConfig.pipelineNotificationsEnabled)) {
         window.kubeDashboard.requestNotificationPermission();
     }
     saveConfig(config);
@@ -728,6 +731,25 @@ let pipelinesRefreshInProgress = false;
 let activePipelineFilter = 'all';
 let pipelineRenderGeneration = 0;
 const pipelinePrCache = new Map(); // key: `pipeline/${repoName}/${sha}` → pr or null
+const seenFailedPipelineIds = new Set();
+
+function notifyFailedPipelines(runs) {
+    const config = loadConfig();
+    if (!config.pipelineNotificationsEnabled) { return; }
+    const isFirstFetch = seenFailedPipelineIds.size === 0;
+    for (const run of runs) {
+        if (run.result !== 'failed') { continue; }
+        if (!seenFailedPipelineIds.has(run.id)) {
+            seenFailedPipelineIds.add(run.id);
+            if (!isFirstFetch) {
+                new Notification(`Pipeline failed: ${run.name}`, {
+                    body: run.team ? `${run.team} · ${run.sourceBranch || ''}` : (run.sourceBranch || ''),
+                    silent: false,
+                });
+            }
+        }
+    }
+}
 
 
 document.getElementById('pipelineFilterBar').addEventListener('click', (e) => {
@@ -751,6 +773,7 @@ async function refreshPipelines() {
             org: config.azureOrg,
             project: config.azureProject,
         });
+        notifyFailedPipelines(runs);
         renderPipelineList(runs);
 
         const activeTeam = config.azureTeam || null;
