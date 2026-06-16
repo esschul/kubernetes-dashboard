@@ -50,4 +50,5 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
     },
     clearPrCache: () => ipcRenderer.invoke('prs:clearCache'),
     openExternal: (url) => ipcRenderer.invoke('external:open', url),
+    requestNotificationPermission: () => ipcRenderer.invoke('notifications:requestPermission'),
 });

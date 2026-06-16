@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, systemPreferences } = require('electron');
 if (!app.isPackaged) { require('electron-reload')(__dirname); }
 
 // Packaged Electron apps launch with a minimal PATH that lacks homebrew and
@@ -134,6 +134,11 @@ app.whenReady().then(() => {
     ipcMain.handle('prs:clearCache', () => {
         clearPrListCache();
         return { ok: true };
+    });
+
+    ipcMain.handle('notifications:requestPermission', async () => {
+        if (process.platform !== 'darwin') { return 'granted'; }
+        return await systemPreferences.requestUserNotificationPermission();
     });
 
     ipcMain.handle('external:open', (_event, url) => {

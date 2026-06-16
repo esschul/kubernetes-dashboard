@@ -269,7 +269,7 @@ document.getElementById('saveSettings').addEventListener('click', () => {
     const config = readFormConfig();
     const oldConfig = loadConfig();
     if (config.notificationsEnabled && !oldConfig.notificationsEnabled) {
-        Notification.requestPermission();
+        window.kubeDashboard.requestNotificationPermission();
     }
     saveConfig(config);
     updateSaveButtonState();
