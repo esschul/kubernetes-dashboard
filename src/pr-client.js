@@ -16,17 +16,29 @@ const checkRunsCache = new Map(); // key: `${nameWithOwner}/${sha}` → { checkS
 
 let _callCount = 0;
 
-async function runGh(args) {
+async function runGh(args, { retry = true } = {}) {
     _callCount++;
     const label = args.slice(0, 3).join(' ');
     console.log(`[gh] #${_callCount} ${label} ${args[3] || ''}`);
     const ghPath = resolveCommand('gh', 'GH_PATH');
-    const { stdout } = await execFileAsync(ghPath, args, {
+    const opts = {
         timeout: 60_000,
         maxBuffer: 10 * 1024 * 1024,
         env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() },
-    });
-    return JSON.parse(stdout);
+    };
+    try {
+        const { stdout } = await execFileAsync(ghPath, args, opts);
+        return JSON.parse(stdout);
+    } catch (err) {
+        const msg = err.stderr || err.message || '';
+        if (retry && (msg.includes('401') || msg.includes('Bad credentials'))) {
+            console.log(`[gh] token error, retrying once after refresh…`);
+            await execFileAsync(ghPath, ['auth', 'token'], opts).catch(() => {});
+            await new Promise((r) => setTimeout(r, 1000));
+            return runGh(args, { retry: false });
+        }
+        throw err;
+    }
 }
 
 function getLocalDateKey(value) {
