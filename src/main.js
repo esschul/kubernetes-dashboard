@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, systemPreferences } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 if (!app.isPackaged) { require('electron-reload')(__dirname); }
 
 // Packaged Electron apps launch with a minimal PATH that lacks homebrew and
@@ -136,9 +136,17 @@ app.whenReady().then(() => {
         return { ok: true };
     });
 
-    ipcMain.handle('notifications:requestPermission', async () => {
-        if (process.platform !== 'darwin') { return 'granted'; }
-        return await systemPreferences.requestUserNotificationPermission();
+    ipcMain.handle('notifications:requestPermission', () => {
+        if (process.platform !== 'darwin') { return; }
+        // Sending a notification from the main process is what triggers the macOS permission dialog
+        const { Notification: ElectronNotification } = require('electron');
+        if (ElectronNotification.isSupported()) {
+            new ElectronNotification({
+                title: 'Kubernetes Dashboard',
+                body: 'Notifications enabled.',
+                silent: true,
+            }).show();
+        }
     });
 
     ipcMain.handle('external:open', (_event, url) => {
