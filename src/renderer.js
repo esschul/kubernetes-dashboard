@@ -1175,6 +1175,54 @@ document.getElementById('prList').addEventListener('click', (e) => {
         window.kubeDashboard.openExternal(link.dataset.url);
         return;
     }
+    const approveBtn = e.target.closest('.pr-approve-btn');
+    if (approveBtn) {
+        e.stopPropagation();
+        const row = approveBtn.closest('.pr-actions-row');
+        const prNumber = Number(row.dataset.prNumber);
+        const prRepo = row.dataset.prRepo;
+        const config = loadConfig();
+        approveBtn.disabled = true;
+        approveBtn.textContent = 'Approving…';
+        window.kubeDashboard.approvePr({ org: config.githubOrg, repoName: prRepo, prNumber }).then((res) => {
+            if (res.ok) {
+                approvedPrKeys.add(`${prRepo}/${prNumber}`);
+                row.innerHTML = `
+                    <select class="pr-merge-method-select">
+                        <option value="squash" selected>Squash</option>
+                        <option value="merge">Merge</option>
+                        <option value="rebase">Rebase</option>
+                    </select>
+                    <button class="pr-action-btn pr-merge-btn">Merge</button>`;
+            } else {
+                approveBtn.disabled = false;
+                approveBtn.textContent = 'Approve';
+                approveBtn.title = res.error || 'Failed to approve';
+            }
+        });
+        return;
+    }
+    const mergeBtn = e.target.closest('.pr-merge-btn');
+    if (mergeBtn) {
+        e.stopPropagation();
+        const row = mergeBtn.closest('.pr-actions-row');
+        const prNumber = Number(row.dataset.prNumber);
+        const prRepo = row.dataset.prRepo;
+        const method = row.querySelector('.pr-merge-method-select')?.value || 'squash';
+        const config = loadConfig();
+        mergeBtn.disabled = true;
+        mergeBtn.textContent = 'Merging…';
+        window.kubeDashboard.mergePr({ org: config.githubOrg, repoName: prRepo, prNumber, method }).then((res) => {
+            if (res.ok) {
+                row.innerHTML = '<span class="pr-action-done">Merged ✓</span>';
+            } else {
+                mergeBtn.disabled = false;
+                mergeBtn.textContent = 'Merge';
+                mergeBtn.title = res.error || 'Failed to merge';
+            }
+        });
+        return;
+    }
     const card = e.target.closest('.pr-card[data-url]');
     if (card) { window.kubeDashboard.openExternal(card.dataset.url); }
 });
@@ -1435,6 +1483,8 @@ function getDeploymentStatusForPr(pr) {
     return { label: `Deployed · ${statusLabel}`, cls };
 }
 
+const approvedPrKeys = new Set(); // tracks `repo/number` approved this session
+
 function renderPrCard(pr, isMerged = false) {
     const reviewLabel = isMerged ? 'Merged' : getPrReviewLabel(pr);
     const reviewClass = isMerged ? 'is-merged' : getPrReviewClass(pr);
@@ -1447,6 +1497,20 @@ function renderPrCard(pr, isMerged = false) {
     const pipelineLink = pipelineStatus?.url
         ? `<span class="datadog-link pr-pipeline-link" data-url="${escapeHtml(pipelineStatus.url)}">Pipeline ↗</span>`
         : '';
+
+    const prKey = `${pr.repository}/${pr.number}`;
+    const isApproved = approvedPrKeys.has(prKey) || pr.reviewDecision === 'APPROVED';
+    const showActions = !isMerged && isDependabotPr(pr) && pr.checkStatus === 'success';
+    const actionsHtml = showActions ? `
+        <div class="pr-actions-row" data-pr-number="${pr.number}" data-pr-repo="${escapeHtml(pr.repository)}">
+            ${!isApproved ? `<button class="pr-action-btn pr-approve-btn">Approve</button>` : `
+            <select class="pr-merge-method-select">
+                <option value="squash" selected>Squash</option>
+                <option value="merge">Merge</option>
+                <option value="rebase">Rebase</option>
+            </select>
+            <button class="pr-action-btn pr-merge-btn">Merge</button>`}
+        </div>` : '';
 
     return `
     <div class="pr-card deployment-card" data-url="${escapeHtml(pr.url)}">
@@ -1466,11 +1530,12 @@ function renderPrCard(pr, isMerged = false) {
             ${ageDetails ? `<span class="age-pill ${ageDetails.cssClass}">${escapeHtml(ageDetails.label)}</span>` : ''}
             ${pr.commentActivityCount > 0 ? `<span class="branch-pill">${pr.commentActivityCount} comment${pr.commentActivityCount !== 1 ? 's' : ''}</span>` : ''}
         </div>
-        ${pipelineStatus && isMerged || deploymentStatus ? `
+        ${(pipelineStatus && isMerged) || deploymentStatus ? `
         <div class="pr-infra-row">
             ${pipelineStatus && isMerged ? `<span class="pr-infra-item"><span class="pr-infra-label">Pipeline</span><span class="status-pill ${pipelineStatus.cls}">${escapeHtml(pipelineStatus.label.replace('Pipeline ', ''))}</span></span>` : ''}
             ${deploymentStatus ? `<span class="pr-infra-item"><span class="pr-infra-label">Deployment</span><span class="status-pill ${deploymentStatus.cls}">${escapeHtml(deploymentStatus.label.replace('Deployed · ', ''))}</span></span>` : ''}
         </div>` : ''}
+        ${actionsHtml}
     </div>`;
 }
 

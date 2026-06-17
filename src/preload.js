@@ -49,6 +49,8 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
         return response.result;
     },
     clearPrCache: () => ipcRenderer.invoke('prs:clearCache'),
+    approvePr: (config) => ipcRenderer.invoke('pr:approve', config),
+    mergePr: (config) => ipcRenderer.invoke('pr:merge', config),
     openExternal: (url) => ipcRenderer.invoke('external:open', url),
     requestNotificationPermission: () => ipcRenderer.invoke('notifications:requestPermission'),
 });

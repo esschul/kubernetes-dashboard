@@ -20,7 +20,7 @@ if (missingPaths.length > 0) {
 }
 const path = require('node:path');
 const { fetchDeployments, fetchContexts, fetchNamespaces } = require('./kubectl-client');
-const { fetchPrForSha, fetchPrByNumber } = require('./github-client');
+const { fetchPrForSha, fetchPrByNumber, approvePr, mergePr } = require('./github-client');
 const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors } = require('./azure-client');
 const { fetchPullRequests, clearPrListCache } = require('./pr-client');
 
@@ -128,6 +128,24 @@ app.whenReady().then(() => {
             return { ok: true, result };
         } catch (err) {
             return { ok: false, error: { message: err.message } };
+        }
+    });
+
+    ipcMain.handle('pr:approve', async (_event, config) => {
+        try {
+            await approvePr(config);
+            return { ok: true };
+        } catch (err) {
+            return { ok: false, error: err.message };
+        }
+    });
+
+    ipcMain.handle('pr:merge', async (_event, config) => {
+        try {
+            await mergePr(config);
+            return { ok: true };
+        } catch (err) {
+            return { ok: false, error: err.message };
         }
     });
 
