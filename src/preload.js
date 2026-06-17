@@ -49,6 +49,11 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
         return response.result;
     },
     clearPrCache: () => ipcRenderer.invoke('prs:clearCache'),
+    fetchGithubUser: async (login) => {
+        const res = await ipcRenderer.invoke('gh:user', login);
+        if (!res.ok) { throw new Error(res.error); }
+        return res.result;
+    },
     approvePr: (config) => ipcRenderer.invoke('pr:approve', config),
     mergePr: (config) => ipcRenderer.invoke('pr:merge', config),
     openExternal: (url) => ipcRenderer.invoke('external:open', url),

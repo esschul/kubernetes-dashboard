@@ -120,6 +120,7 @@ function populateSettingsForm() {
     document.getElementById('githubTopicInput').value = config.githubTopic || '';
     document.getElementById('githubWatchedReposInput').value = (config.githubWatchedRepos || []).join('\n');
     document.getElementById('datadogSiteInput').value = config.datadogSite || '';
+    document.getElementById('showPrAvatarsInput').checked = config.showPrAvatars || false;
     document.getElementById('notificationsEnabledInput').checked = config.notificationsEnabled || false;
     document.getElementById('pipelineNotificationsEnabledInput').checked = config.pipelineNotificationsEnabled || false;
     document.getElementById('azureOrgInput').value = config.azureOrg || '';
@@ -140,6 +141,7 @@ function readFormConfig() {
         githubWatchedRepos: document.getElementById('githubWatchedReposInput').value
             .split('\n').map((r) => r.trim()).filter(Boolean),
         datadogSite: document.getElementById('datadogSiteInput').value.trim().replace(/\/$/, ''),
+        showPrAvatars: document.getElementById('showPrAvatarsInput').checked,
         notificationsEnabled: document.getElementById('notificationsEnabledInput').checked,
         pipelineNotificationsEnabled: document.getElementById('pipelineNotificationsEnabledInput').checked,
         azureOrg: document.getElementById('azureOrgInput').value.trim(),
@@ -169,7 +171,7 @@ document.getElementById('namespaceInput')?.addEventListener('change', () => {
 });
 
 ['contextInput', 'namespaceInput', 'githubOrgInput', 'githubTopicInput', 'githubWatchedReposInput', 'datadogSiteInput',
-    'azureOrgInput', 'azureProjectInput', 'azureTeamInput', 'envProdInput', 'envQaInput', 'envTestInput', 'notificationsEnabledInput', 'pipelineNotificationsEnabledInput',
+    'azureOrgInput', 'azureProjectInput', 'azureTeamInput', 'envProdInput', 'envQaInput', 'envTestInput', 'showPrAvatarsInput', 'notificationsEnabledInput', 'pipelineNotificationsEnabledInput',
 ].forEach((id) => {
     document.getElementById(id)?.addEventListener('change', updateSaveButtonState);
     document.getElementById(id)?.addEventListener('input', updateSaveButtonState);
@@ -1298,6 +1300,21 @@ function getLocalDateKey(value) {
 }
 
 const DEPENDABOT_LOGIN = 'app/dependabot';
+
+const avatarCache = new Map(); // login → avatar_url or null
+
+async function fetchAvatar(login) {
+    if (avatarCache.has(login)) { return avatarCache.get(login); }
+    try {
+        const data = await window.kubeDashboard.fetchGithubUser(login);
+        const url = data?.avatar_url || null;
+        avatarCache.set(login, url);
+        return url;
+    } catch {
+        avatarCache.set(login, null);
+        return null;
+    }
+}
 function isDependabotPr(pr) { return pr.author?.login === DEPENDABOT_LOGIN; }
 
 function matchesPrFilter(pr) {
@@ -1368,6 +1385,22 @@ function renderPrView(data) {
 
     // Inject pipeline errors for PRs with failing checks
     const config = loadConfig();
+
+    // Async: fetch and inject avatars for placeholders
+    if (config.showPrAvatars) {
+        const placeholders = list.querySelectorAll('.pr-avatar--placeholder[data-login]');
+        for (const el of placeholders) {
+            const login = el.dataset.login;
+            fetchAvatar(login).then((url) => {
+                if (!url) { return; }
+                const img = document.createElement('img');
+                img.className = 'pr-avatar';
+                img.src = url;
+                img.alt = login;
+                el.replaceWith(img);
+            });
+        }
+    }
     if (config.azureOrg && config.azureProject && window._lastPipelineRuns) {
         for (const pr of sorted) {
             if (pr.checkStatus === 'failure') {
@@ -1483,6 +1516,8 @@ function getDeploymentStatusForPr(pr) {
 
 const approvedPrKeys = new Set(); // tracks `repo/number` approved this session
 
+const BOT_AVATAR_SVG = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="pr-avatar-bot-icon"><rect x="3" y="8" width="18" height="13" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M9 8V6a3 3 0 0 1 6 0v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="9" cy="14" r="1.5" fill="currentColor"/><circle cx="15" cy="14" r="1.5" fill="currentColor"/><path d="M8 18h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M12 3v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+
 function renderPrCard(pr, isMerged = false) {
     const reviewLabel = isMerged ? 'Merged' : getPrReviewLabel(pr);
     const reviewClass = isMerged ? 'is-merged' : getPrReviewClass(pr);
@@ -1510,8 +1545,25 @@ function renderPrCard(pr, isMerged = false) {
             <button class="pr-action-btn pr-merge-btn">Merge</button>`}
         </div>` : '';
 
+    const config = loadConfig();
+    const showAvatars = config.showPrAvatars;
+    const login = pr.author?.login || 'unknown';
+    const isBot = isDependabotPr(pr);
+    const cachedAvatar = showAvatars && !isBot ? avatarCache.get(login) : null;
+    const avatarHtml = showAvatars ? `
+        <div class="pr-avatar-col">
+            ${isBot
+                ? `<div class="pr-avatar pr-avatar--bot">${BOT_AVATAR_SVG}</div>`
+                : cachedAvatar
+                    ? `<img class="pr-avatar" src="${escapeHtml(cachedAvatar)}" alt="${escapeHtml(login)}" />`
+                    : `<div class="pr-avatar pr-avatar--placeholder" data-login="${escapeHtml(login)}"></div>`}
+            <span class="pr-avatar-name">${escapeHtml(isBot ? 'dependabot' : login)}</span>
+        </div>` : '';
+
     return `
-    <div class="pr-card deployment-card" data-url="${escapeHtml(pr.url)}">
+    <div class="pr-card deployment-card${showAvatars ? ' pr-card--with-avatar' : ''}" data-url="${escapeHtml(pr.url)}">
+        ${avatarHtml}
+        <div class="pr-card-body">
         <div class="deployment-card-top">
             <div class="deployment-name-row">
                 <span class="eyebrow-inline">${escapeHtml(pr.repository)}</span>
@@ -1524,7 +1576,7 @@ function renderPrCard(pr, isMerged = false) {
             </div>
         </div>
         <div class="pr-meta-row">
-            <span class="pr-meta">#${pr.number} · ${escapeHtml(pr.author?.login || 'unknown')} · ${escapeHtml(dateLabel)}</span>
+            <span class="pr-meta">#${pr.number} · ${escapeHtml(login)} · ${escapeHtml(dateLabel)}</span>
             ${ageDetails ? `<span class="age-pill ${ageDetails.cssClass}">${escapeHtml(ageDetails.label)}</span>` : ''}
             ${pr.commentActivityCount > 0 ? `<span class="branch-pill">${pr.commentActivityCount} comment${pr.commentActivityCount !== 1 ? 's' : ''}</span>` : ''}
         </div>
@@ -1534,6 +1586,7 @@ function renderPrCard(pr, isMerged = false) {
             ${deploymentStatus ? `<span class="pr-infra-item"><span class="pr-infra-label">Deployment</span><span class="status-pill ${deploymentStatus.cls}">${escapeHtml(deploymentStatus.label.replace('Deployed · ', ''))}</span></span>` : ''}
         </div>` : ''}
         ${actionsHtml}
+        </div>
     </div>`;
 }
 

@@ -1387,6 +1387,72 @@ input, select {
     letter-spacing: 0.04em;
 }
 
+.pr-card--with-avatar {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.pr-avatar-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    width: 44px;
+    padding-top: 2px;
+}
+
+.pr-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--line);
+    display: block;
+}
+
+.pr-avatar--placeholder {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--line);
+}
+
+.pr-avatar--bot {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+}
+
+.pr-avatar-bot-icon {
+    width: 22px;
+    height: 22px;
+}
+
+.pr-avatar-name {
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-align: center;
+    word-break: break-all;
+    line-height: 1.2;
+    max-width: 44px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pr-card-body {
+    flex: 1;
+    min-width: 0;
+}
+
 .pr-actions-row {
     display: flex;
     align-items: center;

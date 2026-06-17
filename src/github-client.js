@@ -180,6 +180,10 @@ async function fetchPrByNumber(prNumber, repoName, org) {
     }
 }
 
+async function fetchGithubUser(login) {
+    return runGh(['api', `users/${login}`]);
+}
+
 async function approvePr({ repoFullName, prNumber }) {
     const ghPath = resolveCommand('gh', 'GH_PATH');
     const opts = { timeout: 30_000, maxBuffer: 1024 * 1024, env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() } };
@@ -193,4 +197,4 @@ async function mergePr({ repoFullName, prNumber, method }) {
     await execFileAsync(ghPath, ['pr', 'merge', String(prNumber), flag, '--repo', repoFullName, '--admin'], opts);
 }
 
-module.exports = { fetchPrForSha, fetchPrByNumber, approvePr, mergePr };
+module.exports = { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr };
