@@ -109,6 +109,22 @@ async function fetchFailedStep({ org, project, buildId }) {
     }
 }
 
+function extractLogErrors(lines) {
+    return lines
+        .filter((l) => {
+            const t = l.trimStart();
+            return l.includes('[ERROR]')
+                || l.includes('##[error]')
+                || l.toLowerCase().includes('npm error')
+                || l.includes('FAILURE:')
+                || l.includes('BUILD FAILED')
+                || t.startsWith('* What went wrong:')
+                || t.startsWith('> ');
+        })
+        .map((l) => l.replace(/^\d{4}-\d{2}-\d{2}T[\d:.Z]+ /, '').trim())
+        .filter(Boolean);
+}
+
 async function fetchLogErrors({ org, logUrl }) {
     if (!logUrl) { return []; }
     try {
@@ -127,13 +143,10 @@ async function fetchLogErrors({ org, logUrl }) {
         let text = stdout;
         try { text = JSON.parse(stdout); } catch { /* raw text, use as-is */ }
         const lines = String(text).split('\n');
-        return lines
-            .filter((l) => l.includes('[ERROR]') || l.includes('##[error]') || /^npm error\b/i.test(l.trimStart()))
-            .map((l) => l.replace(/^\d{4}-\d{2}-\d{2}T[\d:.Z]+ /, '').trim())
-            .filter(Boolean);
+        return extractLogErrors(lines);
     } catch {
         return [];
     }
 }
 
-module.exports = { fetchPipelineRuns, fetchFailedStep, fetchLogErrors };
+module.exports = { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, extractLogErrors };
