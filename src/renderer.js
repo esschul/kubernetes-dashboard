@@ -1143,6 +1143,14 @@ document.getElementById('prFilterBar').addEventListener('click', (e) => {
 });
 
 document.getElementById('prList').addEventListener('click', (e) => {
+    const copyBtn = e.target.closest('.copy-errors-btn');
+    if (copyBtn) {
+        e.stopPropagation();
+        const errDiv = copyBtn.closest('.pipeline-errors');
+        const errors = errDiv?.dataset.errors ? JSON.parse(errDiv.dataset.errors) : [];
+        navigator.clipboard.writeText(errors.join('\n'));
+        return;
+    }
     const link = e.target.closest('.pr-pipeline-link[data-url]');
     if (link) {
         e.stopPropagation();
@@ -1293,6 +1301,69 @@ function renderPrView(data) {
         return tb.localeCompare(ta);
     });
     list.innerHTML = sorted.map((pr) => renderPrCard(pr, isMergedTab)).join('');
+
+    // Inject pipeline errors for PRs with failing checks
+    const config = loadConfig();
+    if (config.azureOrg && config.azureProject && window._lastPipelineRuns) {
+        for (const pr of sorted) {
+            if (pr.checkStatus === 'failure') {
+                injectPrPipelineErrors(pr, config);
+            }
+        }
+    }
+}
+
+async function injectPrPipelineErrors(pr, config) {
+    const runs = window._lastPipelineRuns;
+    if (!runs) { return; }
+
+    // Find the latest failed pipeline run for this PR
+    const matching = runs.filter((r) =>
+        (r.sourceBranch === `PR #${pr.number}` || r.trigger === `PR #${pr.number}`) &&
+        r.result === 'failed' && r.status === 'completed'
+    ).sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+
+    if (!matching.length) { return; }
+    const run = matching[0];
+
+    const card = document.querySelector(`.pr-card[data-url="${CSS.escape(pr.url)}"]`);
+    if (!card) { return; }
+
+    const result = await window.kubeDashboard.fetchFailedStep({
+        org: config.azureOrg,
+        project: config.azureProject,
+        buildId: run.id,
+    });
+    if (!result?.stepName) { return; }
+
+    const freshCard = document.querySelector(`.pr-card[data-url="${CSS.escape(pr.url)}"]`);
+    if (!freshCard) { return; }
+
+    // Show failed step name
+    const metaRow = freshCard.querySelector('.pr-meta-row');
+    if (metaRow && !metaRow.querySelector('.pr-pipeline-failed-step')) {
+        const el = document.createElement('span');
+        el.className = 'pipeline-failed-step pr-pipeline-failed-step';
+        el.textContent = `Pipeline: ${run.name} · Failed at: ${result.stepName}`;
+        metaRow.insertAdjacentElement('afterend', el);
+    }
+
+    if (!result.logUrl) { return; }
+    const errors = await window.kubeDashboard.fetchLogErrors({
+        org: config.azureOrg,
+        logUrl: result.logUrl,
+    });
+    if (!errors.length) { return; }
+
+    const finalCard = document.querySelector(`.pr-card[data-url="${CSS.escape(pr.url)}"]`);
+    if (!finalCard || finalCard.querySelector('.pipeline-errors')) { return; }
+
+    const errDiv = document.createElement('details');
+    errDiv.className = 'pipeline-errors';
+    errDiv.dataset.errors = JSON.stringify(errors);
+    errDiv.innerHTML = `<summary class="pipeline-errors-summary">${errors.length} error${errors.length !== 1 ? 's' : ''}<button class="copy-errors-btn" title="Copy errors to clipboard">Copy</button></summary>`
+        + errors.map((e) => `<div class="pipeline-error-line">${escapeHtml(e)}</div>`).join('');
+    finalCard.appendChild(errDiv);
 }
 
 function getPipelineStatusForPr(pr) {

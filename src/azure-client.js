@@ -16,8 +16,9 @@ async function runAz(args) {
 async function fetchPipelineRuns({ org, project }) {
     if (!org || !project) { throw new Error('Azure DevOps org and project are required.'); }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 7);
+    cutoff.setHours(0, 0, 0, 0);
 
     const runs = await runAz([
         'pipelines', 'runs', 'list',
@@ -29,7 +30,7 @@ async function fetchPipelineRuns({ org, project }) {
     ]);
 
     return runs
-        .filter((r) => new Date(r.startTime || r.queueTime) >= today)
+        .filter((r) => new Date(r.startTime || r.queueTime) >= cutoff)
         .map((r) => {
             const sourceBranch = (r.sourceBranch || '').replace('refs/heads/', '');
             const prNumber = r.sourceBranch?.match(/refs\/pull\/(\d+)\/merge/)?.[1] || null;
