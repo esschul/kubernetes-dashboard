@@ -118,6 +118,8 @@ function extractLogErrors(lines) {
                 || l.toLowerCase().includes('npm error')
                 || l.includes('FAILURE:')
                 || l.includes('BUILD FAILED')
+                || l.includes('Error:')
+                || l.includes('ERROR in ')
                 || t.startsWith('* What went wrong:')
                 || t.startsWith('> ');
         })

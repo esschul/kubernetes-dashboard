@@ -112,3 +112,16 @@ test('real gradle npm error log sample', () => {
     assert.ok(result.some((l) => l.includes('Code analysis failed')), '##[error] line');
     assert.ok(!result.some((l) => l.includes('npm warn')), 'no npm warn lines');
 });
+
+test('catches bare Error: and ERROR in lines (webpack/babel style)', () => {
+    const lines = [
+        '2024-01-01T00:00:00.000Z ERROR in ./app/main.tsx',
+        '2024-01-01T00:00:00.000Z Error: [BABEL] /home/vsts/work/1/s/frontend/src/app/main.tsx: Invalid Option: The version passed to `corejs` is invalid.',
+        '2024-01-01T00:00:00.000Z   at normalizeCoreJSOption (node_modules/@babel/preset-env/lib/index.js:8956:15)',
+        '2024-01-01T00:00:00.000Z webpack compiled with 1 error',
+    ];
+    const result = extractLogErrors(lines);
+    assert.ok(result.some((l) => l.includes('ERROR in ./app/main.tsx')), 'ERROR in line');
+    assert.ok(result.some((l) => l.includes('Error: [BABEL]')), 'bare Error: line');
+    assert.ok(!result.some((l) => l.includes('at normalizeCoreJSOption')), 'no stack frames');
+});
