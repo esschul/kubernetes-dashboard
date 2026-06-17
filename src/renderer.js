@@ -781,13 +781,13 @@ async function refreshPipelines() {
             org: config.azureOrg,
             project: config.azureProject,
         });
-        notifyFailedPipelines(runs);
         renderPipelineList(runs);
 
         const activeTeam = config.azureTeam || null;
         const teamRuns = activeTeam
             ? runs.filter((r) => r.team === activeTeam)
             : runs;
+        notifyFailedPipelines(teamRuns);
 
         // Deduplicate by pipeline name (latest run per pipeline)
         const latestByName = new Map();
