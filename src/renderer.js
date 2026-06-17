@@ -1151,6 +1151,10 @@ document.getElementById('prList').addEventListener('click', (e) => {
         navigator.clipboard.writeText(errors.join('\n'));
         return;
     }
+    if (e.target.closest('.pipeline-errors')) {
+        e.stopPropagation();
+        return;
+    }
     const link = e.target.closest('.pr-pipeline-link[data-url]');
     if (link) {
         e.stopPropagation();
