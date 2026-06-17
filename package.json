@@ -11,6 +11,7 @@
     "check": "node --check src/command-paths.js && node --check src/kubectl-client.js && node --check src/main.js && node --check src/preload.js && node --check src/renderer.js",
     "build:icon": "bash scripts/build-mac-icon.sh",
     "build:mac": "electron-builder --mac dmg",
+    "install-local": "bash scripts/install-local.sh",
     "release": "bash scripts/publish.sh"
   },
   "devDependencies": {
