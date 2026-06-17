@@ -1437,8 +1437,9 @@ async function injectPrPipelineErrors(pr, config) {
     if (!freshCard) { return; }
 
     // Show failed step name
-    const metaRow = freshCard.querySelector('.pr-meta-row');
-    if (metaRow && !metaRow.querySelector('.pr-pipeline-failed-step')) {
+    const cardBody = freshCard.querySelector('.pr-card-body') || freshCard;
+    const metaRow = cardBody.querySelector('.pr-meta-row');
+    if (metaRow && !cardBody.querySelector('.pr-pipeline-failed-step')) {
         const el = document.createElement('span');
         el.className = 'pipeline-failed-step pr-pipeline-failed-step';
         el.textContent = `Pipeline: ${run.name} · Failed at: ${result.stepName}`;
@@ -1460,7 +1461,7 @@ async function injectPrPipelineErrors(pr, config) {
     errDiv.dataset.errors = JSON.stringify(errors);
     errDiv.innerHTML = `<summary class="pipeline-errors-summary">${errors.length} error${errors.length !== 1 ? 's' : ''}<button class="copy-errors-btn" title="Copy errors to clipboard">Copy</button></summary>`
         + errors.map((e) => `<div class="pipeline-error-line">${escapeHtml(e)}</div>`).join('');
-    finalCard.appendChild(errDiv);
+    (finalCard.querySelector('.pr-card-body') || finalCard).appendChild(errDiv);
 }
 
 function getPipelineStatusForPr(pr) {
