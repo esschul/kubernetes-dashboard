@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Notification: ElectronNotification } = require('electron');
 if (!app.isPackaged) { require('electron-reload')(__dirname); }
 
 // Packaged Electron apps launch with a minimal PATH that lacks homebrew and
@@ -19,6 +19,7 @@ if (missingPaths.length > 0) {
     process.env.PATH = [...missingPaths, currentPath].join(':');
 }
 const path = require('node:path');
+const { autoUpdater } = require('electron-updater');
 const { fetchDeployments, fetchContexts, fetchNamespaces } = require('./kubectl-client');
 const { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr } = require('./github-client');
 const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors } = require('./azure-client');
@@ -166,7 +167,6 @@ app.whenReady().then(() => {
     ipcMain.handle('notifications:requestPermission', () => {
         if (process.platform !== 'darwin') { return; }
         // Sending a notification from the main process is what triggers the macOS permission dialog
-        const { Notification: ElectronNotification } = require('electron');
         if (ElectronNotification.isSupported()) {
             new ElectronNotification({
                 title: 'Kubernetes Dashboard',
@@ -187,6 +187,21 @@ app.whenReady().then(() => {
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) { createWindow(); }
     });
+
+    if (app.isPackaged) {
+        autoUpdater.checkForUpdates();
+
+        autoUpdater.on('update-downloaded', (info) => {
+            if (ElectronNotification.isSupported()) {
+                const n = new ElectronNotification({
+                    title: 'Update ready',
+                    body: `Kubernetes Dashboard ${info.version} downloaded — click to restart and install.`,
+                });
+                n.on('click', () => autoUpdater.quitAndInstall());
+                n.show();
+            }
+        });
+    }
 });
 
 app.on('window-all-closed', () => {

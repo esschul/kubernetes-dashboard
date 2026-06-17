@@ -42,6 +42,14 @@
         "dmg"
       ]
     },
-    "afterSign": "scripts/notarize.js"
+    "afterSign": "scripts/notarize.js",
+    "publish": {
+      "provider": "github",
+      "owner": "esschul",
+      "repo": "kubernetes-dashboard"
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }
