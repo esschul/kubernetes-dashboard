@@ -1161,6 +1161,8 @@ document.getElementById('prList').addEventListener('click', (e) => {
         const prMeta = card?.querySelector('.pr-meta')?.textContent || '';
         const header = [prTitle, prMeta, prUrl].filter(Boolean).join('\n');
         navigator.clipboard.writeText([header, ...errors].filter(Boolean).join('\n'));
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
         return;
     }
     if (e.target.closest('.pipeline-errors')) {
