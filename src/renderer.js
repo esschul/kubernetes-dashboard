@@ -161,6 +161,13 @@ function updateSaveButtonState() {
 }
 
 // Watch all settings inputs for changes
+document.getElementById('namespaceInput')?.addEventListener('change', () => {
+    const teamInput = document.getElementById('azureTeamInput');
+    if (!teamInput.value.trim()) {
+        teamInput.value = document.getElementById('namespaceInput').value;
+    }
+});
+
 ['contextInput', 'namespaceInput', 'githubOrgInput', 'githubTopicInput', 'githubWatchedReposInput', 'datadogSiteInput',
     'azureOrgInput', 'azureProjectInput', 'azureTeamInput', 'envProdInput', 'envQaInput', 'envTestInput', 'notificationsEnabledInput', 'pipelineNotificationsEnabledInput',
 ].forEach((id) => {
