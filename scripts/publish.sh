@@ -5,6 +5,9 @@ VERSION=$(node -p "require('./package.json').version")
 
 export GH_TOKEN=$(gh auth token)
 
+echo "→ Cleaning dist/…"
+rm -rf dist/
+
 echo "→ Building and publishing v${VERSION} to GitHub…"
 electron-builder --mac dmg --publish always
 
