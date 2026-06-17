@@ -170,8 +170,7 @@ app.whenReady().then(() => {
         if (ElectronNotification.isSupported()) {
             new ElectronNotification({
                 title: 'Kubernetes Dashboard',
-                body: 'Notifications enabled.',
-                silent: true,
+                body: 'Notifications are now enabled.',
             }).show();
         }
     });
