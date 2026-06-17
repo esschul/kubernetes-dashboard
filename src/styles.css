@@ -1390,6 +1390,7 @@ input, select {
 .pr-actions-row {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 8px;
     padding: 8px 0 2px;
     border-top: 1px solid var(--line);
@@ -1427,6 +1428,7 @@ input, select {
     background: var(--card);
     color: var(--text);
     cursor: pointer;
+    width: auto;
 }
 
 .pr-action-done {
