@@ -8,4 +8,9 @@ export GH_TOKEN=$(gh auth token)
 echo "→ Building and publishing v${VERSION} to GitHub…"
 electron-builder --mac dmg --publish always
 
+# Ensure latest-mac.yml is attached (electron-builder sometimes skips it on existing releases)
+if [ -f "dist/latest-mac.yml" ]; then
+    gh release upload "v${VERSION}" dist/latest-mac.yml --clobber
+fi
+
 echo "✓ Done."
