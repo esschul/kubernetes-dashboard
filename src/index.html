@@ -133,7 +133,7 @@
             </div>
             <div class="settings-form" id="settingsForm">
                 <div class="settings-grid">
-                    <div class="settings-panel settings-panel--kubernetes panel">
+                    <div class="settings-panel settings-panel--left panel">
                         <div class="settings-section-heading">Kubernetes</div>
                         <label>
                             kubectl context
@@ -151,9 +151,6 @@
                         <label>Prod <select id="envProdInput"><option value="">(none)</option></select></label>
                         <label>QA <select id="envQaInput"><option value="">(none)</option></select></label>
                         <label>Test <select id="envTestInput"><option value="">(none)</option></select></label>
-                    </div>
-
-                    <div class="settings-panel settings-panel--right panel">
                         <div class="settings-section-heading">GitHub</div>
                         <label>
                             Org
@@ -187,18 +184,12 @@
                             <input type="text" id="azureTeamInput" placeholder="e.g. checkout (leave blank to use namespace)" />
                             <span class="form-help">Filters the Pipelines view to your team's folder. Falls back to namespace if blank.</span>
                         </label>
-                    </div>
-
-                    <div class="settings-panel settings-panel--right panel">
                         <div class="settings-section-heading">Datadog</div>
                         <label>
                             Site URL
                             <input type="text" id="datadogSiteInput" placeholder="e.g. https://app.datadoghq.eu" />
                             <span class="form-help">Used to link deployments to Datadog logs.</span>
                         </label>
-                    </div>
-
-                    <div class="settings-panel settings-panel--right panel">
                         <div class="settings-section-heading">Pull Requests</div>
                         <div class="toggle-row">
                             <span class="toggle-row-label">Show author avatars on PR cards</span>

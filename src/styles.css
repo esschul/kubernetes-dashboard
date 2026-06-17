@@ -1259,8 +1259,8 @@ h3 {
     padding: 22px;
 }
 
-.settings-panel--kubernetes {
-    grid-row: 1 / span 3;
+.settings-panel--left {
+    grid-column: 1;
 }
 
 .settings-panel--right {
