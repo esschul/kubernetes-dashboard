@@ -1180,13 +1180,12 @@ document.getElementById('prList').addEventListener('click', (e) => {
         e.stopPropagation();
         const row = approveBtn.closest('.pr-actions-row');
         const prNumber = Number(row.dataset.prNumber);
-        const prRepo = row.dataset.prRepo;
-        const config = loadConfig();
+        const repoFullName = row.dataset.prRepo;
         approveBtn.disabled = true;
         approveBtn.textContent = 'Approving…';
-        window.kubeDashboard.approvePr({ org: config.githubOrg, repoName: prRepo, prNumber }).then((res) => {
+        window.kubeDashboard.approvePr({ repoFullName, prNumber }).then((res) => {
             if (res.ok) {
-                approvedPrKeys.add(`${prRepo}/${prNumber}`);
+                approvedPrKeys.add(`${repoFullName}/${prNumber}`);
                 row.innerHTML = `
                     <select class="pr-merge-method-select">
                         <option value="squash" selected>Squash</option>
@@ -1207,12 +1206,11 @@ document.getElementById('prList').addEventListener('click', (e) => {
         e.stopPropagation();
         const row = mergeBtn.closest('.pr-actions-row');
         const prNumber = Number(row.dataset.prNumber);
-        const prRepo = row.dataset.prRepo;
+        const repoFullName = row.dataset.prRepo;
         const method = row.querySelector('.pr-merge-method-select')?.value || 'squash';
-        const config = loadConfig();
         mergeBtn.disabled = true;
         mergeBtn.textContent = 'Merging…';
-        window.kubeDashboard.mergePr({ org: config.githubOrg, repoName: prRepo, prNumber, method }).then((res) => {
+        window.kubeDashboard.mergePr({ repoFullName, prNumber, method }).then((res) => {
             if (res.ok) {
                 row.innerHTML = '<span class="pr-action-done">Merged ✓</span>';
             } else {

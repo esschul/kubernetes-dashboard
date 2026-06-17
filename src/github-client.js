@@ -180,19 +180,17 @@ async function fetchPrByNumber(prNumber, repoName, org) {
     }
 }
 
-async function approvePr({ org, repoName, prNumber }) {
-    const repoFullName = `${org}/${repoName}`;
+async function approvePr({ repoFullName, prNumber }) {
     const ghPath = resolveCommand('gh', 'GH_PATH');
     const opts = { timeout: 30_000, maxBuffer: 1024 * 1024, env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() } };
     await execFileAsync(ghPath, ['pr', 'review', String(prNumber), '--approve', '--repo', repoFullName], opts);
 }
 
-async function mergePr({ org, repoName, prNumber, method }) {
-    const repoFullName = `${org}/${repoName}`;
+async function mergePr({ repoFullName, prNumber, method }) {
     const ghPath = resolveCommand('gh', 'GH_PATH');
     const opts = { timeout: 30_000, maxBuffer: 1024 * 1024, env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() } };
     const flag = method === 'rebase' ? '--rebase' : method === 'merge' ? '--merge' : '--squash';
-    await execFileAsync(ghPath, ['pr', 'merge', String(prNumber), flag, '--repo', repoFullName], opts);
+    await execFileAsync(ghPath, ['pr', 'merge', String(prNumber), flag, '--repo', repoFullName, '--admin'], opts);
 }
 
 module.exports = { fetchPrForSha, fetchPrByNumber, approvePr, mergePr };
