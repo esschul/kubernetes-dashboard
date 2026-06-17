@@ -3,8 +3,8 @@ set -euo pipefail
 
 VERSION=$(node -p "require('./package.json').version")
 
-echo "→ Building DMG for v${VERSION}…"
-npm run build:mac
+echo "→ Building (no notarization) for v${VERSION}…"
+SKIP_NOTARIZE=1 npm run build:mac
 
 APP_SRC="dist/mac-arm64/Kubernetes Dashboard.app"
 APP_DEST="/Applications/Kubernetes Dashboard.app"
