@@ -1154,8 +1154,13 @@ document.getElementById('prList').addEventListener('click', (e) => {
     if (copyBtn) {
         e.stopPropagation();
         const errDiv = copyBtn.closest('.pipeline-errors');
+        const card = copyBtn.closest('.pr-card');
         const errors = errDiv?.dataset.errors ? JSON.parse(errDiv.dataset.errors) : [];
-        navigator.clipboard.writeText(errors.join('\n'));
+        const prUrl = card?.dataset.url || '';
+        const prTitle = card?.querySelector('h3')?.textContent || '';
+        const prMeta = card?.querySelector('.pr-meta')?.textContent || '';
+        const header = [prTitle, prMeta, prUrl].filter(Boolean).join('\n');
+        navigator.clipboard.writeText([header, ...errors].filter(Boolean).join('\n'));
         return;
     }
     if (e.target.closest('.pipeline-errors')) {
