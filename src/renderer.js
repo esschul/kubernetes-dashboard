@@ -741,16 +741,19 @@ let activePipelineFilter = 'all';
 let pipelineRenderGeneration = 0;
 const pipelinePrCache = new Map(); // key: `pipeline/${repoName}/${sha}` → pr or null
 const seenFailedPipelineIds = new Set();
+let pipelineNotifyReady = false; // true after first fetch has seeded the Set
 
 function notifyFailedPipelines(runs) {
     const config = loadConfig();
     if (!config.pipelineNotificationsEnabled) { return; }
-    const isFirstFetch = seenFailedPipelineIds.size === 0;
+    const shouldNotify = pipelineNotifyReady;
+    // Seed on first call — mark ready for next call
+    pipelineNotifyReady = true;
     for (const run of runs) {
         if (run.result !== 'failed' || run.status !== 'completed') { continue; }
         if (!seenFailedPipelineIds.has(run.id)) {
             seenFailedPipelineIds.add(run.id);
-            if (!isFirstFetch) {
+            if (shouldNotify) {
                 const bType = getPipelineBranchType(run);
                 new Notification(`Pipeline failed on ${bType}: ${run.name}`, {
                     body: run.team ? `${run.team} · ${run.sourceBranch || ''}` : (run.sourceBranch || ''),
