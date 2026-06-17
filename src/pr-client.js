@@ -69,8 +69,9 @@ async function fetchCheckStatus(nameWithOwner, sha, recentlyUpdated) {
     if (cached) {
         const isPending = cached.checkStatus === 'pending';
         const age = Date.now() - cached.fetchedAt;
-        // Re-fetch if: still pending (re-check every 60s), or recently pushed (re-check every 2min)
-        const shouldRefetch = (isPending && age > 60_000) || (recentlyUpdated && age > 2 * 60_000);
+        // Re-fetch if: still pending (every 60s), or recently updated and not yet confirmed failure (every 2min)
+        const notFinal = cached.checkStatus !== 'failure';
+        const shouldRefetch = (isPending && age > 60_000) || (recentlyUpdated && notFinal && age > 2 * 60_000);
         if (!shouldRefetch) {
             console.log(`[gh] checkRuns cache HIT ${cacheKey} (${cached.checkStatus})`);
             return { checkStatus: cached.checkStatus, checkStatusLabel: cached.checkStatusLabel };
