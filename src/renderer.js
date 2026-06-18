@@ -124,7 +124,7 @@ function populateSettingsForm() {
     document.getElementById('githubTopicInput').value = config.githubTopic || '';
     document.getElementById('githubWatchedReposInput').value = (config.githubWatchedRepos || []).join('\n');
     document.getElementById('datadogSiteInput').value = config.datadogSite || '';
-    document.getElementById('showPrAvatarsInput').checked = config.showPrAvatars || false;
+    document.getElementById('showPrAvatarsInput').checked = config.showPrAvatars ?? true;
     document.getElementById('notificationsEnabledInput').checked = config.notificationsEnabled || false;
     document.getElementById('pipelineNotificationsEnabledInput').checked = config.pipelineNotificationsEnabled || false;
     document.getElementById('azureOrgInput').value = config.azureOrg || '';
@@ -1554,7 +1554,7 @@ function renderPrCard(pr, isMerged = false) {
         </div>` : '';
 
     const config = loadConfig();
-    const showAvatars = config.showPrAvatars;
+    const showAvatars = config.showPrAvatars ?? true;
     const login = pr.author?.login || 'unknown';
     const isBot = isDependabotPr(pr);
     const cachedAvatar = showAvatars && !isBot ? avatarCache.get(login) : null;
