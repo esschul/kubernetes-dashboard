@@ -195,6 +195,7 @@ app.whenReady().then(() => {
 
     if (app.isPackaged) {
         autoUpdater.checkForUpdates().catch((err) => console.error('[updater] checkForUpdates error:', err));
+        setInterval(() => autoUpdater.checkForUpdates().catch((err) => console.error('[updater] checkForUpdates error:', err)), 30 * 60 * 1000);
 
         autoUpdater.on('error', (err) => console.error('[updater] error:', err));
 
