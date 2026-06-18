@@ -55,6 +55,8 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
         return res.result;
     },
     getBuildDate: () => ipcRenderer.invoke('app:buildDate'),
+    onUpdateReady: (cb) => ipcRenderer.on('update-ready', (_e, version) => cb(version)),
+    installUpdate: () => ipcRenderer.send('update-install'),
     approvePr: (config) => ipcRenderer.invoke('pr:approve', config),
     mergePr: (config) => ipcRenderer.invoke('pr:merge', config),
     openExternal: (url) => ipcRenderer.invoke('external:open', url),

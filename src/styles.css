@@ -34,6 +34,36 @@
     box-sizing: border-box;
 }
 
+.update-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: var(--accent);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 10px 20px;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.update-banner.hidden { display: none; }
+
+.update-banner-btn {
+    background: #fff;
+    color: var(--accent);
+    border: none;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
 body {
     margin: 0;
     height: 100vh;

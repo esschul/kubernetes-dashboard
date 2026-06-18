@@ -197,6 +197,11 @@ app.whenReady().then(() => {
         autoUpdater.checkForUpdates();
 
         autoUpdater.on('update-downloaded', (info) => {
+            // Show in-app banner
+            const win = BrowserWindow.getAllWindows()[0];
+            if (win) { win.webContents.send('update-ready', info.version); }
+
+            // Also show a system notification
             if (ElectronNotification.isSupported()) {
                 const n = new ElectronNotification({
                     title: 'Update ready',
@@ -206,6 +211,8 @@ app.whenReady().then(() => {
                 n.show();
             }
         });
+
+        ipcMain.on('update-install', () => autoUpdater.quitAndInstall());
     }
 });
 

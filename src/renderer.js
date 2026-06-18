@@ -1623,6 +1623,18 @@ const initialConfig = loadConfig();
 updateContextLabel(initialConfig);
 renderEnvSwitcher(initialConfig);
 populateSettingsForm();
+
+window.kubeDashboard.onUpdateReady((version) => {
+    const banner = document.getElementById('updateBanner');
+    const text = document.getElementById('updateBannerText');
+    if (banner && text) {
+        text.textContent = `Version ${version} is ready to install`;
+        banner.classList.remove('hidden');
+    }
+});
+document.getElementById('updateBannerBtn')?.addEventListener('click', () => {
+    window.kubeDashboard.installUpdate();
+});
 const initialPrTopic = initialConfig.githubTopic || initialConfig.namespace;
 if (initialConfig.githubOrg && initialPrTopic) {
     switchView('pull-requests');
