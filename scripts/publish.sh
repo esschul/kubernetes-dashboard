@@ -17,9 +17,10 @@ gh release delete "v${VERSION}" --yes 2>/dev/null || true
 echo "→ Building and publishing v${VERSION} to GitHub…"
 electron-builder --mac dmg --publish always
 
-# Ensure latest-mac.yml is attached (electron-builder sometimes skips it on existing releases)
+# Ensure latest-mac.yml is attached and release is published (not draft)
 if [ -f "dist/latest-mac.yml" ]; then
     gh release upload "v${VERSION}" dist/latest-mac.yml --clobber
 fi
+gh release edit "v${VERSION}" --draft=false
 
 echo "✓ Done."
