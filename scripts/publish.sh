@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+npm version patch --no-git-tag-version
 VERSION=$(node -p "require('./package.json').version")
 
 export GH_TOKEN=$(gh auth token)
