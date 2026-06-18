@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
         return res.result;
     },
     getBuildDate: () => ipcRenderer.invoke('app:buildDate'),
+    onUpdateAvailable: (cb) => ipcRenderer.on('update-available', (_e, version) => cb(version)),
     onUpdateReady: (cb) => ipcRenderer.on('update-ready', (_e, version) => cb(version)),
     installUpdate: () => ipcRenderer.send('update-install'),
     approvePr: (config) => ipcRenderer.invoke('pr:approve', config),

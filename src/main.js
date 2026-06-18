@@ -194,14 +194,21 @@ app.whenReady().then(() => {
     });
 
     if (app.isPackaged) {
-        autoUpdater.checkForUpdates();
+        autoUpdater.checkForUpdates().catch((err) => console.error('[updater] checkForUpdates error:', err));
+
+        autoUpdater.on('error', (err) => console.error('[updater] error:', err));
+
+        autoUpdater.on('update-available', (info) => {
+            console.log('[updater] update available:', info.version);
+            const win = BrowserWindow.getAllWindows()[0];
+            if (win) { win.webContents.send('update-available', info.version); }
+        });
 
         autoUpdater.on('update-downloaded', (info) => {
-            // Show in-app banner
+            console.log('[updater] update downloaded:', info.version);
             const win = BrowserWindow.getAllWindows()[0];
             if (win) { win.webContents.send('update-ready', info.version); }
 
-            // Also show a system notification
             if (ElectronNotification.isSupported()) {
                 const n = new ElectronNotification({
                     title: 'Update ready',

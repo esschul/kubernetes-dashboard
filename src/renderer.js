@@ -1624,6 +1624,15 @@ updateContextLabel(initialConfig);
 renderEnvSwitcher(initialConfig);
 populateSettingsForm();
 
+window.kubeDashboard.onUpdateAvailable((version) => {
+    const banner = document.getElementById('updateBanner');
+    const text = document.getElementById('updateBannerText');
+    if (banner && text) {
+        text.textContent = `Version ${version} downloading…`;
+        banner.classList.remove('hidden');
+    }
+});
+
 window.kubeDashboard.onUpdateReady((version) => {
     const banner = document.getElementById('updateBanner');
     const text = document.getElementById('updateBannerText');
