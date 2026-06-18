@@ -1269,9 +1269,14 @@ h3 {
 
 .settings-actions {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 20px;
+}
+
+.build-date-label {
+    font-size: 0.75rem;
+    color: var(--muted);
 }
 
 label {

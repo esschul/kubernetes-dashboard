@@ -54,6 +54,7 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
         if (!res.ok) { throw new Error(res.error); }
         return res.result;
     },
+    getBuildDate: () => ipcRenderer.invoke('app:buildDate'),
     approvePr: (config) => ipcRenderer.invoke('pr:approve', config),
     mergePr: (config) => ipcRenderer.invoke('pr:merge', config),
     openExternal: (url) => ipcRenderer.invoke('external:open', url),

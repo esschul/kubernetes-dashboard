@@ -3,6 +3,8 @@ set -euo pipefail
 
 VERSION=$(node -p "require('./package.json').version")
 
+echo "{\"date\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > src/build-info.json
+
 echo "→ Building (no notarization) for v${VERSION}…"
 SKIP_NOTARIZE=1 npm run build:mac
 

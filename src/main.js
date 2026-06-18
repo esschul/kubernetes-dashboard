@@ -20,6 +20,9 @@ if (missingPaths.length > 0) {
 }
 const path = require('node:path');
 const { autoUpdater } = require('electron-updater');
+
+let buildDate = null;
+try { buildDate = require('./build-info.json').date; } catch { /* not available in dev */ }
 const { fetchDeployments, fetchContexts, fetchNamespaces } = require('./kubectl-client');
 const { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr } = require('./github-client');
 const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors } = require('./azure-client');
@@ -174,6 +177,8 @@ app.whenReady().then(() => {
             }).show();
         }
     });
+
+    ipcMain.handle('app:buildDate', () => buildDate);
 
     ipcMain.handle('external:open', (_event, url) => {
         // Only allow safe URLs

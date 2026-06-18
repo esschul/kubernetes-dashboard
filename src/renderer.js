@@ -113,6 +113,10 @@ document.querySelectorAll('.filter-chip[data-filter]').forEach((c) => {
 
 // --- Settings form ---
 function populateSettingsForm() {
+    window.kubeDashboard.getBuildDate().then((date) => {
+        const el = document.getElementById('buildDateLabel');
+        if (el && date) { el.textContent = `Built ${new Date(date).toLocaleString()}`; }
+    });
     const config = loadConfig();
     ensureSelectOption('contextInput', config.context || '');
     ensureSelectOption('namespaceInput', config.namespace || '');

@@ -8,6 +8,8 @@ export GH_TOKEN=$(gh auth token)
 echo "→ Cleaning dist/…"
 rm -rf dist/
 
+echo "{\"date\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > src/build-info.json
+
 echo "→ Building and publishing v${VERSION} to GitHub…"
 electron-builder --mac dmg --publish always
 
