@@ -220,7 +220,14 @@ app.whenReady().then(() => {
             }
         });
 
-        ipcMain.on('update-install', () => autoUpdater.quitAndInstall());
+        ipcMain.on('update-install', () => {
+            try {
+                console.log('[updater] quitAndInstall called');
+                autoUpdater.quitAndInstall(false, true);
+            } catch (err) {
+                console.error('[updater] quitAndInstall error:', err);
+            }
+        });
     }
 });
 

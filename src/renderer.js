@@ -1642,6 +1642,7 @@ window.kubeDashboard.onUpdateReady((version) => {
     }
 });
 document.getElementById('updateBannerBtn')?.addEventListener('click', () => {
+    console.log('[updater] install button clicked');
     window.kubeDashboard.installUpdate();
 });
 const initialPrTopic = initialConfig.githubTopic || initialConfig.namespace;
