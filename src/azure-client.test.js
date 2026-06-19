@@ -125,3 +125,16 @@ test('catches bare Error: and ERROR in lines (webpack/babel style)', () => {
     assert.ok(result.some((l) => l.includes('Error: [BABEL]')), 'bare Error: line');
     assert.ok(!result.some((l) => l.includes('at normalizeCoreJSOption')), 'no stack frames');
 });
+
+test('catches Jest test failures', () => {
+    const lines = [
+        '2024-01-01T00:00:00.000Z FAIL src/app/components/webshops/test/CreateWebshop.test.tsx',
+        '2024-01-01T00:00:00.000Z   ● Test suite failed to run',
+        '2024-01-01T00:00:00.000Z     Cannot find module \'../CreateWebshop\' from \'CreateWebshop.test.tsx\'',
+        '2024-01-01T00:00:00.000Z PASS src/app/components/other/test/Other.test.tsx',
+    ];
+    const result = extractLogErrors(lines);
+    assert.ok(result.some((l) => l.includes('FAIL src/app/components')), 'FAIL line');
+    assert.ok(result.some((l) => l.includes('● Test suite failed to run')), 'bullet error');
+    assert.ok(!result.some((l) => l.includes('PASS ')), 'no passing tests');
+});
