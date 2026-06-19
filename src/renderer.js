@@ -427,6 +427,29 @@ document.getElementById('pipelineList').addEventListener('click', (e) => {
         setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
         return;
     }
+    const rerunBtn = e.target.closest('.pipeline-rerun-btn');
+    if (rerunBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const card = rerunBtn.closest('.pipeline-card');
+        const buildId = parseInt(card?.dataset.buildId, 10);
+        const config = loadConfig();
+        rerunBtn.disabled = true;
+        rerunBtn.textContent = '↺ Rerunning…';
+        window.kubeDashboard.rerunFailedJobs({ org: config.azureOrg, project: config.azureProject, buildId })
+            .then(() => {
+                rerunBtn.textContent = '✓ Queued';
+                setTimeout(() => refreshPipelines(), 3000);
+            })
+            .catch((err) => {
+                rerunBtn.disabled = false;
+                rerunBtn.textContent = '↺ Rerun failed jobs';
+                console.error('[rerun]', err);
+                alert(`Failed to rerun: ${err.message}`);
+            });
+        return;
+    }
+
     const link = e.target.closest('.pr-row-link, .trello-link, .pipeline-link');
     if (link) {
         window.kubeDashboard.openExternal(link.dataset.url);
@@ -1103,7 +1126,7 @@ function renderPipelineGroup(run) {
         : '';
 
     return `
-    <div class="pipeline-card" data-id="${run.id}">
+    <div class="pipeline-card" data-id="${run.id}" data-build-id="${run.id}">
         <div class="deployment-card-top">
             <div class="deployment-name-row">
                 <h3>${escapeHtml(run.name)}</h3>
@@ -1113,6 +1136,7 @@ function renderPipelineGroup(run) {
                 <span class="trello-placeholder"></span>
                 <span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span>
                 <span class="age-pill" title="${escapeHtml(startAbsolute)}">${escapeHtml(startLabel)}</span>
+                ${isFailed ? `<button class="pipeline-rerun-btn" title="Rerun failed jobs">↺ Rerun failed jobs</button>` : ''}
                 <span class="pipeline-link datadog-link" data-url="${escapeHtml(run.url)}">Pipeline ↗</span>
             </div>
         </div>

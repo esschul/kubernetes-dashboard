@@ -153,4 +153,10 @@ async function fetchLogErrors({ org, logUrl }) {
     }
 }
 
-module.exports = { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, extractLogErrors };
+async function rerunFailedJobs({ org, project, buildId }) {
+    const orgUrl = org.replace(/\/$/, '');
+    const url = `${orgUrl}/${encodeURIComponent(project)}/_apis/build/builds/${buildId}?retry=true&api-version=7.1`;
+    return runAz(['rest', '--method', 'patch', '--url', url, '--body', `{"id":${buildId},"retry":true}`]);
+}
+
+module.exports = { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, extractLogErrors, rerunFailedJobs };

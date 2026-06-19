@@ -25,7 +25,7 @@ let buildDate = null;
 try { buildDate = require('./build-info.json').date; } catch { /* not available in dev */ }
 const { fetchDeployments, fetchContexts, fetchNamespaces } = require('./kubectl-client');
 const { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr } = require('./github-client');
-const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors } = require('./azure-client');
+const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, rerunFailedJobs } = require('./azure-client');
 const { fetchPullRequests, clearPrListCache } = require('./pr-client');
 
 function createWindow() {
@@ -102,6 +102,15 @@ app.whenReady().then(() => {
     ipcMain.handle('pipelines:fetch', async (_event, config) => {
         try {
             const result = await fetchPipelineRuns(config);
+            return { ok: true, result };
+        } catch (err) {
+            return { ok: false, error: { message: err.message } };
+        }
+    });
+
+    ipcMain.handle('pipeline:rerun', async (_event, config) => {
+        try {
+            const result = await rerunFailedJobs(config);
             return { ok: true, result };
         } catch (err) {
             return { ok: false, error: { message: err.message } };

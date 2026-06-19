@@ -60,6 +60,11 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
     installUpdate: () => ipcRenderer.send('update-install'),
     approvePr: (config) => ipcRenderer.invoke('pr:approve', config),
     mergePr: (config) => ipcRenderer.invoke('pr:merge', config),
+    rerunFailedJobs: async (config) => {
+        const response = await ipcRenderer.invoke('pipeline:rerun', config);
+        if (!response.ok) { throw response.error; }
+        return response.result;
+    },
     openExternal: (url) => ipcRenderer.invoke('external:open', url),
     requestNotificationPermission: () => ipcRenderer.invoke('notifications:requestPermission'),
 });
