@@ -1757,6 +1757,9 @@ document.getElementById('updateBannerBtn')?.addEventListener('click', () => {
     console.log('[updater] install button clicked');
     window.kubeDashboard.installUpdate();
 });
+document.getElementById('updateBannerDismiss')?.addEventListener('click', () => {
+    document.getElementById('updateBanner').classList.add('hidden');
+});
 const initialPrTopic = initialConfig.githubTopic || initialConfig.namespace;
 if (initialConfig.githubOrg && initialPrTopic) {
     switchView('pull-requests');
