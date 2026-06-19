@@ -298,6 +298,10 @@ app.whenReady().then(() => {
 
         autoUpdater.on('error', (err) => console.error('[updater] error:', err));
 
+        autoUpdater.on('checking-for-update', () => console.log('[updater] checking for update…'));
+        autoUpdater.on('update-not-available', () => console.log('[updater] up to date'));
+        autoUpdater.on('download-progress', (p) => console.log(`[updater] downloading… ${Math.round(p.percent)}%`));
+
         autoUpdater.on('update-available', (info) => {
             console.log('[updater] update available:', info.version);
             const win = BrowserWindow.getAllWindows()[0];
@@ -305,7 +309,7 @@ app.whenReady().then(() => {
         });
 
         autoUpdater.on('update-downloaded', (info) => {
-            console.log('[updater] update downloaded:', info.version);
+            console.log('[updater] update downloaded:', info.version, info.downloadedFile);
             const win = BrowserWindow.getAllWindows()[0];
             if (win) { win.webContents.send('update-ready', info.version); }
 
