@@ -15,7 +15,7 @@ echo "→ Deleting existing GitHub release v${VERSION}…"
 gh release delete "v${VERSION}" --yes 2>/dev/null || true
 
 echo "→ Building and publishing v${VERSION} to GitHub…"
-electron-builder --mac dmg zip --publish always
+npx electron-builder --mac dmg zip --publish always
 
 # Ensure latest-mac.yml is attached and release is published (not draft)
 if [ -f "dist/latest-mac.yml" ]; then
