@@ -65,6 +65,7 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
         if (!response.ok) { throw response.error; }
         return response.result;
     },
+    onSettingsImport: (cb) => ipcRenderer.on('settings:import', (_e, config) => cb(config)),
     openExternal: (url) => ipcRenderer.invoke('external:open', url),
     requestNotificationPermission: () => ipcRenderer.invoke('notifications:requestPermission'),
 });

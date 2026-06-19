@@ -88,12 +88,18 @@ function normalizeDeployments(deployments, pods, events, replicaSets) {
                 const imageTag = imageTagMatch ? imageTagMatch[1].trim() : null;
                 const releaseCommitMatch = changeReason?.match(/ReleaseCommit:\s*([^,\s]+)/);
                 const releaseCommit = releaseCommitMatch ? releaseCommitMatch[1].trim() : null;
+                const branchMatch = changeReason?.match(/Branch:\s*([^,]+)/);
+                const branch = branchMatch ? branchMatch[1].trim() : null;
+                const deployedByMatch = changeReason?.match(/DeployedBy:\s*([^,\s]+)/);
+                const deployedBy = deployedByMatch ? deployedByMatch[1].trim() : null;
                 return {
                     revision: rs.metadata.annotations?.['deployment.kubernetes.io/revision'] || null,
                     deployedAt,
                     isCurrent: (rs.spec.replicas ?? 0) > 0,
                     imageTag,
                     releaseCommit,
+                    branch,
+                    deployedBy,
                     changeReason,
                 };
             })

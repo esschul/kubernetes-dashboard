@@ -496,6 +496,17 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
                         if (titleEl) { titleEl.textContent = ''; }
                     }
                 });
+
+                const avatarImgs = history.querySelectorAll('img.rollout-avatar[data-login]');
+                avatarImgs.forEach(async (img) => {
+                    if (img.dataset.avatarLoaded) { return; }
+                    img.dataset.avatarLoaded = '1';
+                    const url = await fetchAvatar(img.dataset.login);
+                    if (url) {
+                        img.src = url;
+                        img.style.display = '';
+                    }
+                });
             }
         }
         return;
@@ -705,16 +716,27 @@ function renderRolloutHistory(rollouts, repoName) {
         const time = r.deployedAt ? new Date(r.deployedAt).toLocaleString() : '—';
         const rel = r.deployedAt ? formatRelativeTime(r.deployedAt) : '';
         const rev = r.revision ? `<span class="rollout-rev">r${r.revision}</span>` : '';
-        const tag = r.imageTag ? `<span class="rollout-tag">${escapeHtml(r.imageTag.substring(0, 10))}</span>` : '';
-        const current = r.isCurrent ? `<span class="rollout-current">current</span>` : '';
         const sha = r.releaseCommit || '';
         const prAttr = sha && repoName ? ` data-sha="${escapeHtml(sha)}" data-repo="${escapeHtml(repoName)}"` : '';
-        return `<div class="rollout-row${r.isCurrent ? ' is-current' : ''}"${prAttr}>
+        const isLocalBuild = r.imageTag?.startsWith('local-build-');
+        let infoContent = '';
+        if (isLocalBuild) {
+            const avatarHtml = r.deployedBy
+                ? `<img class="rollout-avatar" data-login="${escapeHtml(r.deployedBy)}" src="" alt="${escapeHtml(r.deployedBy)}" style="display:none">`
+                : '';
+            const parts = [];
+            if (r.branch) { parts.push(`<span class="rollout-local-branch">${escapeHtml(r.branch)}</span>`); }
+            if (r.deployedBy) { parts.push(`<span class="rollout-local-by">${escapeHtml(r.deployedBy)}</span>`); }
+            infoContent = `${avatarHtml}${parts.join(' ')}`;
+        } else {
+            infoContent = `<span class="rollout-pr-title">${sha ? 'Loading…' : ''}</span>`;
+        }
+        return `<div class="rollout-row${r.isCurrent ? ' is-current' : ''}${isLocalBuild ? ' is-local-build' : ''}"${prAttr}>
             ${rev}
             <span class="rollout-time" title="${escapeHtml(time)}">${rel}</span>
             <span class="rollout-tag">${r.imageTag ? escapeHtml(r.imageTag.substring(0, 10)) : ''}</span>
             <span class="rollout-current">${r.isCurrent ? 'current' : ''}</span>
-            <span class="rollout-pr-title">${sha ? 'Loading…' : ''}</span>
+            <span class="rollout-info">${infoContent}</span>
         </div>`;
     }).join('')}</div>`;
 }
@@ -1296,6 +1318,10 @@ document.getElementById('prList').addEventListener('click', (e) => {
         });
         return;
     }
+    if (e.target.closest('.pr-merge-method-select')) {
+        e.stopPropagation();
+        return;
+    }
     const mergeBtn = e.target.closest('.pr-merge-btn');
     if (mergeBtn) {
         e.stopPropagation();
@@ -1765,9 +1791,14 @@ function buildFeedEvents() {
         }
     }
 
-    // Pipeline runs
+    // Pipeline runs — filtered to active team (same as pipeline view)
     if (window._lastPipelineRuns) {
-        for (const run of window._lastPipelineRuns) {
+        const feedConfig = loadConfig();
+        const activeTeam = feedConfig.azureTeam || null;
+        const teamRuns = activeTeam
+            ? window._lastPipelineRuns.filter((r) => r.team === activeTeam)
+            : window._lastPipelineRuns;
+        for (const run of teamRuns) {
             const t = run.startTime ? new Date(run.startTime).getTime() : 0;
             if (t < cutoff) continue;
             const failed = run.result === 'failed' || run.result === 'canceled';
@@ -1851,3 +1882,12 @@ async function refreshFeed() {
 
 document.getElementById('feedSearch')?.addEventListener('input', (e) => renderFeed(e.target.value));
 document.getElementById('feedRefreshBtn')?.addEventListener('click', () => refreshFeed());
+
+// --- Settings export/import ---
+window.__loadRawConfig = () => localStorage.getItem(STORAGE_KEYS.config) || '{}';
+
+window.kubeDashboard.onSettingsImport((config) => {
+    saveConfig(config);
+    populateSettingsForm();
+    alert('Settings imported. Refresh to apply.');
+});

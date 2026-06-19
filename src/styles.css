@@ -1853,12 +1853,37 @@ input, select {
     font-weight: 700;
     color: #16a34a;
 }
-.rollout-pr-title {
+.rollout-info {
     font-size: 0.82rem;
     color: var(--muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+.rollout-pr-title {
+    font-size: 0.82rem;
+    color: var(--muted);
+}
+.rollout-avatar {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    vertical-align: middle;
+    margin-right: 5px;
+    object-fit: cover;
+}
+.rollout-local-branch {
+    font-family: monospace;
+    font-size: 0.78rem;
+    color: var(--muted);
+}
+.rollout-local-by {
+    font-size: 0.78rem;
+    color: var(--muted);
+    opacity: 0.7;
+}
+.rollout-row.is-local-build .rollout-tag {
+    color: #d97706;
 }
 .rollout-row-main {
     display: contents;

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, Notification: ElectronNotification } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Menu, dialog, Notification: ElectronNotification } = require('electron');
 if (!app.isPackaged) { require('electron-reload')(__dirname); }
 
 // Packaged Electron apps launch with a minimal PATH that lacks homebrew and
@@ -197,6 +197,96 @@ app.whenReady().then(() => {
     });
 
     createWindow();
+
+    const fs = require('node:fs');
+    const menu = Menu.buildFromTemplate([
+        {
+            label: app.name,
+            submenu: [
+                { role: 'about' },
+                { type: 'separator' },
+                { role: 'services' },
+                { type: 'separator' },
+                { role: 'hide' },
+                { role: 'hideOthers' },
+                { role: 'unhide' },
+                { type: 'separator' },
+                { role: 'quit' },
+            ],
+        },
+        {
+            label: 'File',
+            submenu: [
+                {
+                    label: 'Export Settings…',
+                    accelerator: 'CmdOrCtrl+E',
+                    click: async () => {
+                        const win = BrowserWindow.getFocusedWindow();
+                        const { canceled, filePath } = await dialog.showSaveDialog(win, {
+                            title: 'Export Settings',
+                            defaultPath: 'kubernetes-dashboard-settings.json',
+                            filters: [{ name: 'JSON', extensions: ['json'] }],
+                        });
+                        if (canceled || !filePath) { return; }
+                        const raw = await win.webContents.executeJavaScript('window.__loadRawConfig?.() ?? "{}"');
+                        fs.writeFileSync(filePath, JSON.stringify(JSON.parse(raw), null, 2), 'utf8');
+                    },
+                },
+                {
+                    label: 'Import Settings…',
+                    accelerator: 'CmdOrCtrl+I',
+                    click: async () => {
+                        const win = BrowserWindow.getFocusedWindow();
+                        const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+                            title: 'Import Settings',
+                            filters: [{ name: 'JSON', extensions: ['json'] }],
+                            properties: ['openFile'],
+                        });
+                        if (canceled || !filePaths.length) { return; }
+                        const raw = fs.readFileSync(filePaths[0], 'utf8');
+                        const config = JSON.parse(raw);
+                        win.webContents.send('settings:import', config);
+                    },
+                },
+            ],
+        },
+        {
+            label: 'Edit',
+            submenu: [
+                { role: 'undo' },
+                { role: 'redo' },
+                { type: 'separator' },
+                { role: 'cut' },
+                { role: 'copy' },
+                { role: 'paste' },
+                { role: 'selectAll' },
+            ],
+        },
+        {
+            label: 'View',
+            submenu: [
+                { role: 'reload' },
+                { role: 'forceReload' },
+                { role: 'toggleDevTools' },
+                { type: 'separator' },
+                { role: 'resetZoom' },
+                { role: 'zoomIn' },
+                { role: 'zoomOut' },
+                { type: 'separator' },
+                { role: 'togglefullscreen' },
+            ],
+        },
+        {
+            label: 'Window',
+            submenu: [
+                { role: 'minimize' },
+                { role: 'zoom' },
+                { type: 'separator' },
+                { role: 'front' },
+            ],
+        },
+    ]);
+    Menu.setApplicationMenu(menu);
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) { createWindow(); }
