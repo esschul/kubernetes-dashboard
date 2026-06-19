@@ -23,4 +23,9 @@ if [ -f "dist/latest-mac.yml" ]; then
 fi
 gh release edit "v${VERSION}" --draft=false --latest
 
+echo "→ Pruning old releases (keeping 2 most recent)…"
+gh release list --limit 100 --json tagName,createdAt \
+    | jq -r 'sort_by(.createdAt) | reverse | .[2:] | .[].tagName' \
+    | xargs -I{} gh release delete {} --yes --cleanup-tag 2>/dev/null || true
+
 echo "✓ Done."
