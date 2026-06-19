@@ -92,6 +92,9 @@ function switchView(view) {
     if (view === 'pull-requests' && !latestPrData) {
         refreshPullRequests();
     }
+    if (view === 'feed') {
+        refreshFeed();
+    }
 }
 
 // --- Filter bar ---
@@ -433,10 +436,45 @@ document.getElementById('pipelineList').addEventListener('click', (e) => {
 // --- Card expand/collapse + PR links ---
 document.getElementById('deploymentList').addEventListener('click', (e) => {
     // Handle PR/Trello/Datadog link clicks without toggling expand
-    const link = e.target.closest('.pr-row-link, .trello-link, .datadog-link');
+    const link = e.target.closest('.pr-row-link, .trello-link, .datadog-link, .rollout-pr-link');
     if (link) {
         e.stopPropagation();
         window.kubeDashboard.openExternal(link.dataset.url);
+        return;
+    }
+
+    // Handle history button toggle
+    if (e.target.closest('.rollout-history-btn')) {
+        const btn = e.target.closest('.rollout-history-btn');
+        const card = btn.closest('.deployment-card');
+        const history = card?.querySelector('.rollout-history');
+        if (history) {
+            const isOpen = !history.classList.contains('hidden');
+            history.classList.toggle('hidden', isOpen);
+            btn.classList.toggle('is-active', !isOpen);
+            if (!isOpen) {
+                const rows = history.querySelectorAll('.rollout-row[data-sha][data-repo]');
+                rows.forEach(async (row) => {
+                    if (row.dataset.prLoaded) { return; }
+                    row.dataset.prLoaded = '1';
+                    const titleEl = row.querySelector('span.rollout-pr-title');
+                    try {
+                        const pr = await window.kubeDashboard.fetchPrForSha(row.dataset.sha, row.dataset.repo, initialConfig.githubOrg);
+                        if (titleEl) {
+                            if (pr?.title) {
+                                titleEl.innerHTML = pr.url
+                                    ? `<span class="rollout-pr-link" data-url="${escapeHtml(pr.url)}">#${pr.number} ${escapeHtml(pr.title)}</span>`
+                                    : escapeHtml(pr.title);
+                            } else {
+                                titleEl.textContent = '';
+                            }
+                        }
+                    } catch {
+                        if (titleEl) { titleEl.textContent = ''; }
+                    }
+                });
+            }
+        }
         return;
     }
 
@@ -622,17 +660,41 @@ function renderDeploymentCard(dep) {
                 ${datadogUrl ? `<span class="datadog-link" data-url="${escapeHtml(datadogUrl)}">Logs ↗</span>` : ''}
                 <span class="status-pill is-${escapeHtml(statusClass)}">${escapeHtml(statusLabel)}</span>
                 <span class="age-pill ${agePillClass}" title="${escapeHtml(deployedAbsolute)}">${escapeHtml(deployedLabel)}</span>
+                ${dep.rollouts?.length > 0 ? `<button class="rollout-history-btn" title="Show rollout history">History</button>` : ''}
                 <span class="expand-chevron">›</span>
             </div>
         </div>
         ${dep.gitSha && /^[0-9a-f]{7,}/i.test(dep.gitSha) ? `<div class="pr-row pr-row--loading"><span class="pr-loading">Loading commit info…</span></div>` : ''}
         ${failuresHtml}
+        <div class="rollout-history hidden">
+            ${renderRolloutHistory(dep.rollouts || [], dep.imageRepoName)}
+        </div>
         <div class="pod-expand hidden">
             ${renderPodTable(dep)}
         </div>
     </div>`;
 }
 
+
+function renderRolloutHistory(rollouts, repoName) {
+    if (!rollouts.length) { return '<p class="pod-empty">No rollout history available.</p>'; }
+    return `<div class="rollout-table">${rollouts.map((r) => {
+        const time = r.deployedAt ? new Date(r.deployedAt).toLocaleString() : '—';
+        const rel = r.deployedAt ? formatRelativeTime(r.deployedAt) : '';
+        const rev = r.revision ? `<span class="rollout-rev">r${r.revision}</span>` : '';
+        const tag = r.imageTag ? `<span class="rollout-tag">${escapeHtml(r.imageTag.substring(0, 10))}</span>` : '';
+        const current = r.isCurrent ? `<span class="rollout-current">current</span>` : '';
+        const sha = r.releaseCommit || '';
+        const prAttr = sha && repoName ? ` data-sha="${escapeHtml(sha)}" data-repo="${escapeHtml(repoName)}"` : '';
+        return `<div class="rollout-row${r.isCurrent ? ' is-current' : ''}"${prAttr}>
+            ${rev}
+            <span class="rollout-time" title="${escapeHtml(time)}">${rel}</span>
+            <span class="rollout-tag">${r.imageTag ? escapeHtml(r.imageTag.substring(0, 10)) : ''}</span>
+            <span class="rollout-current">${r.isCurrent ? 'current' : ''}</span>
+            <span class="rollout-pr-title">${sha ? 'Loading…' : ''}</span>
+        </div>`;
+    }).join('')}</div>`;
+}
 
 function renderPodTable(dep) {
     if (dep.pods.length === 0) {
@@ -1661,3 +1723,107 @@ if (initialConfig.githubOrg && initialPrTopic) { refreshPullRequests(true); }
 
 // Auto-refresh every 2 minutes
 setInterval(refreshAll, 2 * 60 * 1000);
+
+// --- Feed ---
+let feedEvents = [];
+
+function buildFeedEvents() {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const events = [];
+
+    // Merged PRs
+    if (latestPrData) {
+        const merged = [...(latestPrData.mergedPullRequests || []), ...(latestPrData.mergedYesterdayPullRequests || [])];
+        for (const pr of merged) {
+            const t = pr.mergedAt ? new Date(pr.mergedAt).getTime() : 0;
+            if (t < cutoff) continue;
+            events.push({ type: 'pr', label: 'PR merged', time: t, title: pr.title, meta: `${pr.repository} · #${pr.number} · ${pr.author?.login || '?'}`, url: pr.url, success: true });
+        }
+    }
+
+    // Pipeline runs
+    if (window._lastPipelineRuns) {
+        for (const run of window._lastPipelineRuns) {
+            const t = run.startTime ? new Date(run.startTime).getTime() : 0;
+            if (t < cutoff) continue;
+            const failed = run.result === 'failed' || run.result === 'canceled';
+            const label = failed ? 'Pipeline failed' : run.result === 'succeeded' ? 'Pipeline passed' : 'Pipeline';
+            events.push({ type: 'pipeline', label, time: t, title: run.name, meta: run.sourceBranch || '', url: run.url, success: !failed });
+        }
+    }
+
+    // Deployments — one event per rollout in the last 24h
+    for (const d of latestDeployments) {
+        for (const rollout of (d.rollouts || [])) {
+            const t = rollout.deployedAt ? new Date(rollout.deployedAt).getTime() : 0;
+            if (t < cutoff) continue;
+            const rev = rollout.revision ? ` · r${rollout.revision}` : '';
+            const reason = rollout.changeReason ? ` · ${rollout.changeReason}` : '';
+            events.push({ type: 'deploy', label: 'Deployed', time: t, title: d.name, meta: `${d.namespace || ''}${rev}${reason}`, url: null, success: true });
+        }
+    }
+
+    events.sort((a, b) => b.time - a.time);
+    return events;
+}
+
+function relativeTime(ts) {
+    if (!ts) return '';
+    const diff = Date.now() - ts;
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    return `${Math.floor(h / 24)}d ago`;
+}
+
+const FEED_ICONS = {
+    pr: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><line x1="6" y1="7" x2="6" y2="17"/><path d="M18 7v4a6 6 0 0 1-6 6H9"/><polyline points="6 14 9 17 6 20"/></svg>`,
+    pipeline: `<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>`,
+    deploy: `<svg viewBox="0 0 24 24"><path d="M13 2.05V4.07C15.94 4.55 18.5 6.15 20.19 8.5L21.96 7.5C19.96 4.72 17.17 2.8 13 2.05M11 2.06C6.92 2.8 3.96 5.17 2.04 7.5L3.81 8.5C5.5 6.15 8.06 4.55 11 4.07V2.06M2.05 9.5C1.39 11.15 1 12.92 1 14.77C1 16.63 1.4 18.41 2.07 20.06L3.84 19.06C3.31 17.75 3 16.3 3 14.77C3 13.24 3.31 11.79 3.84 10.5L2.05 9.5M21.95 9.5L20.16 10.5C20.69 11.79 21 13.24 21 14.77C21 16.3 20.69 17.75 20.16 19.06L21.93 20.06C22.6 18.41 23 16.63 23 14.77C23 12.92 22.61 11.15 21.95 9.5M12 9A3 3 0 0 0 9 12A3 3 0 0 0 12 15A3 3 0 0 0 15 12A3 3 0 0 0 12 9M12 17C9.25 17 7 18.57 7 20.5V22H17V20.5C17 18.57 14.75 17 12 17Z"/></svg>`,
+};
+
+function renderFeed(query) {
+    const list = document.getElementById('feedList');
+    const q = (query || '').toLowerCase();
+    const items = feedEvents.filter((e) => !q || e.title.toLowerCase().includes(q) || e.meta.toLowerCase().includes(q));
+    if (!items.length) {
+        list.innerHTML = '<div class="empty-state">No events found.</div>';
+        return;
+    }
+    list.innerHTML = items.map((e) => {
+        const iconClass = e.type === 'pipeline' && !e.success ? 'feed-icon--fail'
+            : e.type === 'deploy' && !e.success ? 'feed-icon--fail'
+            : `feed-icon--${e.type}`;
+        const icon = FEED_ICONS[e.type] || '';
+        const titleHtml = e.url
+            ? `<span class="feed-title feed-link" data-url="${escapeHtml(e.url)}">${escapeHtml(e.title)}</span>`
+            : `<span class="feed-title">${escapeHtml(e.title)}</span>`;
+        return `<div class="feed-item">
+            <div class="feed-icon ${iconClass}">${icon}</div>
+            <div class="feed-body">
+                <div class="feed-title-row">${titleHtml}<span class="feed-label feed-label--${e.type}${e.success ? '' : '-fail'}">${escapeHtml(e.label)}</span></div>
+                <div class="feed-meta">${escapeHtml(e.meta)}</div>
+            </div>
+            ${e.time ? `<div class="feed-time">${relativeTime(e.time)}</div>` : ''}
+        </div>`;
+    }).join('');
+
+    list.querySelectorAll('.feed-link[data-url]').forEach((el) => {
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', () => window.kubeDashboard.openExternal(el.dataset.url));
+    });
+}
+
+async function refreshFeed() {
+    const status = document.getElementById('feedStatusPanel');
+    status.textContent = 'Loading…';
+    feedEvents = buildFeedEvents();
+    renderFeed(document.getElementById('feedSearch')?.value);
+    const count = feedEvents.filter((e) => e.time > 0).length;
+    status.textContent = `${count} event${count !== 1 ? 's' : ''} in the last 24h`;
+}
+
+document.getElementById('feedSearch')?.addEventListener('input', (e) => renderFeed(e.target.value));
+document.getElementById('feedRefreshBtn')?.addEventListener('click', () => refreshFeed());

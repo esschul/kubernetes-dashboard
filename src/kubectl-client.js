@@ -73,11 +73,38 @@ function normalizeDeployments(deployments, pods, events, replicaSets) {
         const gitSha = depPods[0]?.labels?.['tags.datadoghq.com/version'] || null;
         const imageRepoName = image ? image.split('/').pop().split(':')[0] : null;
 
+        const ownedRS = replicaSets.filter((rs) =>
+            rs.metadata.namespace === namespace &&
+            (rs.metadata.ownerReferences || []).some((ref) => ref.kind === 'Deployment' && ref.name === name)
+        );
+        const rollouts = ownedRS
+            .map((rs) => {
+                const changeReason = rs.metadata.annotations?.['kubernetes.io/change-cause'] || null;
+                const deployedAtMatch = changeReason?.match(/Deployed:\s*([^,]+)/);
+                const deployedAt = deployedAtMatch
+                    ? new Date(deployedAtMatch[1].trim()).toISOString()
+                    : rs.metadata.creationTimestamp;
+                const imageTagMatch = changeReason?.match(/ImageTag:\s*([^,]+)/);
+                const imageTag = imageTagMatch ? imageTagMatch[1].trim() : null;
+                const releaseCommitMatch = changeReason?.match(/ReleaseCommit:\s*([^,\s]+)/);
+                const releaseCommit = releaseCommitMatch ? releaseCommitMatch[1].trim() : null;
+                return {
+                    revision: rs.metadata.annotations?.['deployment.kubernetes.io/revision'] || null,
+                    deployedAt,
+                    isCurrent: (rs.spec.replicas ?? 0) > 0,
+                    imageTag,
+                    releaseCommit,
+                    changeReason,
+                };
+            })
+            .sort((a, b) => new Date(b.deployedAt) - new Date(a.deployedAt));
+
         return {
             name,
             namespace,
             image,
             deployedAt: lastPodStart || deployedAt,
+            rollouts,
             status,
             podSummary,
             pods: depPods.map((p) => normalizePod(p)),

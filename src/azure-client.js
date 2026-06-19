@@ -120,6 +120,8 @@ function extractLogErrors(lines) {
                 || l.includes('BUILD FAILED')
                 || l.includes('Error:')
                 || l.includes('ERROR in ')
+                || l.includes('FAIL ')
+                || l.includes('● ')
                 || t.startsWith('* What went wrong:')
                 || t.startsWith('> ');
         })
