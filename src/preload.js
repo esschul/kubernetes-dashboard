@@ -65,6 +65,16 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
         if (!response.ok) { throw response.error; }
         return response.result;
     },
+    rollbackDeployment: async (config) => {
+        const response = await ipcRenderer.invoke('deployment:rollback', config);
+        if (!response.ok) { throw new Error(response.error.message); }
+        return response.result;
+    },
+    rollbackStatus: async (config) => {
+        const response = await ipcRenderer.invoke('deployment:rollbackStatus', config);
+        if (!response.ok) { throw new Error(response.error.message); }
+        return response.result;
+    },
     onSettingsImport: (cb) => ipcRenderer.on('settings:import', (_e, config) => cb(config)),
     openExternal: (url) => ipcRenderer.invoke('external:open', url),
     requestNotificationPermission: () => ipcRenderer.invoke('notifications:requestPermission'),

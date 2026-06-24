@@ -373,4 +373,24 @@ async function fetchContexts(config = {}) {
         });
 }
 
-module.exports = { fetchDeployments, fetchContexts, fetchNamespaces };
+async function rolloutUndo({ context, namespace, name, revision, kubectlPath }) {
+    const ctxArgs = context ? ['--context', context] : [];
+    const { stdout, stderr } = await execFileAsync(
+        kubectlPath || resolveCommand('kubectl', 'KUBECTL_PATH'),
+        [...ctxArgs, '--namespace', namespace, 'rollout', 'undo', `deployment/${name}`, `--to-revision=${revision}`],
+        { timeout: 30_000, env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() } }
+    ).catch((err) => { throw new Error(err.stderr || err.message); });
+    return { stdout, stderr };
+}
+
+async function rolloutStatus({ context, namespace, name, kubectlPath }) {
+    const ctxArgs = context ? ['--context', context] : [];
+    const { stdout } = await execFileAsync(
+        kubectlPath || resolveCommand('kubectl', 'KUBECTL_PATH'),
+        [...ctxArgs, '--namespace', namespace, 'rollout', 'status', `deployment/${name}`, '--timeout=60s'],
+        { timeout: 70_000, env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() } }
+    ).catch((err) => { throw new Error(err.stderr || err.message); });
+    return stdout;
+}
+
+module.exports = { fetchDeployments, fetchContexts, fetchNamespaces, rolloutUndo, rolloutStatus };

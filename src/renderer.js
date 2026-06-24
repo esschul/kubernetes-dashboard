@@ -93,6 +93,7 @@ function switchView(view) {
         refreshPullRequests();
     }
     if (view === 'feed') {
+        initFeedDateRange();
         refreshFeed();
     }
 }
@@ -466,6 +467,24 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
         return;
     }
 
+    // Handle rollback button
+    const rollbackBtn = e.target.closest('.rollout-rollback-btn');
+    if (rollbackBtn) {
+        e.stopPropagation();
+        const row = rollbackBtn.closest('.rollout-row');
+        const history = rollbackBtn.closest('.rollout-history');
+        const card = rollbackBtn.closest('.deployment-card');
+        const depName = card?.dataset.depName;
+        const revision = rollbackBtn.dataset.revision;
+        const prTitleEl = row?.querySelector('.rollout-pr-title, .rollout-info');
+        const prTitle = prTitleEl?.textContent?.trim();
+        const tagEl = row?.querySelector('.rollout-tag');
+        const tag = tagEl?.textContent?.trim();
+        const config = loadConfig();
+        openRollbackModal({ depName, namespace: config.namespace, context: config.context, revision, prTitle, tag });
+        return;
+    }
+
     // Handle history button toggle
     if (e.target.closest('.rollout-history-btn')) {
         const btn = e.target.closest('.rollout-history-btn');
@@ -682,7 +701,7 @@ function renderDeploymentCard(dep) {
     const datadogUrl = getDatadogLogsUrl(dep.name);
 
     return `
-    <div class="deployment-card" data-name="${escapeHtml(dep.namespace + '/' + dep.name)}" data-sha="${escapeHtml(dep.gitSha || '')}"">
+    <div class="deployment-card" data-name="${escapeHtml(dep.namespace + '/' + dep.name)}" data-dep-name="${escapeHtml(dep.name)}" data-sha="${escapeHtml(dep.gitSha || '')}"">
         <div class="deployment-card-top">
             <div class="deployment-name-row">
                 <span class="eyebrow-inline">${escapeHtml(dep.namespace)}</span>
@@ -731,12 +750,14 @@ function renderRolloutHistory(rollouts, repoName) {
         } else {
             infoContent = `<span class="rollout-pr-title">${sha ? 'Loading…' : ''}</span>`;
         }
+        const rollbackBtn = (!r.isCurrent && r.revision && !isLocalBuild)
+            ? `<button class="rollout-rollback-btn" data-revision="${escapeHtml(r.revision)}">Roll back</button>`
+            : '';
         return `<div class="rollout-row${r.isCurrent ? ' is-current' : ''}${isLocalBuild ? ' is-local-build' : ''}"${prAttr}>
             ${rev}
             <span class="rollout-time" title="${escapeHtml(time)}">${rel}</span>
-            <span class="rollout-tag">${r.imageTag ? escapeHtml(r.imageTag.substring(0, 10)) : ''}</span>
-            <span class="rollout-current">${r.isCurrent ? 'current' : ''}</span>
-            <span class="rollout-info">${infoContent}</span>
+            <span class="rollout-tag" title="${escapeHtml(r.imageTag || '')}">${r.imageTag ? (r.imageTag.startsWith('local-build') ? '<span class="rollout-tag-full">local-build</span><span class="rollout-tag-short">local</span>' : escapeHtml(/^[0-9a-f]{10,}$/i.test(r.imageTag) ? r.imageTag.substring(0, 10) : r.imageTag)) : ''}</span>
+            <span class="rollout-info">${r.isCurrent ? '<span class="rollout-current">current</span>' : ''}${rollbackBtn}${infoContent}</span>
         </div>`;
     }).join('')}</div>`;
 }
@@ -943,6 +964,9 @@ async function refreshPipelines() {
 
 function renderPipelineList(runs) {
     window._lastPipelineRuns = runs;
+    if (document.getElementById('feedView') && !document.getElementById('feedView').classList.contains('hidden')) {
+        feedEvents = buildFeedEvents(); renderFeed(document.getElementById('feedSearch')?.value);
+    }
     const list = document.getElementById('pipelineList');
 
     const pConfig = loadConfig();
@@ -1257,12 +1281,19 @@ document.getElementById('prTabSwitcher').addEventListener('click', (e) => {
 });
 
 document.getElementById('prFilterBar').addEventListener('click', (e) => {
+    if (e.target.closest('#prFilterExpand')) {
+        document.getElementById('prFilterBar').classList.toggle('filter-bar-expanded');
+        e.stopPropagation();
+        return;
+    }
     const chip = e.target.closest('.filter-chip[data-pr-filter]');
     if (!chip) { return; }
     activePrFilter = chip.dataset.prFilter;
     document.querySelectorAll('.filter-chip[data-pr-filter]').forEach((c) => {
         c.classList.toggle('is-active', c.dataset.prFilter === activePrFilter);
     });
+    // collapse back after selecting a filter in compact mode
+    document.getElementById('prFilterBar').classList.remove('filter-bar-expanded');
     if (latestPrData) { renderPrView(latestPrData); }
 });
 
@@ -1372,6 +1403,9 @@ async function refreshPullRequests(force = false) {
         notifyNewPrs(data.pullRequests);
         latestPrData = data;
         renderPrView(data);
+        if (document.getElementById('feedView') && !document.getElementById('feedView').classList.contains('hidden')) {
+            feedEvents = buildFeedEvents(); renderFeed(document.getElementById('feedSearch')?.value);
+        }
         const now = new Date().toLocaleTimeString();
         document.getElementById('prStatusPanel').textContent = `${data.repositories.length} repo${data.repositories.length !== 1 ? 's' : ''}`;
         setLastUpdated();
@@ -1677,7 +1711,7 @@ function renderPrCard(pr, isMerged = false) {
                 : cachedAvatar
                     ? `<img class="pr-avatar" src="${escapeHtml(cachedAvatar)}" alt="${escapeHtml(login)}" />`
                     : `<div class="pr-avatar pr-avatar--placeholder" data-login="${escapeHtml(login)}"></div>`}
-            <span class="pr-avatar-name">${escapeHtml(isBot ? 'dependabot' : login)}</span>
+            <span class="pr-avatar-name" title="${escapeHtml(isBot ? 'dependabot' : login)}">${escapeHtml(isBot ? 'dependabot' : login)}</span>
         </div>` : '';
 
     return `
@@ -1696,7 +1730,7 @@ function renderPrCard(pr, isMerged = false) {
             </div>
         </div>
         <div class="pr-meta-row">
-            <span class="pr-meta">#${pr.number} · ${escapeHtml(login)} · ${escapeHtml(dateLabel)}</span>
+            <span class="pr-meta">#${pr.number} · ${escapeHtml(dateLabel)}</span>
             ${ageDetails ? `<span class="age-pill ${ageDetails.cssClass}">${escapeHtml(ageDetails.label)}</span>` : ''}
             ${pr.commentActivityCount > 0 ? `<span class="branch-pill">${pr.commentActivityCount} comment${pr.commentActivityCount !== 1 ? 's' : ''}</span>` : ''}
         </div>
@@ -1779,18 +1813,45 @@ setInterval(refreshAll, 2 * 60 * 1000);
 
 // --- Feed ---
 let feedEvents = [];
+let activeFeedTypes = new Set(['pr', 'pipeline', 'deploy']);
+
+function getFeedDateRange() {
+    const fromEl = document.getElementById('feedDateFrom');
+    const toEl = document.getElementById('feedDateTo');
+    const from = fromEl?.value ? new Date(fromEl.value).getTime() : Date.now() - 24 * 60 * 60 * 1000;
+    const to = toEl?.value ? new Date(toEl.value).getTime() + 86399999 : Date.now();
+    return { from, to };
+}
+
+function initFeedDateRange() {
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const fromEl = document.getElementById('feedDateFrom');
+    const toEl = document.getElementById('feedDateTo');
+    if (fromEl && !fromEl.value) { fromEl.value = yesterday; fromEl.max = today; }
+    if (toEl && !toEl.value) { toEl.value = today; }
+}
 
 function buildFeedEvents() {
-    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const { from: cutoff, to: ceiling } = getFeedDateRange();
     const events = [];
 
-    // Merged PRs
+    // PR events — opened and merged
     if (latestPrData) {
-        const merged = [...(latestPrData.mergedPullRequests || []), ...(latestPrData.mergedYesterdayPullRequests || [])];
-        for (const pr of merged) {
-            const t = pr.mergedAt ? new Date(pr.mergedAt).getTime() : 0;
-            if (t < cutoff) continue;
-            events.push({ type: 'pr', label: 'PR merged', time: t, title: pr.title, meta: `${pr.repository} · #${pr.number} · ${pr.author?.login || '?'}`, url: pr.url, success: true });
+        const open = latestPrData.pullRequests || [];
+        const merged = [...(latestPrData.mergedPullRequests || []), ...(latestPrData.mergedYesterdayPullRequests || []), ...(latestPrData.mergedDependabotPullRequests || [])];
+        const allPrs = [...open, ...merged];
+        for (const pr of allPrs) {
+            const tCreated = pr.createdAt ? new Date(pr.createdAt).getTime() : 0;
+            if (tCreated >= cutoff && tCreated <= ceiling) {
+                events.push({ type: 'pr', label: 'PR opened', time: tCreated, title: pr.title, meta: `${pr.repository} · #${pr.number} · ${pr.author?.login || '?'}`, url: pr.url, success: true });
+            }
+            if (pr.mergedAt) {
+                const tMerged = new Date(pr.mergedAt).getTime();
+                if (tMerged >= cutoff && tMerged <= ceiling) {
+                    events.push({ type: 'pr', label: 'PR merged', time: tMerged, title: pr.title, meta: `${pr.repository} · #${pr.number} · ${pr.author?.login || '?'}`, url: pr.url, success: true });
+                }
+            }
         }
     }
 
@@ -1803,7 +1864,7 @@ function buildFeedEvents() {
             : window._lastPipelineRuns;
         for (const run of teamRuns) {
             const t = run.startTime ? new Date(run.startTime).getTime() : 0;
-            if (t < cutoff) continue;
+            if (t < cutoff || t > ceiling) continue;
             const failed = run.result === 'failed' || run.result === 'canceled';
             const label = failed ? 'Pipeline failed' : run.result === 'succeeded' ? 'Pipeline passed' : 'Pipeline';
             events.push({ type: 'pipeline', label, time: t, title: run.name, meta: run.sourceBranch || '', url: run.url, success: !failed });
@@ -1814,10 +1875,11 @@ function buildFeedEvents() {
     for (const d of latestDeployments) {
         for (const rollout of (d.rollouts || [])) {
             const t = rollout.deployedAt ? new Date(rollout.deployedAt).getTime() : 0;
-            if (t < cutoff) continue;
+            if (t < cutoff || t > ceiling) continue;
             const rev = rollout.revision ? ` · r${rollout.revision}` : '';
-            const reason = rollout.changeReason ? ` · ${rollout.changeReason}` : '';
-            events.push({ type: 'deploy', label: 'Deployed', time: t, title: d.name, meta: `${d.namespace || ''}${rev}${reason}`, url: null, success: true });
+            const tag = rollout.imageTag ? ` · ${rollout.imageTag.slice(0, 12)}` : '';
+            const branch = rollout.branch ? ` · ${rollout.branch}` : '';
+            events.push({ type: 'deploy', label: 'Deployed', time: t, title: d.name, meta: `${d.namespace || ''}${rev}${tag}${branch}`, url: null, success: true });
         }
     }
 
@@ -1845,7 +1907,10 @@ const FEED_ICONS = {
 function renderFeed(query) {
     const list = document.getElementById('feedList');
     const q = (query || '').toLowerCase();
-    const items = feedEvents.filter((e) => !q || e.title.toLowerCase().includes(q) || e.meta.toLowerCase().includes(q));
+    const items = feedEvents.filter((e) =>
+        activeFeedTypes.has(e.type) &&
+        (!q || e.title.toLowerCase().includes(q) || e.meta.toLowerCase().includes(q))
+    );
     if (!items.length) {
         list.innerHTML = '<div class="empty-state">No events found.</div>';
         return;
@@ -1858,7 +1923,8 @@ function renderFeed(query) {
         const titleHtml = e.url
             ? `<span class="feed-title feed-link" data-url="${escapeHtml(e.url)}">${escapeHtml(e.title)}</span>`
             : `<span class="feed-title">${escapeHtml(e.title)}</span>`;
-        return `<div class="feed-item">
+        const cardClass = !e.success ? 'feed-item--fail' : `feed-item--${e.type}`;
+        return `<div class="feed-item ${cardClass}">
             <div class="feed-icon ${iconClass}">${icon}</div>
             <div class="feed-body">
                 <div class="feed-title-row">${titleHtml}<span class="feed-label feed-label--${e.type}${e.success ? '' : '-fail'}">${escapeHtml(e.label)}</span></div>
@@ -1880,13 +1946,118 @@ async function refreshFeed() {
     feedEvents = buildFeedEvents();
     renderFeed(document.getElementById('feedSearch')?.value);
     const count = feedEvents.filter((e) => e.time > 0).length;
-    status.textContent = `${count} event${count !== 1 ? 's' : ''} in the last 24h`;
+    const { from, to } = getFeedDateRange();
+    const fromStr = new Date(from).toLocaleDateString();
+    const toStr = new Date(to).toLocaleDateString();
+    const rangeStr = fromStr === toStr ? fromStr : `${fromStr} – ${toStr}`;
+    status.textContent = `${count} event${count !== 1 ? 's' : ''} in ${rangeStr}`;
 }
 
 document.getElementById('feedSearch')?.addEventListener('input', (e) => renderFeed(e.target.value));
 document.getElementById('feedRefreshBtn')?.addEventListener('click', () => refreshFeed());
 
+document.querySelectorAll('.filter-chip[data-feed-type]').forEach((chip) => {
+    chip.addEventListener('click', () => {
+        const type = chip.dataset.feedType;
+        if (activeFeedTypes.has(type)) {
+            activeFeedTypes.delete(type);
+            chip.classList.remove('is-active');
+        } else {
+            activeFeedTypes.add(type);
+            chip.classList.add('is-active');
+        }
+        feedEvents = buildFeedEvents();
+        renderFeed(document.getElementById('feedSearch')?.value);
+    });
+});
+
+['feedDateFrom', 'feedDateTo'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('input', () => {
+        feedEvents = buildFeedEvents();
+        renderFeed(document.getElementById('feedSearch')?.value);
+        const { from, to } = getFeedDateRange();
+        const count = feedEvents.filter((e) => e.time > 0).length;
+        const fromStr = new Date(from).toLocaleDateString();
+        const toStr = new Date(to).toLocaleDateString();
+        const rangeStr = fromStr === toStr ? fromStr : `${fromStr} – ${toStr}`;
+        const status = document.getElementById('feedStatusPanel');
+        if (status) status.textContent = `${count} event${count !== 1 ? 's' : ''} in ${rangeStr}`;
+    });
+});
+
 // --- Settings export/import ---
+// --- Rollback modal ---
+let rollbackPending = null;
+
+function openRollbackModal({ depName, namespace, context, revision, prTitle, tag }) {
+    rollbackPending = { depName, namespace, context, revision };
+    document.getElementById('rollbackModalTitle').textContent = `Roll back deployment to r${revision}?`;
+    const parts = [`Deployment: ${depName} in ${namespace}`];
+    if (tag) { parts.push(`Image tag: ${tag}`); }
+    if (prTitle) { parts.push(`Release: ${prTitle}`); }
+    document.getElementById('rollbackModalDesc').textContent = parts.join('\n');
+    const status = document.getElementById('rollbackModalStatus');
+    status.textContent = '';
+    status.className = 'modal-status hidden';
+    document.getElementById('rollbackModalActions').classList.remove('hidden');
+    document.getElementById('rollbackConfirmBtn').disabled = false;
+    document.getElementById('rollbackConfirmBtn').textContent = 'Roll back';
+    document.getElementById('rollbackModal').showModal();
+}
+
+function closeRollbackModal() {
+    document.getElementById('rollbackModal').close();
+    rollbackPending = null;
+}
+
+document.getElementById('rollbackCancelBtn')?.addEventListener('click', () => closeRollbackModal());
+document.getElementById('rollbackModal')?.addEventListener('click', (e) => {
+    if (e.target === document.getElementById('rollbackModal')) { closeRollbackModal(); }
+});
+
+document.getElementById('rollbackConfirmBtn')?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (!rollbackPending) { return; }
+    const { depName, namespace, context, revision } = rollbackPending;
+    const config = loadConfig();
+    const confirmBtn = document.getElementById('rollbackConfirmBtn');
+    const status = document.getElementById('rollbackModalStatus');
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Rolling back…';
+    document.getElementById('rollbackModalActions').classList.add('hidden');
+    status.className = 'modal-status modal-status--info';
+    status.textContent = `Running kubectl rollout undo deployment/${depName} --to-revision=${revision}…`;
+
+    try {
+        await window.kubeDashboard.rollbackDeployment({
+            context: context || config.context,
+            namespace,
+            name: depName,
+            revision,
+            kubectlPath: config.kubectlPath,
+        });
+        status.textContent = `Rolled back. Waiting for rollout to complete…`;
+        const statusOutput = await window.kubeDashboard.rollbackStatus({
+            context: context || config.context,
+            namespace,
+            name: depName,
+            kubectlPath: config.kubectlPath,
+        });
+        status.className = 'modal-status modal-status--success';
+        status.textContent = statusOutput.trim();
+        setTimeout(() => {
+            closeRollbackModal();
+            refresh();
+        }, 2000);
+    } catch (err) {
+        status.className = 'modal-status modal-status--error';
+        status.textContent = `Failed: ${err.message}`;
+        document.getElementById('rollbackModalActions').classList.remove('hidden');
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Roll back';
+    }
+});
+
 window.__loadRawConfig = () => localStorage.getItem(STORAGE_KEYS.config) || '{}';
 
 window.kubeDashboard.onSettingsImport((config) => {

@@ -1,6 +1,6 @@
 {
   "name": "kubernetes-dashboard",
-  "version": "1.1.9",
+  "version": "1.1.15",
   "private": true,
   "description": "Electron dashboard for Kubernetes deployments using kubectl",
   "main": "src/main.js",
@@ -12,6 +12,7 @@
     "build:icon": "bash scripts/build-mac-icon.sh",
     "build:mac": "electron-builder --mac dmg",
     "install-local": "bash scripts/install-local.sh",
+    "install-local-intel": "bash scripts/install-local-intel.sh",
     "release": "bash scripts/publish.sh"
   },
   "devDependencies": {

@@ -125,32 +125,39 @@
             </div>
             <div class="filter-bar" id="prFilterBar">
                 <button class="filter-chip is-active" data-pr-filter="all">All <span></span></button>
-                <button class="filter-chip" data-pr-filter="human">Human <span></span></button>
-                <button class="filter-chip" data-pr-filter="dependabot">Dependabot <span></span></button>
-                <button class="filter-chip" data-pr-filter="opened-today">Opened today <span></span></button>
-                <button class="filter-chip" data-pr-filter="approved">Approved <span></span></button>
-                <button class="filter-chip" data-pr-filter="changes-requested">Changes requested <span></span></button>
-                <button class="filter-chip" data-pr-filter="draft">Draft <span></span></button>
-                <button class="filter-chip" data-pr-filter="checks-passing">Checks passing <span></span></button>
-                <button class="filter-chip" data-pr-filter="checks-failing">Checks failing <span></span></button>
+                <button class="filter-chip filter-chip--collapsible" data-pr-filter="human">Human <span></span></button>
+                <button class="filter-chip filter-chip--collapsible" data-pr-filter="dependabot">Dependabot <span></span></button>
+                <button class="filter-chip filter-chip--collapsible" data-pr-filter="opened-today">Opened today <span></span></button>
+                <button class="filter-chip filter-chip--collapsible" data-pr-filter="approved">Approved <span></span></button>
+                <button class="filter-chip filter-chip--collapsible" data-pr-filter="changes-requested">Changes requested <span></span></button>
+                <button class="filter-chip filter-chip--collapsible" data-pr-filter="draft">Draft <span></span></button>
+                <button class="filter-chip filter-chip--collapsible" data-pr-filter="checks-passing">Checks passing <span></span></button>
+                <button class="filter-chip filter-chip--collapsible" data-pr-filter="checks-failing">Checks failing <span></span></button>
+                <button class="pr-filter-expand" id="prFilterExpand" title="Show all filters">+</button>
             </div>
             <div class="pr-list" id="prList"></div>
         </div>
 
         <!-- Feed view -->
         <div class="view hidden" id="feedView">
-            <div class="topbar">
-                <div>
-                    <h2>Feed</h2>
-                    <p class="status-panel" id="feedStatusPanel">Loading…</p>
-                </div>
-                <div class="env-switcher">
-                    <button class="theme-button" id="feedRefreshBtn" title="Refresh feed">
-                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
-                    </button>
-                </div>
+            <div style="display:flex;align-items:baseline;gap:10px;">
+                <h2>Feed</h2>
+                <button class="theme-button" id="feedRefreshBtn" title="Refresh feed" style="flex-shrink:0;">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+                </button>
             </div>
-            <div class="filter-bar">
+            <p class="status-panel" id="feedStatusPanel">Loading…</p>
+            <div class="filter-bar feed-filter-bar">
+                <div class="feed-type-chips">
+                    <button class="filter-chip is-active" data-feed-type="pr">PRs</button>
+                    <button class="filter-chip is-active" data-feed-type="pipeline">Pipelines</button>
+                    <button class="filter-chip is-active" data-feed-type="deploy">Deploys</button>
+                </div>
+                <div class="feed-date-range">
+                    <input type="date" id="feedDateFrom" class="feed-date-input">
+                    <span class="feed-date-sep">→</span>
+                    <input type="date" id="feedDateTo" class="feed-date-input">
+                </div>
                 <input class="feed-search" id="feedSearch" type="text" placeholder="Search events…">
             </div>
             <div class="feed-list" id="feedList"></div>
@@ -309,6 +316,16 @@ az login</pre>
     </main>
 </div>
 
+<dialog id="rollbackModal">
+    <h3 class="modal-title" id="rollbackModalTitle">Roll back deployment?</h3>
+    <p class="modal-desc" id="rollbackModalDesc"></p>
+    <p class="modal-caveat">This uses <code>kubectl rollout undo</code> to restore the pod template to this revision. It does not roll back ConfigMaps, Services, Ingresses, or other Kubernetes resources that may have changed in the same release.</p>
+    <div class="modal-status hidden" id="rollbackModalStatus"></div>
+    <div class="modal-actions" id="rollbackModalActions">
+        <button class="modal-btn modal-btn--cancel" id="rollbackCancelBtn">Cancel</button>
+        <button class="modal-btn modal-btn--confirm" id="rollbackConfirmBtn">Roll back</button>
+    </div>
+</dialog>
 <script src="renderer.js"></script>
 </body>
 </html>

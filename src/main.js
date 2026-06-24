@@ -23,7 +23,7 @@ const { autoUpdater } = require('electron-updater');
 
 let buildDate = null;
 try { buildDate = require('./build-info.json').date; } catch { /* not available in dev */ }
-const { fetchDeployments, fetchContexts, fetchNamespaces } = require('./kubectl-client');
+const { fetchDeployments, fetchContexts, fetchNamespaces, rolloutUndo, rolloutStatus } = require('./kubectl-client');
 const { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr } = require('./github-client');
 const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, rerunFailedJobs } = require('./azure-client');
 const { fetchPullRequests, clearPrListCache } = require('./pr-client');
@@ -111,6 +111,24 @@ app.whenReady().then(() => {
     ipcMain.handle('pipeline:rerun', async (_event, config) => {
         try {
             const result = await rerunFailedJobs(config);
+            return { ok: true, result };
+        } catch (err) {
+            return { ok: false, error: { message: err.message } };
+        }
+    });
+
+    ipcMain.handle('deployment:rollback', async (_event, config) => {
+        try {
+            const result = await rolloutUndo(config);
+            return { ok: true, result };
+        } catch (err) {
+            return { ok: false, error: { message: err.message } };
+        }
+    });
+
+    ipcMain.handle('deployment:rollbackStatus', async (_event, config) => {
+        try {
+            const result = await rolloutStatus(config);
             return { ok: true, result };
         } catch (err) {
             return { ok: false, error: { message: err.message } };
@@ -292,7 +310,7 @@ app.whenReady().then(() => {
         if (BrowserWindow.getAllWindows().length === 0) { createWindow(); }
     });
 
-    if (app.isPackaged) {
+    if (app.isPackaged && process.arch !== 'x64') {
         autoUpdater.checkForUpdates().catch((err) => console.error('[updater] checkForUpdates error:', err));
         setInterval(() => autoUpdater.checkForUpdates().catch((err) => console.error('[updater] checkForUpdates error:', err)), 30 * 60 * 1000);
 

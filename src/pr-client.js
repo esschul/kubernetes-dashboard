@@ -11,7 +11,7 @@ const DEPENDABOT_LOGIN = 'app/dependabot';
 const OPEN_PR_FIELDS = 'number,title,url,author,isDraft,createdAt,updatedAt,reviewDecision,headRefOid,comments,reviews';
 const MERGED_PR_FIELDS = 'number,title,url,author,isDraft,createdAt,updatedAt,mergedAt,reviewDecision';
 
-const RECENT_PUSH_MS = 30 * 60 * 1000; // 30 minutes — only fetch checks for recently updated PRs
+const RECENT_PUSH_MS = 24 * 60 * 60 * 1000; // 24 hours — fetch checks for all recently active PRs
 const checkRunsCache = new Map(); // key: `${nameWithOwner}/${sha}` → { checkStatus, checkStatusLabel, fetchedAt }
 
 let _callCount = 0;

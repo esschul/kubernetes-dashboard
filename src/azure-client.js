@@ -156,7 +156,14 @@ async function fetchLogErrors({ org, logUrl }) {
 async function rerunFailedJobs({ org, project, buildId }) {
     const orgUrl = org.replace(/\/$/, '');
     const url = `${orgUrl}/${encodeURIComponent(project)}/_apis/build/builds/${buildId}?retry=true&api-version=7.1`;
-    return runAz(['rest', '--method', 'patch', '--url', url, '--body', `{"id":${buildId},"retry":true}`]);
+    const { stdout: token } = await execFileAsync(resolveCommand('az', 'AZ_PATH'), [
+        'account', 'get-access-token',
+        '--resource', '499b84ac-1321-427f-aa17-267ca6975798',
+        '--query', 'accessToken', '-o', 'tsv',
+    ], { env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() } });
+    return runAz(['rest', '--method', 'patch', '--url', url,
+        '--headers', `Authorization=Bearer ${token.trim()}`,
+        '--body', `{"id":${buildId},"retry":true}`]);
 }
 
 module.exports = { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, extractLogErrors, rerunFailedJobs };
