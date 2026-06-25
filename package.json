@@ -7,7 +7,7 @@
   "scripts": {
     "start": "electron .",
     "lint": "eslint .",
-    "test": "node src/azure-client.test.js && node src/log-stream.test.js && node src/renderer-utils.test.js",
+    "test": "node src/azure-client.test.js && node src/log-stream.test.js && node src/renderer-utils.test.js && node src/pr-client.test.js",
     "check": "node --check src/command-paths.js && node --check src/kubectl-client.js && node --check src/main.js && node --check src/preload.js && node --check src/renderer.js && node --check src/renderer-utils.js && node --check src/renderer-logs.js && node --check src/renderer-feed.js && node --check src/renderer-pipelines.js && node --check src/renderer-prs.js && node --check src/renderer-deployments.js",
     "build:icon": "bash scripts/build-mac-icon.sh",
     "build:mac": "electron-builder --mac dmg",

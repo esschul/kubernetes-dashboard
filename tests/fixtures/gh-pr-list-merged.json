@@ -1,0 +1,13 @@
+[
+  {
+    "number": 40,
+    "title": "Fix pruning script",
+    "url": "https://github.com/bring/my-service/pull/40",
+    "author": { "login": "espen" },
+    "isDraft": false,
+    "createdAt": "2026-06-18T09:00:00Z",
+    "updatedAt": "2026-06-25T10:00:00Z",
+    "mergedAt": "2026-06-25T10:00:00Z",
+    "reviewDecision": "APPROVED"
+  }
+]

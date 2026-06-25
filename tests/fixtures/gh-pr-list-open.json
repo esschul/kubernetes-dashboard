@@ -1,0 +1,32 @@
+[
+  {
+    "number": 42,
+    "title": "Add retry logic to log streaming",
+    "url": "https://github.com/bring/my-service/pull/42",
+    "author": { "login": "espen" },
+    "isDraft": false,
+    "createdAt": "2026-06-20T09:00:00Z",
+    "updatedAt": "2026-06-25T14:30:00Z",
+    "reviewDecision": "REVIEW_REQUIRED",
+    "headRefOid": "abc123def456abc123def456abc123def456abcd",
+    "comments": [
+      { "createdAt": "2026-06-21T10:00:00Z", "updatedAt": "2026-06-21T10:00:00Z" }
+    ],
+    "reviews": [
+      { "body": "Looks good!", "submittedAt": "2026-06-22T11:00:00Z" }
+    ]
+  },
+  {
+    "number": 43,
+    "title": "[Draft] Refactor renderer",
+    "url": "https://github.com/bring/my-service/pull/43",
+    "author": { "login": "ramesh" },
+    "isDraft": true,
+    "createdAt": "2026-06-24T08:00:00Z",
+    "updatedAt": "2026-06-24T08:00:00Z",
+    "reviewDecision": null,
+    "headRefOid": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+    "comments": [],
+    "reviews": []
+  }
+]

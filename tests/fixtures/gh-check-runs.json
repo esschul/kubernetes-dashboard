@@ -1,0 +1,5 @@
+[
+  { "status": "completed", "conclusion": "success" },
+  { "status": "completed", "conclusion": "success" },
+  { "status": "in_progress", "conclusion": null }
+]
