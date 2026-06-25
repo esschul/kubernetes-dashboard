@@ -174,9 +174,12 @@
                         <div class="settings-section-heading">Kubernetes</div>
                         <label>
                             kubectl context
-                            <select id="contextInput">
-                                <option value="">(current context)</option>
-                            </select>
+                            <span class="settings-label-row">
+                                <select id="contextInput">
+                                    <option value="">(current context)</option>
+                                </select>
+                                <button type="button" id="reloadContextsBtn" class="settings-reload-btn" title="Reload contexts from kubectl">↺</button>
+                            </span>
                         </label>
                         <label>
                             Namespace

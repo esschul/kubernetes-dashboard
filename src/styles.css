@@ -1382,6 +1382,33 @@ h3 {
     border-top: 1px solid var(--line);
 }
 
+.settings-label-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.settings-label-row select {
+    flex: 1;
+}
+
+.settings-reload-btn {
+    flex-shrink: 0;
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 2px 6px;
+    line-height: 1;
+}
+
+.settings-reload-btn:hover {
+    color: var(--fg);
+    border-color: var(--fg);
+}
+
 .env-mapping-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);

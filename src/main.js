@@ -23,7 +23,7 @@ const { autoUpdater } = require('electron-updater');
 
 let buildDate = null;
 try { buildDate = require('./build-info.json').date; } catch { /* not available in dev */ }
-const { fetchDeployments, fetchContexts, fetchNamespaces, rolloutUndo, rolloutStatus, spawnLogStream } = require('./kubectl-client');
+const { fetchDeployments, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutUndo, rolloutStatus, spawnLogStream } = require('./kubectl-client');
 const { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr } = require('./github-client');
 const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, rerunFailedJobs } = require('./azure-client');
 const { fetchPullRequests, clearPrListCache } = require('./pr-client');
@@ -151,6 +151,11 @@ app.whenReady().then(() => {
         } catch (err) {
             return { ok: false, error: { message: err.message } };
         }
+    });
+
+    ipcMain.handle('contexts:invalidate', () => {
+        invalidateContextsCache();
+        return { ok: true };
     });
 
     ipcMain.handle('prs:fetch', async (_event, config) => {

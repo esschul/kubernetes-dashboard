@@ -359,9 +359,12 @@ async function fetchNamespaces(config = {}) {
     return stdout.split(/\s+/).map((s) => s.trim()).filter(Boolean).sort();
 }
 
+let contextsCache = null;
+
 async function fetchContexts(config = {}) {
+    if (contextsCache) { return contextsCache; }
     const stdout = await runKubectl(['config', 'get-contexts', '--no-headers'], { kubectlPath: config.kubectlPath });
-    return stdout.split('\n')
+    contextsCache = stdout.split('\n')
         .map((line) => line.trim())
         .filter(Boolean)
         .map((line) => {
@@ -371,6 +374,11 @@ async function fetchContexts(config = {}) {
             const cluster = cols[1] || '';
             return { name, cluster, isCurrent };
         });
+    return contextsCache;
+}
+
+function invalidateContextsCache() {
+    contextsCache = null;
 }
 
 async function rolloutUndo({ context, namespace, name, revision, kubectlPath }) {
@@ -402,4 +410,4 @@ function spawnLogStream({ context, namespace, podName, container, kubectlPath })
     return spawn(kPath, args, { env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() } });
 }
 
-module.exports = { fetchDeployments, fetchContexts, fetchNamespaces, rolloutUndo, rolloutStatus, spawnLogStream };
+module.exports = { fetchDeployments, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutUndo, rolloutStatus, spawnLogStream };

@@ -82,7 +82,11 @@ function normalizeTrigger(reason, requestedBy, prNumber) {
     return reason || '—';
 }
 
+const failedStepCache = new Map(); // key: buildId → { stepName, logUrl } | null
+const logErrorsCache = new Map(); // key: logUrl → errors[]
+
 async function fetchFailedStep({ org, project, buildId }) {
+    if (failedStepCache.has(buildId)) { return failedStepCache.get(buildId); }
     try {
         const timeline = await runAz([
             'rest', '--method', 'get',
@@ -96,11 +100,16 @@ async function fetchFailedStep({ org, project, buildId }) {
         const jobs = records.filter((r) => r.result === 'failed' && r.type === 'Job' && r.name);
         const failed = tasks.length > 0 ? tasks : jobs;
 
-        if (failed.length === 0) { return null; }
-        return {
+        if (failed.length === 0) {
+            failedStepCache.set(buildId, null);
+            return null;
+        }
+        const result = {
             stepName: failed.map((r) => r.name).join(', '),
             logUrl: failed[0].log?.url || null,
         };
+        failedStepCache.set(buildId, result);
+        return result;
     } catch {
         return null;
     }
@@ -128,6 +137,7 @@ function extractLogErrors(lines) {
 
 async function fetchLogErrors({ org, logUrl }) {
     if (!logUrl) { return []; }
+    if (logErrorsCache.has(logUrl)) { return logErrorsCache.get(logUrl); }
     try {
         const url = logUrl.startsWith('http') ? logUrl : `${org.replace(/\/$/, '')}/${logUrl}`;
         // Log content is plain text — az rest returns it as a JSON string, so parse accordingly
@@ -144,7 +154,9 @@ async function fetchLogErrors({ org, logUrl }) {
         let text = stdout;
         try { text = JSON.parse(stdout); } catch { /* raw text, use as-is */ }
         const lines = String(text).split('\n');
-        return extractLogErrors(lines);
+        const errors = extractLogErrors(lines);
+        logErrorsCache.set(logUrl, errors);
+        return errors;
     } catch {
         return [];
     }

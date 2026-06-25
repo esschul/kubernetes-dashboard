@@ -192,6 +192,11 @@ document.getElementById('contextInput').addEventListener('change', () => {
     });
 });
 
+document.getElementById('reloadContextsBtn').addEventListener('click', async () => {
+    await window.kubeDashboard.invalidateContextsCache();
+    await loadClusterSettingsIfEmpty();
+});
+
 async function loadClusterSettingsIfEmpty() {
     const contextSelect = document.getElementById('contextInput');
     try {

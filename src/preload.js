@@ -33,6 +33,9 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
         if (!response.ok) { throw response.error; }
         return response.result;
     },
+    invalidateContextsCache: async () => {
+        await ipcRenderer.invoke('contexts:invalidate');
+    },
     fetchPrByNumber: async (prNumber, repoName, org) => {
         const response = await ipcRenderer.invoke('pr:fetchByNumber', prNumber, repoName, org);
         if (!response.ok) { throw response.error; }
