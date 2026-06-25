@@ -393,4 +393,13 @@ async function rolloutStatus({ context, namespace, name, kubectlPath }) {
     return stdout;
 }
 
-module.exports = { fetchDeployments, fetchContexts, fetchNamespaces, rolloutUndo, rolloutStatus };
+function spawnLogStream({ context, namespace, podName, container, kubectlPath }) {
+    const { spawn } = require('node:child_process');
+    const kPath = kubectlPath || resolveCommand('kubectl', 'KUBECTL_PATH');
+    const ctxArgs = context ? ['--context', context] : [];
+    const containerArgs = container ? ['-c', container] : [];
+    const args = [...ctxArgs, '--namespace', namespace, 'logs', '-f', '--tail=100', '--timestamps', podName, ...containerArgs];
+    return spawn(kPath, args, { env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() } });
+}
+
+module.exports = { fetchDeployments, fetchContexts, fetchNamespaces, rolloutUndo, rolloutStatus, spawnLogStream };

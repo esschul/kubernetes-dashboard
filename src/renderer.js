@@ -388,10 +388,6 @@ function updateCounts(deployments) {
     }
 }
 
-function isFailingStatus(status) {
-    return ['error', 'crash-loop', 'failed', 'unavailable'].includes(status);
-}
-
 // --- Filter ---
 function depHasTrello(dep) {
     const cacheKey = `${dep.name}/${dep.gitSha}`;
@@ -464,6 +460,18 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
     if (link) {
         e.stopPropagation();
         window.kubeDashboard.openExternal(link.dataset.url);
+        return;
+    }
+
+    // Handle logs button
+    const logsBtn = e.target.closest('.logs-open-btn');
+    if (logsBtn) {
+        e.stopPropagation();
+        const depName = logsBtn.dataset.depName;
+        const dep = latestDeployments.find((d) => d.name === depName);
+        const pods = dep?.pods?.map((p) => p.name).filter(Boolean) || [];
+        const config = loadConfig();
+        openLogsModal({ depName, pods, context: config.context, namespace: config.namespace });
         return;
     }
 
@@ -704,13 +712,13 @@ function renderDeploymentCard(dep) {
     <div class="deployment-card" data-name="${escapeHtml(dep.namespace + '/' + dep.name)}" data-dep-name="${escapeHtml(dep.name)}" data-sha="${escapeHtml(dep.gitSha || '')}"">
         <div class="deployment-card-top">
             <div class="deployment-name-row">
-                <span class="eyebrow-inline">${escapeHtml(dep.namespace)}</span>
                 <h3>${escapeHtml(dep.name)}</h3>
                 ${isLocalBuild ? `<span class="local-build-badge" title="${escapeHtml(dep.image || '')}">local build</span>` : ''}
             </div>
             <div class="deployment-pill-row">
                 <span class="trello-placeholder"></span>
-                ${datadogUrl ? `<span class="datadog-link" data-url="${escapeHtml(datadogUrl)}">Logs ↗</span>` : ''}
+                <button class="logs-open-btn" data-dep-name="${escapeHtml(dep.name)}">Logs</button>
+                ${datadogUrl ? `<span class="datadog-link" data-url="${escapeHtml(datadogUrl)}">Datadog</span>` : ''}
                 <span class="status-pill is-${escapeHtml(statusClass)}">${escapeHtml(statusLabel)}</span>
                 <span class="age-pill ${agePillClass}" title="${escapeHtml(deployedAbsolute)}">${escapeHtml(deployedLabel)}</span>
                 ${dep.rollouts?.length > 0 ? `<button class="rollout-history-btn" title="Show rollout history">History</button>` : ''}
@@ -811,61 +819,6 @@ function renderFailures(failures) {
 }
 
 // --- Utilities ---
-function escapeHtml(str) {
-    if (!str) { return ''; }
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
-
-function getStatusLabel(status) {
-    const labels = {
-        healthy: 'Healthy',
-        progressing: 'Progressing',
-        'crash-loop': 'CrashLoopBackOff',
-        error: 'Error',
-        failed: 'Failed',
-        unavailable: 'Unavailable',
-        'scaled-down': 'Scaled down',
-    };
-    return labels[status] || status;
-}
-
-function getImageTag(image) {
-    if (!image) { return null; }
-    const parts = image.split(':');
-    const tag = parts.length >= 2 ? parts[parts.length - 1] : null;
-    if (!tag) { return null; }
-    // Truncate digest SHAs (sha256:abc123...) to 8 chars
-    if (/^[0-9a-f]{12,}$/i.test(tag)) { return tag.slice(0, 8); }
-    if (tag.startsWith('sha256:')) { return 'sha256:' + tag.slice(7, 15); }
-    return tag;
-}
-
-function formatRelativeTime(isoString) {
-    const now = Date.now();
-    const then = new Date(isoString).getTime();
-    const diffMs = now - then;
-    const diffMin = Math.floor(diffMs / 60_000);
-    if (diffMin < 1) { return 'just now'; }
-    if (diffMin < 60) { return `${diffMin}m ago`; }
-    const diffH = Math.floor(diffMin / 60);
-    if (diffH < 24) { return `${diffH}h ago`; }
-    const diffD = Math.floor(diffH / 24);
-    return `${diffD}d ago`;
-}
-
-
-function getAgePillClass(isoString) {
-    if (!isoString) { return 'age-pill is-none'; }
-    const diffH = (Date.now() - new Date(isoString).getTime()) / 3_600_000;
-    if (diffH < 1) { return 'age-pill is-fresh'; }
-    if (diffH < 24) { return 'age-pill is-notice'; }
-    if (diffH < 72) { return 'age-pill is-warning'; }
-    return 'age-pill is-critical';
-}
 
 // --- Pipelines ---
 let pipelinesRefreshInProgress = false;
@@ -1198,46 +1151,6 @@ function renderPipelineGroup(run) {
     </div>`;
 }
 
-function getPipelineBranchType(run) {
-    const branch = run.sourceBranch || '';
-    if (/^PR #\d+$/.test(branch)) { return 'branch'; }
-    if (branch === 'master' || branch === 'main') { return 'master'; }
-    // Batched CI / individualCI on non-PR branch — treat non-feature branches as master
-    if (run.trigger === 'Batched CI' || run.trigger === 'Commit') {
-        return (branch && branch !== 'master' && branch !== 'main') ? 'branch' : 'master';
-    }
-    // Named feature branch
-    if (branch && branch !== 'master' && branch !== 'main') { return 'branch'; }
-    return 'master';
-}
-
-function getPipelineStatusClass(run) {
-    if (run.status === 'inProgress' || run.status === 'notStarted') { return 'is-progressing'; }
-    if (run.result === 'succeeded') { return 'is-healthy'; }
-    if (run.result === 'failed') { return 'is-failed'; }
-    if (run.result === 'canceled') { return 'is-scaled-down'; }
-    if (run.result === 'partiallySucceeded') { return 'is-progressing'; }
-    return 'is-none';
-}
-
-function getPipelineStatusLabel(run) {
-    if (run.status === 'inProgress') { return 'Running'; }
-    if (run.status === 'notStarted') { return 'Queued'; }
-    if (run.status === 'cancelling') { return 'Cancelling'; }
-    if (run.result === 'succeeded') { return 'Succeeded'; }
-    if (run.result === 'failed') { return 'Failed'; }
-    if (run.result === 'canceled') { return 'Canceled'; }
-    if (run.result === 'partiallySucceeded') { return 'Partial'; }
-    return run.status || '—';
-}
-
-function formatDuration(ms) {
-    const totalSeconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    if (minutes === 0) { return `${seconds}s`; }
-    return `${minutes}m ${seconds}s`;
-}
 
 // --- Pull Requests ---
 let prRefreshInProgress = false;
@@ -1954,7 +1867,12 @@ async function refreshFeed() {
 }
 
 document.getElementById('feedSearch')?.addEventListener('input', (e) => renderFeed(e.target.value));
-document.getElementById('feedRefreshBtn')?.addEventListener('click', () => refreshFeed());
+document.getElementById('feedRefreshBtn')?.addEventListener('click', () => {
+    const btn = document.getElementById('feedRefreshBtn');
+    btn.classList.add('is-spinning');
+    btn.addEventListener('animationiteration', () => btn.classList.remove('is-spinning'), { once: true });
+    refreshFeed();
+});
 
 document.querySelectorAll('.filter-chip[data-feed-type]').forEach((chip) => {
     chip.addEventListener('click', () => {
@@ -2014,6 +1932,8 @@ document.getElementById('rollbackCancelBtn')?.addEventListener('click', () => cl
 document.getElementById('rollbackModal')?.addEventListener('click', (e) => {
     if (e.target === document.getElementById('rollbackModal')) { closeRollbackModal(); }
 });
+
+// ── Log modal ──────────────────────────────────────────────────────────────
 
 document.getElementById('rollbackConfirmBtn')?.addEventListener('click', async (e) => {
     e.stopPropagation();
