@@ -186,14 +186,37 @@ async function fetchPullRequests({ org, topic, watchedRepos = [], namespace }) {
         };
     }));
 
+    // Fetch PRs authored by the current user across the whole org
+    const AUTHOR_FIELDS = `number,title,url,author,isDraft,createdAt,updatedAt,reviewDecision,repository`;
+    const AUTHOR_MERGED_FIELDS = `number,title,url,author,isDraft,createdAt,updatedAt,mergedAt,reviewDecision,repository`;
+    const [authorOpen, authorMergedToday, authorMergedYesterday] = await Promise.allSettled([
+        runGh(['search', 'prs', '--author=@me', `--owner=${org}`, '--state=open', '--limit=100', '--json', AUTHOR_FIELDS]),
+        runGh(['search', 'prs', '--author=@me', `--owner=${org}`, '--state=merged', `--merged-at=${today}`, '--limit=100', '--json', AUTHOR_MERGED_FIELDS]),
+        runGh(['search', 'prs', '--author=@me', `--owner=${org}`, '--state=merged', `--merged-at=${yesterday}`, '--limit=100', '--json', AUTHOR_MERGED_FIELDS]),
+    ]);
+
+    function normalizeSearchPr(pr) {
+        const repo = pr.repository?.nameWithOwner || pr.repository?.fullName || '';
+        return normalizePr({ ...pr, headRefOid: pr.headRefOid || '' }, repo);
+    }
+
+    const authorOpenPrs = authorOpen.status === 'fulfilled' ? (authorOpen.value || []).map(normalizeSearchPr) : [];
+    const authorMergedTodayPrs = authorMergedToday.status === 'fulfilled' ? (authorMergedToday.value || []).map(normalizeSearchPr) : [];
+    const authorMergedYesterdayPrs = authorMergedYesterday.status === 'fulfilled' ? (authorMergedYesterday.value || []).map(normalizeSearchPr) : [];
+
     const allLists = [...lists, ...watchedLists];
 
-    const all = allLists.flatMap((l) => l.pullRequests)
+    function dedupeByUrl(prs) {
+        const seen = new Set();
+        return prs.filter((pr) => { if (seen.has(pr.url)) { return false; } seen.add(pr.url); return true; });
+    }
+
+    const all = dedupeByUrl([...allLists.flatMap((l) => l.pullRequests), ...authorOpenPrs])
         .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
-    const allMerged = allLists.flatMap((l) => l.mergedPullRequests)
+    const allMerged = dedupeByUrl([...allLists.flatMap((l) => l.mergedPullRequests), ...authorMergedTodayPrs])
         .filter((pr) => getLocalDateKey(pr.mergedAt) === today)
         .sort((a, b) => String(b.mergedAt).localeCompare(String(a.mergedAt)));
-    const allMergedYesterday = allLists.flatMap((l) => l.mergedYesterdayPullRequests || [])
+    const allMergedYesterday = dedupeByUrl([...allLists.flatMap((l) => l.mergedYesterdayPullRequests || []), ...authorMergedYesterdayPrs])
         .filter((pr) => getLocalDateKey(pr.mergedAt) === yesterday)
         .sort((a, b) => String(b.mergedAt).localeCompare(String(a.mergedAt)));
 

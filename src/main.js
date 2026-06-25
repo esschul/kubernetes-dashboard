@@ -23,7 +23,7 @@ const { autoUpdater } = require('electron-updater');
 
 let buildDate = null;
 try { buildDate = require('./build-info.json').date; } catch { /* not available in dev */ }
-const { fetchDeployments, fetchContexts, fetchNamespaces, rolloutUndo, rolloutStatus } = require('./kubectl-client');
+const { fetchDeployments, fetchContexts, fetchNamespaces, rolloutUndo, rolloutStatus, spawnLogStream } = require('./kubectl-client');
 const { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr } = require('./github-client');
 const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, rerunFailedJobs } = require('./azure-client');
 const { fetchPullRequests, clearPrListCache } = require('./pr-client');
@@ -191,6 +191,51 @@ app.whenReady().then(() => {
 
     ipcMain.handle('prs:clearCache', () => {
         clearPrListCache();
+        return { ok: true };
+    });
+
+    let activeLogProcess = null;
+    let activeLogStopped = false;
+
+    function startLogProcess(config, sender, attempt = 0) {
+        const proc = spawnLogStream(config);
+        activeLogProcess = proc;
+        let buf = '';
+        proc.stdout.on('data', (chunk) => {
+            buf += chunk.toString();
+            const lines = buf.split('\n');
+            buf = lines.pop();
+            for (const line of lines) {
+                if (!sender.isDestroyed()) { sender.send('logs:line', line); }
+            }
+        });
+        proc.stderr.on('data', (chunk) => {
+            if (!sender.isDestroyed()) { sender.send('logs:error', chunk.toString()); }
+        });
+        proc.on('close', (code) => {
+            activeLogProcess = null;
+            if (activeLogStopped) { return; }
+            if (code !== 0 && attempt < 3) {
+                const delay = (attempt + 1) * 2000;
+                console.log(`[logs] stream exited with code ${code}, retrying in ${delay}ms (attempt ${attempt + 1})`);
+                setTimeout(() => {
+                    if (!activeLogStopped && !sender.isDestroyed()) { startLogProcess(config, sender, attempt + 1); }
+                }, delay);
+            } else {
+                if (!sender.isDestroyed()) { sender.send('logs:closed'); }
+            }
+        });
+    }
+
+    ipcMain.handle('logs:start', (_event, config) => {
+        if (activeLogProcess) { activeLogProcess.kill(); activeLogProcess = null; }
+        activeLogStopped = false;
+        startLogProcess(config, _event.sender);
+        return { ok: true };
+    });
+    ipcMain.handle('logs:stop', () => {
+        activeLogStopped = true;
+        if (activeLogProcess) { activeLogProcess.kill(); activeLogProcess = null; }
         return { ok: true };
     });
 

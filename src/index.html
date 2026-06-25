@@ -326,6 +326,34 @@ az login</pre>
         <button class="modal-btn modal-btn--confirm" id="rollbackConfirmBtn">Roll back</button>
     </div>
 </dialog>
+<dialog id="logsModal">
+    <div class="logs-modal-header">
+        <div class="logs-modal-title-row">
+            <h3 class="modal-title" id="logsModalTitle">Logs</h3>
+            <select class="logs-pod-select" id="logsPodSelect"></select>
+        </div>
+        <div class="logs-modal-controls">
+            <input class="logs-filter-input" id="logsFilterInput" type="text" placeholder="Filter lines…" />
+            <input class="logs-net-input" id="logsNetInput" type="text" placeholder="Catch matching lines…" />
+        </div>
+        <div class="logs-modal-actions">
+            <button class="logs-copy-btn" id="logsCopyBtn">Copy all</button>
+            <button class="modal-btn modal-btn--cancel" id="logsCloseBtn">Close</button>
+        </div>
+    </div>
+    <div class="logs-body">
+        <div class="logs-output" id="logsOutput"></div>
+        <div class="logs-net" id="logsNet">
+            <div class="logs-net-header">
+                <span class="logs-net-label">Caught</span>
+                <button class="logs-net-clear" id="logsNetClear" title="Clear">✕</button>
+            </div>
+            <textarea class="logs-net-output" id="logsNetOutput" readonly placeholder="Lines matching the catch filter will appear here…"></textarea>
+        </div>
+    </div>
+</dialog>
+<script src="renderer-utils.js"></script>
+<script src="renderer-logs.js"></script>
 <script src="renderer.js"></script>
 </body>
 </html>

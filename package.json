@@ -1,14 +1,14 @@
 {
   "name": "kubernetes-dashboard",
-  "version": "1.1.15",
+  "version": "1.1.19",
   "private": true,
   "description": "Electron dashboard for Kubernetes deployments using kubectl",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
     "lint": "eslint .",
-    "test": "node src/azure-client.test.js",
-    "check": "node --check src/command-paths.js && node --check src/kubectl-client.js && node --check src/main.js && node --check src/preload.js && node --check src/renderer.js",
+    "test": "node src/azure-client.test.js && node src/log-stream.test.js && node src/renderer-utils.test.js",
+    "check": "node --check src/command-paths.js && node --check src/kubectl-client.js && node --check src/main.js && node --check src/preload.js && node --check src/renderer.js && node --check src/renderer-utils.js && node --check src/renderer-logs.js",
     "build:icon": "bash scripts/build-mac-icon.sh",
     "build:mac": "electron-builder --mac dmg",
     "install-local": "bash scripts/install-local.sh",

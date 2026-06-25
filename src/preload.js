@@ -78,4 +78,14 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
     onSettingsImport: (cb) => ipcRenderer.on('settings:import', (_e, config) => cb(config)),
     openExternal: (url) => ipcRenderer.invoke('external:open', url),
     requestNotificationPermission: () => ipcRenderer.invoke('notifications:requestPermission'),
+    startLogStream: (config) => ipcRenderer.invoke('logs:start', config),
+    stopLogStream: () => ipcRenderer.invoke('logs:stop'),
+    onLogLine: (cb) => ipcRenderer.on('logs:line', (_e, line) => cb(line)),
+    onLogError: (cb) => ipcRenderer.on('logs:error', (_e, msg) => cb(msg)),
+    onLogClosed: (cb) => ipcRenderer.on('logs:closed', () => cb()),
+    offLogListeners: () => {
+        ipcRenderer.removeAllListeners('logs:line');
+        ipcRenderer.removeAllListeners('logs:error');
+        ipcRenderer.removeAllListeners('logs:closed');
+    },
 });
