@@ -4,6 +4,9 @@ const { resolveCommand } = require('./command-paths');
 
 const execFileAsync = promisify(execFile);
 
+// Azure DevOps REST API resource scope — used for token acquisition and az rest calls
+const AZURE_DEVOPS_RESOURCE_ID = '499b84ac-1321-427f-aa17-267ca6975798';
+
 async function runAz(args) {
     const { stdout } = await execFileAsync(resolveCommand('az', 'AZ_PATH'), args, {
         timeout: 30_000,
@@ -90,7 +93,7 @@ async function fetchFailedStep({ org, project, buildId }) {
     try {
         const timeline = await runAz([
             'rest', '--method', 'get',
-            '--resource', '499b84ac-1321-427f-aa17-267ca6975798',
+            '--resource', AZURE_DEVOPS_RESOURCE_ID,
             '--url', `${org.replace(/\/$/, '')}/${encodeURIComponent(project)}/_apis/build/builds/${buildId}/timeline?api-version=7.0`,
         ]);
 
@@ -143,7 +146,7 @@ async function fetchLogErrors({ org, logUrl }) {
         // Log content is plain text — az rest returns it as a JSON string, so parse accordingly
         const { stdout } = await execFileAsync(
             resolveCommand('az', 'AZ_PATH'),
-            ['rest', '--method', 'get', '--resource', '499b84ac-1321-427f-aa17-267ca6975798', '--url', url],
+            ['rest', '--method', 'get', '--resource', AZURE_DEVOPS_RESOURCE_ID, '--url', url],
             {
                 timeout: 30_000,
                 maxBuffer: 10 * 1024 * 1024,
@@ -165,13 +168,10 @@ async function fetchLogErrors({ org, logUrl }) {
 async function rerunFailedJobs({ org, project, buildId }) {
     const orgUrl = org.replace(/\/$/, '');
     const url = `${orgUrl}/${encodeURIComponent(project)}/_apis/build/builds/${buildId}?retry=true&api-version=7.1`;
-    const { stdout: token } = await execFileAsync(resolveCommand('az', 'AZ_PATH'), [
-        'account', 'get-access-token',
-        '--resource', '499b84ac-1321-427f-aa17-267ca6975798',
-        '--query', 'accessToken', '-o', 'tsv',
-    ], { env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() } });
-    return runAz(['rest', '--method', 'patch', '--url', url,
-        '--headers', `Authorization=Bearer ${token.trim()}`,
+    // az rest auto-attaches the Bearer token via --resource — no need to fetch and pass it explicitly
+    return runAz(['rest', '--method', 'patch',
+        '--resource', AZURE_DEVOPS_RESOURCE_ID,
+        '--url', url,
         '--body', `{"id":${buildId},"retry":true}`]);
 }
 
