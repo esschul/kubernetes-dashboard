@@ -1,4 +1,5 @@
 'use strict';
+/* exported latestPrData, prRefreshInProgress, isDependabotPr, fetchAvatar, refreshPullRequests, renderPrView */
 
 let prRefreshInProgress = false;
 let activePrTab = 'open';

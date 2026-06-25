@@ -1,4 +1,5 @@
 'use strict';
+/* exported escapeHtml, getStatusLabel, getImageTag, formatRelativeTime, getAgePillClass, formatDuration, isFailingStatus, getPipelineBranchType, getPipelineStatusClass, getPipelineStatusLabel, parseLogLine */
 
 function escapeHtml(str) {
     if (!str) { return ''; }

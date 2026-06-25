@@ -1,4 +1,5 @@
 'use strict';
+/* exported openLogsModal, closeLogsModal */
 
 // Log modal state
 const LOG_MAX_LINES = 500;

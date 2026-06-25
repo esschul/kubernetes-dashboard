@@ -1,4 +1,5 @@
 'use strict';
+/* exported updateFilterCounts, renderDeploymentList, renderPrRow, matchesFilter, depHasTrello */
 
 function updateFilterCounts(deployments) {
     const counts = {
@@ -192,7 +193,7 @@ function renderRolloutHistory(rollouts, repoName) {
         const sha = r.releaseCommit || '';
         const prAttr = sha && repoName ? ` data-sha="${escapeHtml(sha)}" data-repo="${escapeHtml(repoName)}"` : '';
         const isLocalBuild = r.imageTag?.startsWith('local-build-');
-        let infoContent = '';
+        let infoContent;
         if (isLocalBuild) {
             const avatarHtml = r.deployedBy
                 ? `<img class="rollout-avatar" data-login="${escapeHtml(r.deployedBy)}" src="" alt="${escapeHtml(r.deployedBy)}" style="display:none">`

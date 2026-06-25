@@ -1,4 +1,5 @@
 'use strict';
+/* exported latestDeployments, renderGeneration, prCache, loadConfig, setLastUpdated, refresh, depHasTrello, matchesFilter */
 
 const STORAGE_KEYS = {
     config: 'kube-dashboard:config',
@@ -351,7 +352,6 @@ async function refresh() {
         latestDeployments = deployments;
         renderDeploymentList(deployments);
         updateCounts(deployments);
-        const now = new Date().toLocaleTimeString();
         setStatus(`${deployments.length} deployment${deployments.length !== 1 ? 's' : ''}`);
         setLastUpdated();
     } catch (err) {
@@ -480,7 +480,6 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
     if (rollbackBtn) {
         e.stopPropagation();
         const row = rollbackBtn.closest('.rollout-row');
-        const history = rollbackBtn.closest('.rollout-history');
         const card = rollbackBtn.closest('.deployment-card');
         const depName = card?.dataset.depName;
         const revision = rollbackBtn.dataset.revision;

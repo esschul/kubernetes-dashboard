@@ -64,9 +64,6 @@ function normalizeRepoName(name) {
     return name.replace(/^[^.]+\./, '');
 }
 
-function deriveRepoName(definitionName) {
-    return normalizeRepoName(definitionName);
-}
 
 function normalizeTrigger(reason, requestedBy, prNumber) {
     if (reason === 'pullRequest' || prNumber) { return prNumber ? `PR #${prNumber}` : 'Pull request'; }

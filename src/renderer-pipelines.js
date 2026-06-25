@@ -1,4 +1,5 @@
 'use strict';
+/* exported pipelinesRefreshInProgress, refreshPipelines, renderPipelineList */
 
 let pipelinesRefreshInProgress = false;
 let activePipelineFilter = 'all';

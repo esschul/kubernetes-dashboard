@@ -1,4 +1,5 @@
 'use strict';
+/* exported feedEvents, initFeedDateRange, buildFeedEvents, renderFeed, refreshFeed */
 
 let feedEvents = [];
 let activeFeedTypes = new Set(['pr', 'pipeline', 'deploy']);
@@ -50,7 +51,7 @@ function buildFeedEvents() {
             : window._lastPipelineRuns;
         for (const run of teamRuns) {
             const t = run.startTime ? new Date(run.startTime).getTime() : 0;
-            if (t < cutoff || t > ceiling) continue;
+            if (t < cutoff || t > ceiling) { continue; }
             const failed = run.result === 'failed' || run.result === 'canceled';
             const label = failed ? 'Pipeline failed' : run.result === 'succeeded' ? 'Pipeline passed' : 'Pipeline';
             events.push({ type: 'pipeline', label, time: t, title: run.name, meta: run.sourceBranch || '', url: run.url, success: !failed });
@@ -60,7 +61,7 @@ function buildFeedEvents() {
     for (const d of latestDeployments) {
         for (const rollout of (d.rollouts || [])) {
             const t = rollout.deployedAt ? new Date(rollout.deployedAt).getTime() : 0;
-            if (t < cutoff || t > ceiling) continue;
+            if (t < cutoff || t > ceiling) { continue; }
             const rev = rollout.revision ? ` · r${rollout.revision}` : '';
             const tag = rollout.imageTag ? ` · ${rollout.imageTag.slice(0, 12)}` : '';
             const branch = rollout.branch ? ` · ${rollout.branch}` : '';
@@ -160,6 +161,6 @@ document.querySelectorAll('.filter-chip[data-feed-type]').forEach((chip) => {
         const toStr = new Date(to).toLocaleDateString();
         const rangeStr = fromStr === toStr ? fromStr : `${fromStr} – ${toStr}`;
         const status = document.getElementById('feedStatusPanel');
-        if (status) status.textContent = `${count} event${count !== 1 ? 's' : ''} in ${rangeStr}`;
+        if (status) { status.textContent = `${count} event${count !== 1 ? 's' : ''} in ${rangeStr}`; }
     });
 });
