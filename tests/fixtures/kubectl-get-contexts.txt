@@ -1,0 +1,3 @@
+      prod-cluster                    prod-cluster              clusterUser_prod-rg_prod-cluster
+*     qa-cluster                      qa-cluster                clusterUser_qa-rg_qa-cluster
+      test-cluster                    test-cluster              clusterUser_test-rg_test-cluster

@@ -2,7 +2,7 @@
   {
     "number": 42,
     "title": "Add retry logic to log streaming",
-    "url": "https://github.com/bring/my-service/pull/42",
+    "url": "https://github.com/acme/my-service/pull/42",
     "author": { "login": "espen" },
     "isDraft": false,
     "createdAt": "2026-06-20T09:00:00Z",
@@ -19,7 +19,7 @@
   {
     "number": 43,
     "title": "[Draft] Refactor renderer",
-    "url": "https://github.com/bring/my-service/pull/43",
+    "url": "https://github.com/acme/my-service/pull/43",
     "author": { "login": "ramesh" },
     "isDraft": true,
     "createdAt": "2026-06-24T08:00:00Z",

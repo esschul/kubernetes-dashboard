@@ -2,12 +2,12 @@
   {
     "number": 7,
     "title": "Update dependencies",
-    "url": "https://github.com/bring/other-service/pull/7",
+    "url": "https://github.com/acme/other-service/pull/7",
     "author": { "login": "espen" },
     "isDraft": false,
     "createdAt": "2026-06-24T12:00:00Z",
     "updatedAt": "2026-06-25T09:00:00Z",
     "reviewDecision": "APPROVED",
-    "repository": { "nameWithOwner": "bring/other-service" }
+    "repository": { "nameWithOwner": "acme/other-service" }
   }
 ]

@@ -2,7 +2,7 @@
   {
     "number": 40,
     "title": "Fix pruning script",
-    "url": "https://github.com/bring/my-service/pull/40",
+    "url": "https://github.com/acme/my-service/pull/40",
     "author": { "login": "espen" },
     "isDraft": false,
     "createdAt": "2026-06-18T09:00:00Z",

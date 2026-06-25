@@ -58,37 +58,37 @@ console.log('\nnormalizePr — open PRs');
 
 test('preserves required fields', () => {
     const [raw] = fixture('gh-pr-list-open.json');
-    const pr = normalizePr(raw, 'bring/my-service');
+    const pr = normalizePr(raw, 'acme/my-service');
     assert.equal(pr.number, 42);
     assert.equal(pr.title, 'Add retry logic to log streaming');
-    assert.equal(pr.url, 'https://github.com/bring/my-service/pull/42');
-    assert.equal(pr.repository, 'bring/my-service');
+    assert.equal(pr.url, 'https://github.com/acme/my-service/pull/42');
+    assert.equal(pr.repository, 'acme/my-service');
     assert.equal(pr.author?.login, 'espen');
 });
 
 test('adds default checkStatus fields', () => {
     const [raw] = fixture('gh-pr-list-open.json');
-    const pr = normalizePr(raw, 'bring/my-service');
+    const pr = normalizePr(raw, 'acme/my-service');
     assert.equal(pr.checkStatus, 'none');
     assert.equal(pr.checkStatusLabel, 'No checks');
 });
 
 test('computes commentActivityCount from comments and reviews', () => {
     const [raw] = fixture('gh-pr-list-open.json');
-    const pr = normalizePr(raw, 'bring/my-service');
+    const pr = normalizePr(raw, 'acme/my-service');
     // 1 comment + 1 review with body = 2
     assert.equal(pr.commentActivityCount, 2);
 });
 
 test('picks latest commentActivityAt', () => {
     const [raw] = fixture('gh-pr-list-open.json');
-    const pr = normalizePr(raw, 'bring/my-service');
+    const pr = normalizePr(raw, 'acme/my-service');
     assert.equal(pr.commentActivityAt, '2026-06-22T11:00:00Z');
 });
 
 test('draft PR preserves isDraft flag', () => {
     const prs = fixture('gh-pr-list-open.json');
-    const draft = normalizePr(prs[1], 'bring/my-service');
+    const draft = normalizePr(prs[1], 'acme/my-service');
     assert.equal(draft.isDraft, true);
     assert.equal(draft.commentActivityCount, 0);
     assert.equal(draft.commentActivityAt, null);
@@ -99,14 +99,14 @@ console.log('\nnormalizePr — merged PRs');
 
 test('preserves mergedAt', () => {
     const [raw] = fixture('gh-pr-list-merged.json');
-    const pr = normalizePr(raw, 'bring/my-service');
+    const pr = normalizePr(raw, 'acme/my-service');
     assert.equal(pr.mergedAt, '2026-06-25T10:00:00Z');
     assert.equal(pr.reviewDecision, 'APPROVED');
 });
 
 test('has no comments or reviews in merged fixture', () => {
     const [raw] = fixture('gh-pr-list-merged.json');
-    const pr = normalizePr(raw, 'bring/my-service');
+    const pr = normalizePr(raw, 'acme/my-service');
     assert.equal(pr.commentActivityCount, 0);
 });
 
@@ -116,7 +116,7 @@ console.log('\nnormalizeSearchPr — author org search');
 test('extracts repository from nested object', () => {
     const [raw] = fixture('gh-search-prs-open.json');
     const pr = normalizeSearchPr(raw);
-    assert.equal(pr.repository, 'bring/other-service');
+    assert.equal(pr.repository, 'acme/other-service');
 });
 
 test('adds empty headRefOid if missing', () => {
@@ -186,11 +186,11 @@ test('dedupeByUrl removes duplicate PRs from topic and author searches', () => {
         return prs.filter((pr) => { if (seen.has(pr.url)) { return false; } seen.add(pr.url); return true; });
     }
 
-    const topicPr = normalizePr(fixture('gh-pr-list-open.json')[0], 'bring/my-service');
+    const topicPr = normalizePr(fixture('gh-pr-list-open.json')[0], 'acme/my-service');
     const authorPr = normalizeSearchPr({
         ...fixture('gh-search-prs-open.json')[0],
         url: topicPr.url, // same URL = duplicate
-        repository: { nameWithOwner: 'bring/my-service' },
+        repository: { nameWithOwner: 'acme/my-service' },
     });
 
     const merged = dedupeByUrl([topicPr, authorPr]);
@@ -203,7 +203,7 @@ test('dedupeByUrl keeps distinct PRs', () => {
         return prs.filter((pr) => { if (seen.has(pr.url)) { return false; } seen.add(pr.url); return true; });
     }
 
-    const prs = fixture('gh-pr-list-open.json').map((p) => normalizePr(p, 'bring/my-service'));
+    const prs = fixture('gh-pr-list-open.json').map((p) => normalizePr(p, 'acme/my-service'));
     const authorPr = normalizeSearchPr(fixture('gh-search-prs-open.json')[0]);
     const merged = dedupeByUrl([...prs, authorPr]);
     assert.equal(merged.length, 3);

@@ -1,0 +1,1 @@
+default kube-public kube-system monitoring production staging
