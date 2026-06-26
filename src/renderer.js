@@ -488,7 +488,7 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
         const dep = latestDeployments.find((d) => d.name === depName);
         const pods = dep?.pods?.map((p) => p.name).filter(Boolean) || [];
         const config = loadConfig();
-        openLogsModal({ depName, pods, context: config.context, namespace: config.namespace });
+        openLogsModal({ depName, pods, context: config.context, namespace: config.namespace, selector: `app=${depName}` });
         return;
     }
 

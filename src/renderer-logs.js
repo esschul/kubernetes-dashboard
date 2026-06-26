@@ -44,7 +44,7 @@ function closeLogsModal() {
     document.getElementById('logsModal').close();
 }
 
-function openLogsModal({ depName, pods, context, namespace }) {
+function openLogsModal({ depName, pods, context, namespace, selector }) {
     logBuffer = [];
     logAutoScroll = true;
 
@@ -64,7 +64,10 @@ function openLogsModal({ depName, pods, context, namespace }) {
     document.getElementById('logsFilterInput').value = '';
     document.getElementById('logsNetInput').value = '';
     document.getElementById('logsNetOutput').value = '';
-    select.innerHTML = pods.map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+    const allPodsOption = pods.length > 1 && selector
+        ? `<option value="__all__">All pods (${pods.length})</option>`
+        : '';
+    select.innerHTML = allPodsOption + pods.map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
 
     window.kubeDashboard.offLogListeners();
     window.kubeDashboard.onLogLine((line) => appendLogLine(line, output));
@@ -74,7 +77,12 @@ function openLogsModal({ depName, pods, context, namespace }) {
     function startStream() {
         logBuffer = [];
         output.textContent = '';
-        window.kubeDashboard.startLogStream({ context, namespace, podName: select.value });
+        const isAll = select.value === '__all__';
+        window.kubeDashboard.startLogStream({
+            context, namespace,
+            podName: isAll ? null : select.value,
+            selector: isAll ? selector : null,
+        });
     }
 
     select.onchange = () => {
