@@ -2246,6 +2246,12 @@ input, select {
 }
 .logs-open-btn:hover { border-color: var(--accent); color: var(--accent); }
 
+.pod-expand-actions {
+    padding: 8px 12px 4px;
+    display: flex;
+    gap: 8px;
+}
+
 .restart-btn {
     padding: 3px 10px;
     border: 1px solid var(--line);

@@ -238,7 +238,6 @@ function renderDeploymentCard(dep) {
             <div class="deployment-pill-row">
                 <span class="trello-placeholder"></span>
                 <button class="logs-open-btn" data-dep-name="${escapeHtml(dep.name)}">Logs</button>
-                <button class="restart-btn" data-dep-name="${escapeHtml(dep.name)}">Restart</button>
                 ${datadogUrl ? `<span class="datadog-link" data-url="${escapeHtml(datadogUrl)}">Datadog</span>` : ''}
                 <span class="status-pill is-${escapeHtml(statusClass)}">${escapeHtml(statusLabel)}</span>
                 <span class="age-pill ${agePillClass}" title="${escapeHtml(deployedAbsolute)}">${escapeHtml(deployedLabel)}</span>
@@ -253,6 +252,9 @@ function renderDeploymentCard(dep) {
         </div>
         <div class="pod-expand hidden">
             ${renderPodTable(dep)}
+            <div class="pod-expand-actions">
+                <button class="restart-btn" data-dep-name="${escapeHtml(dep.name)}">Restart deployment</button>
+            </div>
         </div>
     </div>`;
 }
