@@ -494,6 +494,17 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
         return;
     }
 
+    // Handle restart button
+    const restartBtn = e.target.closest('.restart-btn');
+    if (restartBtn) {
+        e.stopPropagation();
+        const depName = restartBtn.dataset.depName;
+        const dep = latestDeployments.find((d) => d.name === depName);
+        const config = loadConfig();
+        openRestartModal({ depName, namespace: dep?.namespace || config.namespace, context: config.context });
+        return;
+    }
+
     // Handle rollback button
     const rollbackBtn = e.target.closest('.rollout-rollback-btn');
     if (rollbackBtn) {
@@ -645,6 +656,63 @@ function closeRollbackModal() {
 document.getElementById('rollbackCancelBtn')?.addEventListener('click', () => closeRollbackModal());
 document.getElementById('rollbackModal')?.addEventListener('click', (e) => {
     if (e.target === document.getElementById('rollbackModal')) { closeRollbackModal(); }
+});
+
+// ── Restart modal ─────────────────────────────────────────────────────────
+let restartPending = null;
+
+function openRestartModal({ depName, namespace, context }) {
+    restartPending = { depName, namespace, context };
+    document.getElementById('restartModalTitle').textContent = `Restart ${depName}?`;
+    document.getElementById('restartModalDesc').textContent = `deployment/${depName} in ${namespace}`;
+    const status = document.getElementById('restartModalStatus');
+    status.textContent = '';
+    status.className = 'modal-status hidden';
+    document.getElementById('restartModalActions').classList.remove('hidden');
+    document.getElementById('restartConfirmBtn').disabled = false;
+    document.getElementById('restartConfirmBtn').textContent = 'Restart';
+    document.getElementById('restartModal').showModal();
+}
+
+function closeRestartModal() {
+    document.getElementById('restartModal').close();
+    restartPending = null;
+}
+
+document.getElementById('restartCancelBtn')?.addEventListener('click', () => closeRestartModal());
+document.getElementById('restartModal')?.addEventListener('click', (e) => {
+    if (e.target === document.getElementById('restartModal')) { closeRestartModal(); }
+});
+
+document.getElementById('restartConfirmBtn')?.addEventListener('click', async () => {
+    if (!restartPending) { return; }
+    const { depName, namespace, context } = restartPending;
+    const config = loadConfig();
+    const confirmBtn = document.getElementById('restartConfirmBtn');
+    const status = document.getElementById('restartModalStatus');
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Restarting…';
+    document.getElementById('restartModalActions').classList.add('hidden');
+    status.className = 'modal-status modal-status--info';
+    status.textContent = `Running kubectl rollout restart deployment/${depName}…`;
+
+    try {
+        await window.kubeDashboard.restartDeployment({
+            context: context || config.context,
+            namespace,
+            name: depName,
+            kubectlPath: config.kubectlPath,
+        });
+        status.className = 'modal-status modal-status--success';
+        status.textContent = `Restart initiated. New pods are starting.`;
+        setTimeout(() => { closeRestartModal(); refresh(); }, 2000);
+    } catch (err) {
+        status.className = 'modal-status modal-status--error';
+        status.textContent = err?.message || 'Restart failed.';
+        document.getElementById('restartModalActions').classList.remove('hidden');
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Restart';
+    }
 });
 
 // ── Log modal ──────────────────────────────────────────────────────────────

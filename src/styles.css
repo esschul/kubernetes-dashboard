@@ -2246,6 +2246,19 @@ input, select {
 }
 .logs-open-btn:hover { border-color: var(--accent); color: var(--accent); }
 
+.restart-btn {
+    padding: 3px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.restart-btn:hover { border-color: var(--accent); color: var(--accent); }
+
 /* Logs modal */
 #logsModal {
     background: #0d1117;

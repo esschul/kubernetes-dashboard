@@ -68,6 +68,11 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
         if (!response.ok) { throw response.error; }
         return response.result;
     },
+    restartDeployment: async (config) => {
+        const response = await ipcRenderer.invoke('deployment:restart', config);
+        if (!response.ok) { throw new Error(response.error.message); }
+        return response.result;
+    },
     rollbackDeployment: async (config) => {
         const response = await ipcRenderer.invoke('deployment:rollback', config);
         if (!response.ok) { throw new Error(response.error.message); }

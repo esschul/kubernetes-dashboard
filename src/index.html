@@ -319,6 +319,16 @@ az login</pre>
     </main>
 </div>
 
+<dialog id="restartModal">
+    <h3 class="modal-title" id="restartModalTitle">Restart deployment?</h3>
+    <p class="modal-desc" id="restartModalDesc"></p>
+    <p class="modal-caveat">This uses <code>kubectl rollout restart</code> which does a rolling restart — new pods are started before old ones are terminated. No downtime assuming the deployment has multiple replicas and readiness probes configured.</p>
+    <div class="modal-status hidden" id="restartModalStatus"></div>
+    <div class="modal-actions" id="restartModalActions">
+        <button class="modal-btn modal-btn--cancel" id="restartCancelBtn">Cancel</button>
+        <button class="modal-btn modal-btn--confirm" id="restartConfirmBtn">Restart</button>
+    </div>
+</dialog>
 <dialog id="rollbackModal">
     <h3 class="modal-title" id="rollbackModalTitle">Roll back deployment?</h3>
     <p class="modal-desc" id="rollbackModalDesc"></p>

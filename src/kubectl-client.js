@@ -381,6 +381,17 @@ function invalidateContextsCache() {
     contextsCache = null;
 }
 
+async function rolloutRestart({ context, namespace, name, kubectlPath }) {
+    const kPath = kubectlPath || resolveCommand('kubectl', 'KUBECTL_PATH');
+    const ctxArgs = context ? ['--context', context] : [];
+    const { stdout, stderr } = await execFileAsync(
+        kPath,
+        [...ctxArgs, '--namespace', namespace, 'rollout', 'restart', `deployment/${name}`],
+        { timeout: 30_000, env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() } }
+    ).catch((err) => { throw new Error(err.stderr || err.message); });
+    return { stdout, stderr };
+}
+
 async function rolloutUndo({ context, namespace, name, revision, kubectlPath }) {
     const ctxArgs = context ? ['--context', context] : [];
     const { stdout, stderr } = await execFileAsync(
@@ -413,4 +424,4 @@ function spawnLogStream({ context, namespace, podName, selector, container, kube
     return spawn(kPath, args, { env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() } });
 }
 
-module.exports = { fetchDeployments, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutUndo, rolloutStatus, spawnLogStream };
+module.exports = { fetchDeployments, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream };
