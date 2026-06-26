@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, Menu, dialog, Notification: ElectronNotification } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Menu, dialog, clipboard, Notification: ElectronNotification } = require('electron');
 if (!app.isPackaged) { require('electron-reload')(__dirname); }
 
 // Packaged Electron apps launch with a minimal PATH that lacks homebrew and
@@ -23,7 +23,7 @@ const { autoUpdater } = require('electron-updater');
 
 let buildDate = null;
 try { buildDate = require('./build-info.json').date; } catch { /* not available in dev */ }
-const { fetchDeployments, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream } = require('./kubectl-client');
+const { fetchDeployments, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs } = require('./kubectl-client');
 const { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr } = require('./github-client');
 const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, rerunFailedJobs } = require('./azure-client');
 const { fetchPullRequests, clearPrListCache } = require('./pr-client');
@@ -209,13 +209,14 @@ app.whenReady().then(() => {
     });
 
     let activeLogProcess = null;
-    let activeLogStopped = false;
+    let activeLogStreamId = 0;
 
-    function startLogProcess(config, sender, attempt = 0) {
+    function startLogProcess(config, sender, streamId, attempt = 0) {
         const proc = spawnLogStream(config);
         activeLogProcess = proc;
         let buf = '';
         proc.stdout.on('data', (chunk) => {
+            if (streamId !== activeLogStreamId) { return; }
             buf += chunk.toString();
             const lines = buf.split('\n');
             buf = lines.pop();
@@ -224,16 +225,27 @@ app.whenReady().then(() => {
             }
         });
         proc.stderr.on('data', (chunk) => {
+            if (streamId !== activeLogStreamId) { return; }
             if (!sender.isDestroyed()) { sender.send('logs:error', chunk.toString()); }
         });
-        proc.on('close', (code) => {
+        proc.on('close', (code, signal) => {
+            if (streamId !== activeLogStreamId) { return; }
+            if (buf) {
+                if (!sender.isDestroyed()) { sender.send('logs:line', buf); }
+                buf = '';
+            }
             activeLogProcess = null;
-            if (activeLogStopped) { return; }
+            if (signal) {
+                if (!sender.isDestroyed()) { sender.send('logs:closed'); }
+                return;
+            }
             if (code !== 0 && attempt < 3) {
                 const delay = (attempt + 1) * 2000;
                 console.log(`[logs] stream exited with code ${code}, retrying in ${delay}ms (attempt ${attempt + 1})`);
                 setTimeout(() => {
-                    if (!activeLogStopped && !sender.isDestroyed()) { startLogProcess(config, sender, attempt + 1); }
+                    if (streamId === activeLogStreamId && !sender.isDestroyed()) {
+                        startLogProcess(config, sender, streamId, attempt + 1);
+                    }
                 }, delay);
             } else {
                 if (!sender.isDestroyed()) { sender.send('logs:closed'); }
@@ -241,14 +253,23 @@ app.whenReady().then(() => {
         });
     }
 
+    ipcMain.handle('logs:search', async (_event, config) => {
+        try {
+            const result = await searchLogs(config);
+            return { ok: true, result };
+        } catch (err) {
+            return { ok: false, error: { message: err.message } };
+        }
+    });
+
     ipcMain.handle('logs:start', (_event, config) => {
+        activeLogStreamId++;
         if (activeLogProcess) { activeLogProcess.kill(); activeLogProcess = null; }
-        activeLogStopped = false;
-        startLogProcess(config, _event.sender);
+        startLogProcess(config, _event.sender, activeLogStreamId);
         return { ok: true };
     });
     ipcMain.handle('logs:stop', () => {
-        activeLogStopped = true;
+        activeLogStreamId++;
         if (activeLogProcess) { activeLogProcess.kill(); activeLogProcess = null; }
         return { ok: true };
     });
@@ -294,6 +315,22 @@ app.whenReady().then(() => {
         {
             label: 'File',
             submenu: [
+                {
+                    label: 'Copy Screenshot',
+                    accelerator: 'CmdOrCtrl+S',
+                    click: async () => {
+                        const win = BrowserWindow.getFocusedWindow();
+                        if (!win) { return; }
+                        try {
+                            const image = await win.webContents.capturePage();
+                            clipboard.writeImage(image);
+                            win.webContents.send('screenshot:copied');
+                        } catch (err) {
+                            win.webContents.send('screenshot:failed', err.message || 'Could not capture screenshot.');
+                        }
+                    },
+                },
+                { type: 'separator' },
                 {
                     label: 'Export Settings…',
                     accelerator: 'CmdOrCtrl+E',

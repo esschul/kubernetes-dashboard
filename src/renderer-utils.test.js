@@ -13,6 +13,7 @@ const {
     getPipelineStatusClass,
     getPipelineStatusLabel,
     parseLogLine,
+    logLineMatchesFilter,
 } = require('./renderer-utils');
 
 function test(name, fn) {
@@ -212,4 +213,36 @@ test('handles message with spaces and special chars', () => {
     const { ts, msg } = parseLogLine('2026-06-25T08:00:00.000000000Z GET /api/status 200 OK');
     assert.equal(ts, '08:00:00');
     assert.equal(msg, 'GET /api/status 200 OK');
+});
+test('parses timestamp and retains pod prefix from all-pods stream', () => {
+    const { ts, msg } = parseLogLine('[my-pod-abc123] 2026-06-25T12:34:56.789012345Z request received');
+    assert.equal(ts, '12:34:56');
+    assert.equal(msg, '[my-pod-abc123] request received');
+});
+test('returns full raw line when prefixed line has no timestamp', () => {
+    const { ts, msg } = parseLogLine('[my-pod-abc123] plain log line');
+    assert.equal(ts, '');
+    assert.equal(msg, '[my-pod-abc123] plain log line');
+});
+
+// ── logLineMatchesFilter ─────────────────────────────────────────────────────
+console.log('\nlogLineMatchesFilter');
+
+test('empty filter matches every log line', () => {
+    assert.equal(logLineMatchesFilter('plain log line', ''), true);
+    assert.equal(logLineMatchesFilter('plain log line', '   '), true);
+});
+test('matches log lines case-insensitively', () => {
+    assert.equal(logLineMatchesFilter('GET /api/orders 500 ERROR', 'error'), true);
+    assert.equal(logLineMatchesFilter('GET /api/orders 500 ERROR', 'orders'), true);
+});
+test('hides log lines that do not match the filter', () => {
+    assert.equal(logLineMatchesFilter('GET /api/orders 200 OK', 'error'), false);
+});
+test('matches visible message text after timestamp parsing', () => {
+    assert.equal(logLineMatchesFilter('2026-06-25T12:34:56.789012345Z payment failed', 'payment'), true);
+});
+test('matches all-pods prefix text after timestamp parsing', () => {
+    assert.equal(logLineMatchesFilter('[my-pod-abc123] 2026-06-25T12:34:56.789012345Z request received', 'my-pod'), true);
+    assert.equal(logLineMatchesFilter('[my-pod-abc123] 2026-06-25T12:34:56.789012345Z request received', 'request'), true);
 });

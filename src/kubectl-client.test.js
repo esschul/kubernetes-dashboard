@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
+const { getLogLineTimestamp } = require('./kubectl-client');
 
 function test(name, fn) {
     try {
@@ -122,4 +123,21 @@ test('handles newline-separated output', () => {
 test('filters empty strings', () => {
     const result = parseNamespaces('  default  kube-system  ');
     assert.equal(result.length, 2);
+});
+
+// ── getLogLineTimestamp ──────────────────────────────────────────────────────
+console.log('\ngetLogLineTimestamp');
+
+test('extracts timestamp from normal kubectl log line', () => {
+    const ts = getLogLineTimestamp('2026-06-25T12:00:01.000Z request ok');
+    assert.equal(ts, new Date('2026-06-25T12:00:01.000Z').getTime());
+});
+
+test('extracts timestamp from all-pods prefixed log line', () => {
+    const ts = getLogLineTimestamp('[api-pod] 2026-06-25T12:00:02.000Z request ok');
+    assert.equal(ts, new Date('2026-06-25T12:00:02.000Z').getTime());
+});
+
+test('returns null when log line has no timestamp', () => {
+    assert.equal(getLogLineTimestamp('plain log line'), null);
 });

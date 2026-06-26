@@ -84,8 +84,15 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
         return response.result;
     },
     onSettingsImport: (cb) => ipcRenderer.on('settings:import', (_e, config) => cb(config)),
+    onScreenshotCopied: (cb) => ipcRenderer.on('screenshot:copied', () => cb()),
+    onScreenshotFailed: (cb) => ipcRenderer.on('screenshot:failed', (_e, message) => cb(message)),
     openExternal: (url) => ipcRenderer.invoke('external:open', url),
     requestNotificationPermission: () => ipcRenderer.invoke('notifications:requestPermission'),
+    searchLogs: async (config) => {
+        const response = await ipcRenderer.invoke('logs:search', config);
+        if (!response.ok) { throw new Error(response.error.message); }
+        return response.result;
+    },
     startLogStream: (config) => ipcRenderer.invoke('logs:start', config),
     stopLogStream: () => ipcRenderer.invoke('logs:stop'),
     onLogLine: (cb) => ipcRenderer.on('logs:line', (_e, line) => cb(line)),

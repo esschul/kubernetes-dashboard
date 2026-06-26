@@ -2208,6 +2208,35 @@ input, select {
 .modal-status--info { background: var(--panel-muted); color: var(--muted); }
 .modal-status--success { background: #dcfce7; color: #16a34a; }
 .modal-status--error { background: #fee2e2; color: #dc2626; }
+
+.app-toast {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 1000;
+    max-width: min(360px, calc(100vw - 36px));
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    background: #0f172a;
+    color: #f8fafc;
+    font-size: 0.86rem;
+    font-weight: 700;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.28);
+    opacity: 0;
+    transform: translateY(10px);
+    pointer-events: none;
+    transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.app-toast.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.app-toast.is-error {
+    background: #7f1d1d;
+}
 .modal-actions {
     display: flex;
     gap: 8px;
@@ -2303,6 +2332,89 @@ input, select {
     gap: 10px;
     min-width: 0;
 }
+
+.logs-mode-tabs {
+    display: flex;
+    gap: 2px;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 7px;
+    padding: 2px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+.logs-mode-tab {
+    padding: 3px 12px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: #8b949e;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.logs-mode-tab.is-active {
+    background: #21262d;
+    color: #e6edf3;
+}
+
+.logs-live-selects {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.logs-search-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.logs-search-row-top,
+.logs-search-row-bottom {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.logs-search-since {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #e6edf3;
+    font-size: 0.78rem;
+    padding: 5px 8px;
+    outline: none;
+    width: 170px;
+    flex-shrink: 0;
+}
+.logs-search-since:focus { border-color: #e6edf3; }
+.logs-search-term {
+    flex: 1;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #e6edf3;
+    font-size: 0.78rem;
+    padding: 5px 8px;
+    outline: none;
+    min-width: 0;
+}
+.logs-search-term::placeholder { color: #8b949e; }
+.logs-search-term:focus { border-color: #e6edf3; }
+.logs-search-btn {
+    padding: 5px 14px;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    background: #21262d;
+    color: #e6edf3;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.logs-search-btn:hover { background: #30363d; }
+.logs-search-btn:disabled { opacity: 0.5; cursor: default; }
+
+#logsSearchControls { padding-bottom: 4px; }
 .logs-modal-title-row .modal-title { color: #e6edf3; white-space: nowrap; }
 .logs-pod-select {
     background: #161b22;
@@ -2392,9 +2504,9 @@ input, select {
     min-width: 120px;
     max-width: 70%;
     flex-shrink: 0;
-    display: flex;
     flex-direction: column;
 }
+.logs-net:not(.hidden) { display: flex; }
 .logs-net-header {
     display: flex;
     align-items: center;
@@ -2420,6 +2532,7 @@ input, select {
 .logs-net-clear:hover { color: #e6edf3; }
 .logs-net-output {
     flex: 1;
+    min-height: 0;
     background: #0d1117;
     border: none;
     color: #58a6ff;
@@ -2431,4 +2544,121 @@ input, select {
     outline: none;
     scrollbar-width: thin;
     scrollbar-color: #30363d transparent;
+}
+
+.logs-speedometer {
+    border-top: 1px solid #30363d;
+    padding: 10px 14px 12px;
+    background: radial-gradient(circle at 50% 20%, #1f2937 0, #111827 48%, #0d1117 100%);
+    color: #e6edf3;
+    flex-shrink: 0;
+}
+
+.logs-speedometer-dial {
+    position: relative;
+    width: 138px;
+    height: 70px;
+    margin: 0 auto;
+    overflow: hidden;
+}
+
+.logs-speedometer-dial::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -68px;
+    height: 136px;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 50% 50%, #0d1117 0 46%, transparent 47%),
+        conic-gradient(from 270deg, #22c55e 0deg 58deg, #facc15 58deg 118deg, #ef4444 118deg 180deg, transparent 180deg 360deg);
+    border: 1px solid #30363d;
+}
+
+.logs-speedometer-dial::after {
+    content: "";
+    position: absolute;
+    left: 20px;
+    right: 20px;
+    bottom: -48px;
+    height: 96px;
+    border-radius: 50%;
+    border: 1px solid rgba(230, 237, 243, 0.16);
+}
+
+.logs-speedometer-mark {
+    position: absolute;
+    bottom: 2px;
+    z-index: 1;
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: #8b949e;
+    user-select: none;
+}
+
+.logs-speedometer-mark.is-left { left: 3px; }
+.logs-speedometer-mark.is-mid {
+    left: 50%;
+    bottom: 49px;
+    transform: translateX(-50%);
+}
+.logs-speedometer-mark.is-right { right: 0; }
+
+.logs-speedometer-needle {
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    width: 3px;
+    height: 58px;
+    border-radius: 999px 999px 2px 2px;
+    background: linear-gradient(to top, #f97316, #fef3c7);
+    transform: translateX(-50%) rotate(-90deg);
+    transform-origin: 50% 100%;
+    transition: transform 0.28s ease-out;
+    z-index: 2;
+    box-shadow: 0 0 10px rgba(249, 115, 22, 0.5);
+}
+
+.logs-speedometer-hub {
+    position: absolute;
+    left: 50%;
+    bottom: -8px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    transform: translateX(-50%);
+    background: #e6edf3;
+    border: 4px solid #30363d;
+    z-index: 3;
+}
+
+.logs-speedometer-readout {
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+    gap: 4px;
+    margin-top: 2px;
+}
+
+.logs-speedometer-value {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 1.25rem;
+    font-weight: 800;
+    line-height: 1;
+    color: #f8fafc;
+}
+
+.logs-speedometer-unit {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #8b949e;
+    text-transform: uppercase;
+}
+
+.logs-speedometer-meta {
+    margin-top: 4px;
+    text-align: center;
+    font-size: 0.66rem;
+    color: #8b949e;
 }

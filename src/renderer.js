@@ -45,6 +45,30 @@ function applyTheme(theme) {
 const storedTheme = localStorage.getItem(STORAGE_KEYS.theme) || 'light';
 applyTheme(storedTheme);
 
+function showToast(message, type = 'success') {
+    let toast = document.getElementById('appToast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'appToast';
+        toast.className = 'app-toast';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.className = `app-toast is-visible is-${type}`;
+    clearTimeout(showToast.timer);
+    showToast.timer = setTimeout(() => {
+        toast.classList.remove('is-visible');
+    }, 2200);
+}
+
+window.kubeDashboard.onScreenshotCopied?.(() => {
+    showToast('Screenshot copied to clipboard');
+});
+
+window.kubeDashboard.onScreenshotFailed?.((message) => {
+    showToast(message || 'Could not copy screenshot', 'error');
+});
+
 document.getElementById('themeToggle').addEventListener('click', () => {
     const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     localStorage.setItem(STORAGE_KEYS.theme, next);
@@ -487,10 +511,11 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
         const depName = logsBtn.dataset.depName;
         const dep = latestDeployments.find((d) => d.name === depName);
         const pods = dep?.pods?.map((p) => p.name).filter(Boolean) || [];
+        const podObjects = dep?.pods || [];
         const config = loadConfig();
         const matchLabels = dep?.labels || {};
         const selector = Object.entries(matchLabels).map(([k, v]) => `${k}=${v}`).join(',') || null;
-        openLogsModal({ depName, pods, context: config.context, namespace: config.namespace, selector });
+        openLogsModal({ depName, pods, podObjects, context: config.context, namespace: config.namespace, selector });
         return;
     }
 

@@ -1,5 +1,5 @@
 'use strict';
-/* exported escapeHtml, getStatusLabel, getImageTag, formatRelativeTime, getAgePillClass, formatDuration, isFailingStatus, getPipelineBranchType, getPipelineStatusClass, getPipelineStatusLabel, parseLogLine */
+/* exported escapeHtml, getStatusLabel, getImageTag, formatRelativeTime, getAgePillClass, formatDuration, isFailingStatus, getPipelineBranchType, getPipelineStatusClass, getPipelineStatusLabel, parseLogLine, logLineMatchesFilter */
 
 function escapeHtml(str) {
     if (!str) { return ''; }
@@ -98,9 +98,19 @@ function getPipelineStatusLabel(run) {
 }
 
 function parseLogLine(raw) {
-    const m = raw.match(/^(\d{4}-\d{2}-\d{2}T(\d{2}:\d{2}:\d{2})[^Z]*Z)\s([\s\S]*)$/);
-    if (m) { return { ts: m[2], msg: m[3], raw }; }
+    const prefixMatch = raw.match(/^\[[\w/-]+\]\s*/);
+    const prefix = prefixMatch ? prefixMatch[0] : '';
+    const stripped = raw.slice(prefix.length);
+    const m = stripped.match(/^(\d{4}-\d{2}-\d{2}T(\d{2}:\d{2}:\d{2})[^Z]*Z)\s([\s\S]*)$/);
+    if (m) { return { ts: m[2], msg: prefix + m[3], raw }; }
     return { ts: '', msg: raw, raw };
+}
+
+function logLineMatchesFilter(raw, filter) {
+    const needle = String(filter || '').trim().toLowerCase();
+    if (!needle) { return true; }
+    const { ts, msg } = parseLogLine(String(raw || ''));
+    return `${raw || ''}\n${ts} ${msg}`.toLowerCase().includes(needle);
 }
 
 if (typeof module !== 'undefined') {
@@ -116,5 +126,6 @@ if (typeof module !== 'undefined') {
         getPipelineStatusClass,
         getPipelineStatusLabel,
         parseLogLine,
+        logLineMatchesFilter,
     };
 }

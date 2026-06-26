@@ -343,13 +343,37 @@ az login</pre>
     <div class="logs-modal-header">
         <div class="logs-modal-title-row">
             <h3 class="modal-title" id="logsModalTitle">Logs</h3>
-                <span class="logs-env-pill" id="logsEnvPill"></span>
-            <select class="logs-pod-select" id="logsPodSelect"></select>
+            <span class="logs-env-pill" id="logsEnvPill"></span>
+            <div class="logs-mode-tabs">
+                <button class="logs-mode-tab" id="logsTabLive">Live</button>
+                <button class="logs-mode-tab is-active" id="logsTabSearch">Search</button>
+            </div>
         </div>
-        <div class="logs-modal-controls">
-            <input class="logs-filter-input" id="logsFilterInput" type="text" placeholder="Filter lines…" />
-            <input class="logs-net-input" id="logsNetInput" type="text" placeholder="Catch matching lines…" />
+
+        <div id="logsLiveControls" class="hidden">
+            <div class="logs-live-selects">
+                <select class="logs-pod-select" id="logsPodSelect"></select>
+            </div>
+            <div class="logs-modal-controls">
+                <input class="logs-filter-input" id="logsLiveFilterInput" type="text" placeholder="Filter lines…" />
+                <input class="logs-net-input" id="logsNetInput" type="text" placeholder="Catch matching lines…" />
+            </div>
         </div>
+
+        <div id="logsSearchControls">
+            <div class="logs-search-row">
+                <div class="logs-search-row-top">
+                    <select class="logs-pod-select" id="logsSearchPodSelect"></select>
+                    <input class="logs-search-since" id="logsSearchFrom" type="datetime-local" title="From" />
+                    <input class="logs-search-since" id="logsSearchTo" type="datetime-local" title="To" />
+                </div>
+                <div class="logs-search-row-bottom">
+                    <input class="logs-search-term" id="logsSearchInput" type="text" placeholder="Search logs…" />
+                    <button class="logs-search-btn" id="logsSearchBtn">Search</button>
+                </div>
+            </div>
+        </div>
+
         <div class="logs-modal-actions">
             <button class="logs-copy-btn" id="logsCopyBtn">Copy all</button>
             <button class="modal-btn modal-btn--cancel" id="logsCloseBtn">Close</button>
@@ -364,6 +388,20 @@ az login</pre>
                 <button class="logs-net-clear" id="logsNetClear" title="Clear">✕</button>
             </div>
             <textarea class="logs-net-output" id="logsNetOutput" readonly placeholder="Lines matching the catch filter will appear here…"></textarea>
+            <div class="logs-speedometer" aria-label="Log line rate">
+                <div class="logs-speedometer-dial">
+                    <span class="logs-speedometer-mark is-left">0</span>
+                    <span class="logs-speedometer-mark is-mid">50</span>
+                    <span class="logs-speedometer-mark is-right">100</span>
+                    <div class="logs-speedometer-needle" id="logsRateNeedle"></div>
+                    <div class="logs-speedometer-hub"></div>
+                </div>
+                <div class="logs-speedometer-readout">
+                    <span class="logs-speedometer-value" id="logsRateValue">0.0</span>
+                    <span class="logs-speedometer-unit">l/s</span>
+                </div>
+                <div class="logs-speedometer-meta">10s avg · peak <span id="logsRatePeak">0.0</span></div>
+            </div>
         </div>
     </div>
 </dialog>

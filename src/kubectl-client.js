@@ -424,4 +424,39 @@ function spawnLogStream({ context, namespace, podName, selector, container, kube
     return spawn(kPath, args, { env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() } });
 }
 
-module.exports = { fetchDeployments, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream };
+function getLogLineTimestamp(line) {
+    const stripped = line.replace(/^\[[\w/-]+\]\s*/, '');
+    const match = stripped.match(/^(\d{4}-\d{2}-\d{2}T[^\s]+Z)\s/);
+    if (!match) { return null; }
+    const time = new Date(match[1]).getTime();
+    return Number.isNaN(time) ? null : time;
+}
+
+async function searchLogs({ context, namespace, podName, selector, sinceTime, untilTime, searchTerm, kubectlPath }) {
+    const { execFile } = require('node:child_process');
+    const kPath = kubectlPath || resolveCommand('kubectl', 'KUBECTL_PATH');
+    const ctxArgs = context ? ['--context', context] : [];
+    const sinceArgs = sinceTime ? ['--since-time', sinceTime] : [];
+    const targetArgs = selector
+        ? ['--selector', selector, '--prefix', '--max-log-requests=20']
+        : [podName];
+    const args = [...ctxArgs, '--namespace', namespace, 'logs', '--timestamps', ...sinceArgs, ...targetArgs];
+    return new Promise((resolve, reject) => {
+        execFile(kPath, args, { env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() }, maxBuffer: 50 * 1024 * 1024 }, (err, stdout) => {
+            if (err && !stdout) { return reject(err); }
+            const untilMs = untilTime ? new Date(untilTime).getTime() : null;
+            const lines = stdout.split('\n').filter(Boolean)
+                .filter((line) => {
+                    if (!untilMs || Number.isNaN(untilMs)) { return true; }
+                    const lineMs = getLogLineTimestamp(line);
+                    return lineMs === null || lineMs <= untilMs;
+                });
+            const filtered = searchTerm
+                ? lines.filter((l) => l.toLowerCase().includes(searchTerm.toLowerCase()))
+                : lines;
+            resolve(filtered);
+        });
+    });
+}
+
+module.exports = { fetchDeployments, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs, getLogLineTimestamp };
