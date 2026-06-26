@@ -106,6 +106,26 @@ document.getElementById('logsNetClear')?.addEventListener('click', () => {
     document.getElementById('logsNetInput').value = '';
     document.getElementById('logsNetOutput').value = '';
 });
+document.getElementById('logsNetDivider')?.addEventListener('mousedown', (e) => {
+    const divider = e.currentTarget;
+    const net = document.getElementById('logsNet');
+    const startX = e.clientX;
+    const startWidth = net.offsetWidth;
+    divider.classList.add('is-dragging');
+
+    function onMove(ev) {
+        const delta = startX - ev.clientX;
+        net.style.width = `${Math.max(120, startWidth + delta)}px`;
+    }
+    function onUp() {
+        divider.classList.remove('is-dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+});
+
 document.getElementById('logsCloseBtn')?.addEventListener('click', closeLogsModal);
 document.getElementById('logsModal')?.addEventListener('click', (e) => {
     if (e.target === document.getElementById('logsModal')) { closeLogsModal(); }
