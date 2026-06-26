@@ -54,6 +54,12 @@ function openLogsModal({ depName, pods, context, namespace }) {
     const title = document.getElementById('logsModalTitle');
 
     title.textContent = depName;
+    const envLabel = getCurrentEnvLabel(loadConfig());
+    const pill = document.getElementById('logsEnvPill');
+    if (pill) {
+        pill.textContent = envLabel ? envLabel.toUpperCase() : '';
+        pill.className = `logs-env-pill${envLabel ? ` is-env-${envLabel}` : ''}`;
+    }
     output.textContent = '';
     document.getElementById('logsFilterInput').value = '';
     document.getElementById('logsNetInput').value = '';

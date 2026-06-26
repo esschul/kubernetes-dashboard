@@ -1,5 +1,5 @@
 'use strict';
-/* exported latestDeployments, renderGeneration, prCache, loadConfig, setLastUpdated, refresh, depHasTrello, matchesFilter */
+/* exported latestDeployments, renderGeneration, prCache, loadConfig, setLastUpdated, refresh, depHasTrello, matchesFilter, getCurrentEnvLabel */
 
 const STORAGE_KEYS = {
     config: 'kube-dashboard:config',
@@ -223,6 +223,8 @@ async function loadClusterSettingsIfEmpty() {
     }
 }
 
+const ENV_COLOR_CLASS = { Prod: 'is-env-prod', QA: 'is-env-qa', Test: 'is-env-test' };
+
 function renderEnvSwitcher(config) {
     const switcher = document.getElementById('envSwitcher');
     const envs = config?.envContexts || {};
@@ -233,8 +235,18 @@ function renderEnvSwitcher(config) {
 
     switcher.innerHTML = buttons.map(([label, ctx]) => {
         const isActive = (config?.context || '') === ctx;
-        return `<button class="env-btn ${isActive ? 'is-active' : ''}" data-context="${escapeHtml(ctx)}">${label}</button>`;
+        const colorClass = ENV_COLOR_CLASS[label] || '';
+        return `<button class="env-btn ${colorClass} ${isActive ? 'is-active' : ''}" data-context="${escapeHtml(ctx)}" data-env="${label.toLowerCase()}">${label}</button>`;
     }).join('');
+}
+
+function getCurrentEnvLabel(config) {
+    const envs = config?.envContexts || {};
+    const ctx = config?.context || '';
+    if (ctx && ctx === envs.prod) { return 'prod'; }
+    if (ctx && ctx === envs.qa) { return 'qa'; }
+    if (ctx && ctx === envs.test) { return 'test'; }
+    return null;
 }
 
 document.getElementById('envSwitcher').addEventListener('click', (e) => {

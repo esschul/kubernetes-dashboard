@@ -1372,6 +1372,40 @@ h3 {
     color: #ddd6fe;
 }
 
+/* Environment colour coding — prod/qa/test */
+.env-btn.is-env-prod { border-color: #fca5a5; }
+.env-btn.is-env-prod.is-active { border-color: #ef4444; background: #fef2f2; color: #991b1b; }
+.env-btn.is-env-qa  { border-color: #86efac; }
+.env-btn.is-env-qa.is-active  { border-color: #22c55e; background: #f0fdf4; color: #166534; }
+.env-btn.is-env-test { border-color: #93c5fd; }
+.env-btn.is-env-test.is-active { border-color: #3b82f6; background: #eff6ff; color: #1e40af; }
+
+:root[data-theme="dark"] .env-btn.is-env-prod { border-color: #7f1d1d; }
+:root[data-theme="dark"] .env-btn.is-env-prod.is-active { border-color: #ef4444; background: #450a0a; color: #fca5a5; }
+:root[data-theme="dark"] .env-btn.is-env-qa  { border-color: #14532d; }
+:root[data-theme="dark"] .env-btn.is-env-qa.is-active  { border-color: #22c55e; background: #052e16; color: #86efac; }
+:root[data-theme="dark"] .env-btn.is-env-test { border-color: #1e3a5f; }
+:root[data-theme="dark"] .env-btn.is-env-test.is-active { border-color: #3b82f6; background: #172554; color: #93c5fd; }
+
+/* Env pill in log modal */
+.logs-env-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    vertical-align: middle;
+    margin-left: 8px;
+}
+.logs-env-pill.is-env-prod { background: #fef2f2; color: #991b1b; border: 1px solid #fca5a5; }
+.logs-env-pill.is-env-qa  { background: #f0fdf4; color: #166534; border: 1px solid #86efac; }
+.logs-env-pill.is-env-test { background: #eff6ff; color: #1e40af; border: 1px solid #93c5fd; }
+
+:root[data-theme="dark"] .logs-env-pill.is-env-prod { background: #450a0a; color: #fca5a5; border-color: #7f1d1d; }
+:root[data-theme="dark"] .logs-env-pill.is-env-qa  { background: #052e16; color: #86efac; border-color: #14532d; }
+:root[data-theme="dark"] .logs-env-pill.is-env-test { background: #172554; color: #93c5fd; border-color: #1e3a5f; }
+
 .settings-section-heading {
     font-size: 0.78rem;
     font-weight: 750;
