@@ -251,10 +251,10 @@ function renderDeploymentCard(dep) {
             ${renderRolloutHistory(dep.rollouts || [], dep.imageRepoName)}
         </div>
         <div class="pod-expand hidden">
-            ${renderPodTable(dep)}
-            <div class="pod-expand-actions">
+            <div class="pod-expand-header">
                 <button class="restart-btn" data-dep-name="${escapeHtml(dep.name)}">Restart deployment</button>
             </div>
+            ${renderPodTable(dep)}
         </div>
     </div>`;
 }

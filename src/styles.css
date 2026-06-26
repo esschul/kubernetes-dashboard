@@ -827,6 +827,7 @@ h3 {
     user-select: none;
 }
 
+
 .pr-row {
     margin-top: 10px;
     padding-top: 10px;
@@ -1373,19 +1374,19 @@ h3 {
 }
 
 /* Environment colour coding — prod/qa/test */
-.env-btn.is-env-prod { border-color: #fca5a5; }
-.env-btn.is-env-prod.is-active { border-color: #ef4444; background: #fef2f2; color: #991b1b; }
-.env-btn.is-env-qa  { border-color: #86efac; }
-.env-btn.is-env-qa.is-active  { border-color: #22c55e; background: #f0fdf4; color: #166534; }
-.env-btn.is-env-test { border-color: #93c5fd; }
-.env-btn.is-env-test.is-active { border-color: #3b82f6; background: #eff6ff; color: #1e40af; }
+.env-btn.is-env-prod { border-color: #fca5a5; color: #991b1b; }
+.env-btn.is-env-prod.is-active { border-color: #ef4444; background: #ef4444; color: #fff; }
+.env-btn.is-env-qa  { border-color: #86efac; color: #166534; }
+.env-btn.is-env-qa.is-active  { border-color: #22c55e; background: #22c55e; color: #fff; }
+.env-btn.is-env-test { border-color: #93c5fd; color: #1e40af; }
+.env-btn.is-env-test.is-active { border-color: #3b82f6; background: #3b82f6; color: #fff; }
 
-:root[data-theme="dark"] .env-btn.is-env-prod { border-color: #7f1d1d; }
-:root[data-theme="dark"] .env-btn.is-env-prod.is-active { border-color: #ef4444; background: #450a0a; color: #fca5a5; }
-:root[data-theme="dark"] .env-btn.is-env-qa  { border-color: #14532d; }
-:root[data-theme="dark"] .env-btn.is-env-qa.is-active  { border-color: #22c55e; background: #052e16; color: #86efac; }
-:root[data-theme="dark"] .env-btn.is-env-test { border-color: #1e3a5f; }
-:root[data-theme="dark"] .env-btn.is-env-test.is-active { border-color: #3b82f6; background: #172554; color: #93c5fd; }
+:root[data-theme="dark"] .env-btn.is-env-prod { border-color: #ef4444; color: #fca5a5; }
+:root[data-theme="dark"] .env-btn.is-env-prod.is-active { border-color: #ef4444; background: #ef4444; color: #fff; }
+:root[data-theme="dark"] .env-btn.is-env-qa  { border-color: #22c55e; color: #86efac; }
+:root[data-theme="dark"] .env-btn.is-env-qa.is-active  { border-color: #22c55e; background: #22c55e; color: #fff; }
+:root[data-theme="dark"] .env-btn.is-env-test { border-color: #3b82f6; color: #93c5fd; }
+:root[data-theme="dark"] .env-btn.is-env-test.is-active { border-color: #3b82f6; background: #3b82f6; color: #fff; }
 
 /* Env pill in log modal */
 .logs-env-pill {
@@ -2157,7 +2158,8 @@ input, select {
 }
 
 /* Rollback modal */
-#rollbackModal {
+#rollbackModal,
+#restartModal {
     background: var(--panel);
     border: 1px solid var(--line);
     border-radius: 12px;
@@ -2166,12 +2168,14 @@ input, select {
     max-width: 90vw;
     box-shadow: 0 8px 32px rgba(0,0,0,0.18);
 }
-#rollbackModal[open] {
+#rollbackModal[open],
+#restartModal[open] {
     display: flex;
     flex-direction: column;
     gap: 12px;
 }
-#rollbackModal::backdrop {
+#rollbackModal::backdrop,
+#restartModal::backdrop {
     background: rgba(0,0,0,0.45);
 }
 .modal-title {
@@ -2246,10 +2250,10 @@ input, select {
 }
 .logs-open-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-.pod-expand-actions {
-    padding: 8px 12px 4px;
+.pod-expand-header {
     display: flex;
-    gap: 8px;
+    justify-content: flex-end;
+    margin-bottom: 8px;
 }
 
 .restart-btn {
