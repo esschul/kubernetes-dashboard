@@ -67,7 +67,7 @@ function openLogsModal({ depName, pods, context, namespace, selector }) {
     const allPodsOption = pods.length > 1 && selector
         ? `<option value="__all__">All pods (${pods.length})</option>`
         : '';
-    select.innerHTML = allPodsOption + pods.map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+    select.innerHTML = pods.map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('') + allPodsOption;
 
     window.kubeDashboard.offLogListeners();
     window.kubeDashboard.onLogLine((line) => appendLogLine(line, output));
