@@ -438,14 +438,16 @@ async function searchLogs({ context, namespace, podName, selector, sinceTime, un
     const ctxArgs = context ? ['--context', context] : [];
     const sinceArgs = sinceTime ? ['--since-time', sinceTime] : [];
     const targetArgs = selector
-        ? ['--selector', selector, '--prefix', '--max-log-requests=20']
+        ? ['--selector', selector, '--prefix', '--max-log-requests=20', '--tail=-1']
         : [podName];
     const args = [...ctxArgs, '--namespace', namespace, 'logs', '--timestamps', ...sinceArgs, ...targetArgs];
     return new Promise((resolve, reject) => {
-        execFile(kPath, args, { env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() }, maxBuffer: 50 * 1024 * 1024 }, (err, stdout) => {
-            if (err && !stdout) { return reject(err); }
+        execFile(kPath, args, { env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() }, maxBuffer: 50 * 1024 * 1024 }, (err, stdout, stderr) => {
+            if (err) { console.error('[searchLogs] kubectl error:', err.message, stderr); }
+            const out = stdout || (err && err.stdout) || '';
+            if (!out && err) { return reject(err); }
             const untilMs = untilTime ? new Date(untilTime).getTime() : null;
-            const lines = stdout.split('\n').filter(Boolean)
+            const lines = out.split('\n').filter(Boolean)
                 .filter((line) => {
                     if (!untilMs || Number.isNaN(untilMs)) { return true; }
                     const lineMs = getLogLineTimestamp(line);

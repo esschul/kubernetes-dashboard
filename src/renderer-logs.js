@@ -3,6 +3,7 @@
 
 // Log modal state
 const LOG_MAX_LINES = 500;
+const LOG_SEARCH_MAX_LINES = 5000;
 const LOG_RATE_WINDOW_MS = 10_000;
 const LOG_RATE_GAUGE_MAX = 100;
 let logBuffer = [];
@@ -109,7 +110,8 @@ function appendLogLine(raw, output, options = {}) {
         el.classList.toggle('log-line--hidden', !logLineMatchesFilter(raw, getLiveFilter()));
     }
     output.appendChild(el);
-    if (output.children.length > LOG_MAX_LINES) { output.removeChild(output.firstChild); }
+    const domLimit = countRate ? LOG_MAX_LINES : LOG_SEARCH_MAX_LINES;
+    if (output.children.length > domLimit) { output.removeChild(output.firstChild); }
     if (logAutoScroll) { output.scrollTop = output.scrollHeight; }
 
     const needle = getNetFilter();
@@ -124,6 +126,29 @@ function closeLogsModal() {
 }
 
 let logsModalContext = null;
+
+function applyHighlight() {
+    const pattern = document.getElementById('logsHighlightInput')?.value.trim();
+    document.querySelectorAll('#logsOutput .log-line .log-msg').forEach((el) => {
+        const text = el.dataset.text || el.textContent;
+        el.dataset.text = text;
+        if (!pattern) { el.textContent = text; return; }
+        let rx;
+        try { rx = new RegExp(pattern, 'gi'); } catch { el.textContent = text; return; }
+        el.innerHTML = '';
+        let last = 0;
+        let m;
+        while ((m = rx.exec(text)) !== null) {
+            if (m.index > last) { el.appendChild(document.createTextNode(text.slice(last, m.index))); }
+            const mark = document.createElement('mark');
+            mark.textContent = m[0];
+            el.appendChild(mark);
+            last = rx.lastIndex;
+            if (m[0].length === 0) { rx.lastIndex++; }
+        }
+        if (last < text.length) { el.appendChild(document.createTextNode(text.slice(last))); }
+    });
+}
 
 function setLogsMode(mode) {
     const isLive = mode === 'live';
@@ -197,19 +222,13 @@ function openLogsModal({ depName, pods, podObjects, context, namespace, selector
     searchSelect.innerHTML = podOptionHtml;
     if (selector && pods.length > 1) { searchSelect.value = '__all__'; }
 
-    // Set min datetime on search picker to oldest pod start time
     const fromInput = document.getElementById('logsSearchFrom');
     const toInput = document.getElementById('logsSearchTo');
     if (fromInput && podObjects && podObjects.length > 0) {
-        const oldest = podObjects
-            .map((p) => p.startTime)
-            .filter(Boolean)
-            .sort()[0];
-        if (oldest) {
-            fromInput.min = getLocalDatetimeValue(new Date(oldest));
-            fromInput.value = getLocalDatetimeValue(new Date(oldest));
-        }
+        const oldest = podObjects.map((p) => p.startTime).filter(Boolean).sort()[0];
+        if (oldest) { fromInput.min = getLocalDatetimeValue(new Date(oldest)); }
     }
+    if (fromInput) { fromInput.value = getLocalDatetimeValue(new Date(Date.now() - 30 * 60 * 1000)); }
     if (toInput) { toInput.value = getLocalDatetimeValue(); }
 
     window.kubeDashboard.offLogListeners();
@@ -239,6 +258,7 @@ function openLogsModal({ depName, pods, podObjects, context, namespace, selector
 
 function bindLogEventListeners() {
     document.getElementById('logsTabLive')?.addEventListener('click', () => {
+        if (document.getElementById('logsTabLive').classList.contains('is-active')) { return; }
         setLogsMode('live');
         if (logsModalContext) {
             const { context, namespace, selector } = logsModalContext;
@@ -260,6 +280,7 @@ function bindLogEventListeners() {
     });
 
     document.getElementById('logsTabSearch')?.addEventListener('click', () => {
+        if (document.getElementById('logsTabSearch').classList.contains('is-active')) { return; }
         window.kubeDashboard.stopLogStream();
         stopLogRateTimer();
         logBuffer = [];
@@ -286,6 +307,8 @@ function bindLogEventListeners() {
         btn.textContent = 'Searching…';
         output.textContent = '';
         logBuffer = [];
+        const highlightInput = document.getElementById('logsHighlightInput');
+        if (highlightInput) { highlightInput.value = ''; }
 
         try {
             const lines = await window.kubeDashboard.searchLogs({
@@ -300,6 +323,10 @@ function bindLogEventListeners() {
                 appendLogLine('[no results]', output, { countRate: false, applyLiveFilter: false });
             } else {
                 for (const line of lines) { appendLogLine(line, output, { countRate: false, applyLiveFilter: false }); }
+                if (lines.length >= LOG_SEARCH_MAX_LINES) {
+                    appendLogLine(`[truncated — showing first ${LOG_SEARCH_MAX_LINES} of ${lines.length} lines]`, output, { countRate: false, applyLiveFilter: false });
+                }
+                applyHighlight();
             }
         } catch (err) {
             appendLogLine(`[error] ${err.message}`, output, { countRate: false, applyLiveFilter: false });
@@ -311,6 +338,28 @@ function bindLogEventListeners() {
 
     document.getElementById('logsSearchInput')?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { document.getElementById('logsSearchBtn')?.click(); }
+    });
+
+    document.getElementById('logsHighlightInput')?.addEventListener('input', () => {
+        applyHighlight();
+    });
+
+    document.getElementById('logsCopyMatchesBtn')?.addEventListener('click', () => {
+        const pattern = document.getElementById('logsHighlightInput')?.value.trim();
+        if (!pattern) { return; }
+        let rx;
+        try { rx = new RegExp(pattern, 'gi'); } catch { return; }
+        const matches = [];
+        document.querySelectorAll('#logsOutput .log-line:not(.log-line--hidden) .log-msg').forEach((el) => {
+            const found = el.dataset.text?.match(rx) || [];
+            matches.push(...found);
+        });
+        if (matches.length > 0) {
+            navigator.clipboard.writeText(matches.join('\n'));
+            const btn = document.getElementById('logsCopyMatchesBtn');
+            btn.textContent = `Copied ${matches.length}`;
+            setTimeout(() => { btn.textContent = 'Copy matches'; }, 1500);
+        }
     });
     document.getElementById('logsLiveFilterInput')?.addEventListener('input', () => {
         refreshLiveLogLines();

@@ -2358,10 +2358,10 @@ input, select {
     color: #e6edf3;
 }
 
-.logs-live-selects {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 6px;
+.logs-search-panel {
+    padding: 8px 12px;
+    border-bottom: 1px solid #30363d;
+    background: #0d1117;
 }
 
 .logs-search-row {
@@ -2387,6 +2387,7 @@ input, select {
     flex-shrink: 0;
 }
 .logs-search-since:focus { border-color: #e6edf3; }
+.logs-search-since::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
 .logs-search-term {
     flex: 1;
     background: #161b22;
@@ -2413,6 +2414,15 @@ input, select {
 }
 .logs-search-btn:hover { background: #30363d; }
 .logs-search-btn:disabled { opacity: 0.5; cursor: default; }
+
+#logsHighlightRow { margin-top: 2px; }
+
+#logsOutput mark {
+    background: #b45309;
+    color: #fff;
+    border-radius: 2px;
+    padding: 0 1px;
+}
 
 #logsSearchControls { padding-bottom: 4px; }
 .logs-modal-title-row .modal-title { color: #e6edf3; white-space: nowrap; }
