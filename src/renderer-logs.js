@@ -12,9 +12,127 @@ let logAutoScroll = true;
 let logLineTimestamps = [];
 let logPeakRate = 0;
 let logRateTimer = null;
+let pendingRegexSelection = '';
+let logStreamPaused = false;
+
+function escapeRegexLiteral(text) {
+    return String(text).replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
+}
+
+function consumeRegexPattern(text, index) {
+    const rest = text.slice(index);
+    const patterns = [
+        [/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?/, '\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z?'],
+        [/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b/i, '[a-f0-9-]{36}'],
+        [/^\s+/, '\\s+'],
+        [/^[a-f0-9]{7,}\b/i, '[a-f0-9]+'],
+        [/^(?=[a-z0-9]*[a-z])(?=[a-z0-9]*\d)[a-z0-9]+\b/i, '[a-z0-9]+'],
+        [/^\d+/, '\\d+'],
+    ];
+    for (const [rx, replacement] of patterns) {
+        const match = rest.match(rx);
+        if (match) { return { pattern: replacement, length: match[0].length }; }
+    }
+    return { pattern: escapeRegexLiteral(text[index]), length: 1 };
+}
+
+function generateRegexFromSelection(text) {
+    const selected = String(text || '').trim();
+    if (!selected) { return ''; }
+    let regex = '';
+    for (let index = 0; index < selected.length;) {
+        const token = consumeRegexPattern(selected, index);
+        regex += token.pattern;
+        index += token.length;
+    }
+    return regex;
+}
+
+function getActiveHighlightInput() {
+    const isLive = document.getElementById('logsTabLive')?.classList?.contains('is-active');
+    return document.getElementById(isLive ? 'logsLiveHighlightInput' : 'logsHighlightInput');
+}
+
+function getActiveHighlightError() {
+    const isLive = document.getElementById('logsTabLive')?.classList?.contains('is-active');
+    return document.getElementById(isLive ? 'logsLiveHighlightError' : 'logsHighlightError');
+}
+
+function setHighlightError(message = '') {
+    const input = getActiveHighlightInput();
+    const error = getActiveHighlightError();
+    input?.classList.toggle('is-invalid', Boolean(message));
+    if (!error) { return; }
+    error.textContent = message;
+    error.classList.toggle('hidden', !message);
+}
+
+function buildHighlightRegex() {
+    const pattern = getHighlightPattern();
+    if (!pattern) {
+        setHighlightError('');
+        return null;
+    }
+    try {
+        const rx = new RegExp(pattern, 'gi');
+        setHighlightError('');
+        return rx;
+    } catch (err) {
+        setHighlightError(err.message || 'Invalid regex');
+        return null;
+    }
+}
 
 function getNetFilter() {
-    return document.getElementById('logsNetInput')?.value.trim().toLowerCase() || '';
+    return document.getElementById('logsNetInput')?.value.trim() || '';
+}
+
+function getCatchMode() {
+    return document.querySelector('#logsCatchMode .logs-catch-mode-btn.is-active')?.dataset.mode || 'text';
+}
+
+function setCatchError(message = '') {
+    const input = document.getElementById('logsNetInput');
+    const error = document.getElementById('logsCatchError');
+    input?.classList.toggle('is-invalid', Boolean(message));
+    if (!error) { return; }
+    error.textContent = message;
+    error.classList.toggle('hidden', !message);
+}
+
+function buildCatchExtractor() {
+    const filter = getNetFilter();
+    if (!filter) {
+        setCatchError('');
+        return null;
+    }
+    if (getCatchMode() === 'regex') {
+        try {
+            const rx = new RegExp(filter, 'gi');
+            setCatchError('');
+            return (text) => {
+                const values = [];
+                rx.lastIndex = 0;
+                let match;
+                while ((match = rx.exec(text)) !== null) {
+                    values.push(match[0]);
+                    if (match[0].length === 0) { rx.lastIndex++; }
+                }
+                return values;
+            };
+        } catch (err) {
+            setCatchError(err.message || 'Invalid regex');
+            return null;
+        }
+    }
+    setCatchError('');
+    const needle = filter.toLowerCase();
+    return (text) => (text.toLowerCase().includes(needle) ? [text.trim()] : []);
+}
+
+function buildCatchMatcher() {
+    const extractor = buildCatchExtractor();
+    return extractor ? (text) => extractor(text).length > 0 : null;
 }
 
 function getLiveFilter() {
@@ -24,8 +142,11 @@ function getLiveFilter() {
 function renderCaughtLogLines() {
     const netOutput = document.getElementById('logsNetOutput');
     if (!netOutput) { return; }
-    const needle = getNetFilter();
-    if (!needle) { netOutput.value = ''; return; }
+    if (!getNetFilter()) {
+        setCatchError('');
+        netOutput.value = '';
+        return;
+    }
     netOutput.value = caughtBuffer.join('\n');
     netOutput.scrollTop = netOutput.scrollHeight;
 }
@@ -38,9 +159,7 @@ function refreshLiveLogLines() {
 }
 
 function getHighlightPattern() {
-    const isLive = document.getElementById('logsTabLive')?.classList?.contains('is-active');
-    const inputId = isLive ? 'logsLiveHighlightInput' : 'logsHighlightInput';
-    return document.getElementById(inputId)?.value.trim() || '';
+    return getActiveHighlightInput()?.value.trim() || '';
 }
 
 function pruneLogRateTimestamps(now = Date.now()) {
@@ -77,6 +196,13 @@ function resetLogRateGauge() {
 function startLogRateTimer() {
     stopLogRateTimer();
     logRateTimer = setInterval(updateLogRateGauge, 500);
+}
+
+function updatePauseButton() {
+    const btn = document.getElementById('logsPauseBtn');
+    if (!btn) { return; }
+    btn.textContent = logStreamPaused ? 'Resume' : 'Pause';
+    btn.classList.toggle('is-active', logStreamPaused);
 }
 
 function stopLogRateTimer() {
@@ -189,27 +315,23 @@ function appendLogLine(raw, output, options = {}) {
     if (applyLiveFilter) {
         el.classList.toggle('log-line--hidden', !logLineMatchesFilter(raw, getLiveFilter()));
     }
-    const pattern = getHighlightPattern();
-    if (pattern) {
+    const highlightRx = buildHighlightRegex();
+    if (highlightRx) {
         const msgEl = el.querySelector('.log-msg');
         if (msgEl) {
             const text = msgEl.textContent;
             msgEl.dataset.text = text;
-            let rx;
-            try { rx = new RegExp(pattern, 'gi'); } catch { /* invalid regex, skip */ }
-            if (rx) {
-                msgEl.innerHTML = '';
-                let last = 0; let m;
-                while ((m = rx.exec(text)) !== null) {
-                    if (m.index > last) { msgEl.appendChild(document.createTextNode(text.slice(last, m.index))); }
-                    const mark = document.createElement('mark');
-                    mark.textContent = m[0];
-                    msgEl.appendChild(mark);
-                    last = rx.lastIndex;
-                    if (m[0].length === 0) { rx.lastIndex++; }
-                }
-                if (last < text.length) { msgEl.appendChild(document.createTextNode(text.slice(last))); }
+            msgEl.innerHTML = '';
+            let last = 0; let m;
+            while ((m = highlightRx.exec(text)) !== null) {
+                if (m.index > last) { msgEl.appendChild(document.createTextNode(text.slice(last, m.index))); }
+                const mark = document.createElement('mark');
+                mark.textContent = m[0];
+                msgEl.appendChild(mark);
+                last = highlightRx.lastIndex;
+                if (m[0].length === 0) { highlightRx.lastIndex++; }
             }
+            if (last < text.length) { msgEl.appendChild(document.createTextNode(text.slice(last))); }
         }
     }
     output.appendChild(el);
@@ -217,10 +339,10 @@ function appendLogLine(raw, output, options = {}) {
     if (output.children.length > domLimit) { output.removeChild(output.firstChild); }
     if (logAutoScroll) { output.scrollTop = output.scrollHeight; }
 
-    const needle = getNetFilter();
+    const catchExtractor = buildCatchExtractor();
     const msgText = el.querySelector('.log-msg')?.dataset.text || el.querySelector('.log-msg')?.textContent || '';
-    if (applyLiveFilter && needle && !el.classList.contains('log-line--hidden') && msgText.toLowerCase().includes(needle)) {
-        caughtBuffer.push(msgText.trim());
+    if (applyLiveFilter && catchExtractor && !el.classList.contains('log-line--hidden')) {
+        caughtBuffer.push(...catchExtractor(msgText));
         renderCaughtLogLines();
     }
 }
@@ -230,19 +352,20 @@ function closeLogsModal() {
     window.kubeDashboard.offLogListeners();
     stopLogRateTimer();
     caughtBuffer = [];
+    logStreamPaused = false;
+    updatePauseButton();
     document.getElementById('logsModal').close();
 }
 
 let logsModalContext = null;
 
 function applyHighlight() {
-    const pattern = getHighlightPattern();
+    const rx = buildHighlightRegex();
     document.querySelectorAll('#logsOutput .log-line .log-msg').forEach((el) => {
         const text = el.dataset.text || el.textContent;
         el.dataset.text = text;
-        if (!pattern) { el.textContent = text; return; }
-        let rx;
-        try { rx = new RegExp(pattern, 'gi'); } catch { el.textContent = text; return; }
+        if (!rx) { el.textContent = text; return; }
+        rx.lastIndex = 0;
         el.innerHTML = '';
         let last = 0;
         let m;
@@ -258,6 +381,53 @@ function applyHighlight() {
     });
 }
 
+function getLogsRegexMenu() {
+    let menu = document.getElementById('logsRegexMenu');
+    if (menu) { return menu; }
+    const modal = document.getElementById('logsModal');
+    menu = document.createElement('div');
+    menu.id = 'logsRegexMenu';
+    menu.className = 'logs-regex-menu hidden';
+    menu.innerHTML = '<button type="button" id="logsGenerateRegexBtn">Generate regex</button>';
+    (modal || document.body).appendChild(menu);
+    menu.querySelector('button')?.addEventListener('click', () => {
+        const regex = generateRegexFromSelection(pendingRegexSelection);
+        const input = getActiveHighlightInput();
+        if (regex && input) {
+            input.value = regex;
+            input.focus();
+            input.select?.();
+            applyHighlight();
+        }
+        hideLogsRegexMenu();
+    });
+    return menu;
+}
+
+function hideLogsRegexMenu() {
+    document.getElementById('logsRegexMenu')?.classList.add('hidden');
+    pendingRegexSelection = '';
+}
+
+function showLogsRegexMenu(event) {
+    const output = document.getElementById('logsOutput');
+    const selection = window.getSelection?.();
+    const selected = selection?.toString().trim() || '';
+    const targetIsInOutput = output && (event.target === output || output.contains(event.target));
+    if (!selected || !targetIsInOutput) {
+        hideLogsRegexMenu();
+        return;
+    }
+    event.preventDefault();
+    pendingRegexSelection = selected;
+    const menu = getLogsRegexMenu();
+    menu.classList.remove('hidden');
+    const left = Math.min(event.clientX, window.innerWidth - 180);
+    const top = Math.min(event.clientY, window.innerHeight - 44);
+    menu.style.left = `${Math.max(8, left)}px`;
+    menu.style.top = `${Math.max(8, top)}px`;
+}
+
 function setLogsMode(mode) {
     const isLive = mode === 'live';
     const isSearch = mode === 'search';
@@ -265,6 +435,7 @@ function setLogsMode(mode) {
     document.getElementById('logsTabSearch').classList.toggle('is-active', isSearch);
     document.getElementById('logsLiveControls').classList.toggle('hidden', !isLive);
     document.getElementById('logsSearchControls').classList.toggle('hidden', !isSearch);
+    document.getElementById('logsPauseBtn')?.classList.toggle('hidden', !isLive);
     applyHighlight();
     const net = document.getElementById('logsNet');
     const divider = document.getElementById('logsNetDivider');
@@ -284,22 +455,40 @@ function buildPodOptions(pods, selector) {
     return pods.map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('') + allPodsOption;
 }
 
-function startLogsLiveStream(context, namespace, selector) {
+function startLogsLiveStream(context, namespace, selector, options = {}) {
+    const { preserveOutput = false } = options;
     const select = document.getElementById('logsPodSelect');
     const output = document.getElementById('logsOutput');
     const isAll = select.value === '__all__';
-    logBuffer = [];
-    caughtBuffer = [];
+    if (!preserveOutput) {
+        logBuffer = [];
+        caughtBuffer = [];
+    }
+    logStreamPaused = false;
     resetLogRateGauge();
     startLogRateTimer();
-    if (output) { output.textContent = ''; }
-    document.getElementById('logsNetOutput').value = '';
+    if (output && !preserveOutput) { output.textContent = ''; }
+    if (!preserveOutput) { document.getElementById('logsNetOutput').value = ''; }
+    updatePauseButton();
     window.kubeDashboard.stopLogStream();
     window.kubeDashboard.startLogStream({
         context, namespace,
         podName: isAll ? null : select.value,
         selector: isAll ? selector : null,
     });
+}
+
+function pauseLogsLiveStream() {
+    logStreamPaused = true;
+    window.kubeDashboard.stopLogStream();
+    stopLogRateTimer();
+    updatePauseButton();
+}
+
+function resumeLogsLiveStream() {
+    if (!logsModalContext) { return; }
+    const { context, namespace, selector } = logsModalContext;
+    startLogsLiveStream(context, namespace, selector, { preserveOutput: true });
 }
 
 function openLogsModal({ depName, pods, podObjects, context, namespace, selector, initialMode = 'search' }) {
@@ -329,6 +518,13 @@ function openLogsModal({ depName, pods, podObjects, context, namespace, selector
     document.getElementById('logsSearchInput').value = '';
     document.getElementById('logsNetInput').value = '';
     document.getElementById('logsNetOutput').value = '';
+    logStreamPaused = false;
+    updatePauseButton();
+    setHighlightError('');
+    setCatchError('');
+    document.querySelectorAll('#logsCatchMode .logs-catch-mode-btn').forEach((btn) => {
+        btn.classList.toggle('is-active', btn.dataset.mode === 'text');
+    });
 
     window.kubeDashboard.stopLogStream();
     window.kubeDashboard.offLogListeners();
@@ -363,7 +559,9 @@ function openLogsModal({ depName, pods, podObjects, context, namespace, selector
     window.kubeDashboard.offLogListeners();
     window.kubeDashboard.onLogLine((line) => appendLogLine(line, output));
     window.kubeDashboard.onLogError((msg) => appendLogLine(`[error] ${msg}`, output, { countRate: false, applyLiveFilter: false }));
-    window.kubeDashboard.onLogClosed(() => appendLogLine('[stream closed]', output, { countRate: false, applyLiveFilter: false }));
+    window.kubeDashboard.onLogClosed(() => {
+        if (!logStreamPaused) { appendLogLine('[stream closed]', output, { countRate: false, applyLiveFilter: false }); }
+    });
 
     select.onchange = () => {
         window.kubeDashboard.stopLogStream();
@@ -390,6 +588,8 @@ function bindLogEventListeners() {
         stopLogRateTimer();
         logBuffer = [];
         caughtBuffer = [];
+        logStreamPaused = false;
+        updatePauseButton();
         document.getElementById('logsOutput').textContent = '';
         setLogsMode('search');
     });
@@ -408,6 +608,7 @@ function bindLogEventListeners() {
         const sinceTime = fromInput.value ? new Date(fromInput.value).toISOString() : null;
         const untilTime = toInput.value ? new Date(toInput.value).toISOString() : null;
         const searchTerm = termInput.value.trim();
+        const searchIsRegex = document.querySelector('#logsSearchMode .logs-catch-mode-btn.is-active')?.dataset.mode === 'regex';
         const maxLines = parseInt(document.getElementById('logsSearchLimit')?.value || '2000', 10);
 
         btn.disabled = true;
@@ -415,6 +616,7 @@ function bindLogEventListeners() {
         logBuffer = [];
         const highlightInput = document.getElementById('logsHighlightInput');
         if (highlightInput) { highlightInput.value = ''; }
+        setHighlightError('');
 
         const progressEl = document.getElementById('logsSearchProgress');
         const progressText = document.getElementById('logsSearchProgressText');
@@ -440,6 +642,7 @@ function bindLogEventListeners() {
                 sinceTime,
                 untilTime,
                 searchTerm,
+                searchIsRegex,
                 maxLines,
             });
             window.kubeDashboard.offSearchProgress?.();
@@ -483,13 +686,17 @@ function bindLogEventListeners() {
         applyHighlight();
     });
 
+    document.getElementById('logsPauseBtn')?.addEventListener('click', () => {
+        if (logStreamPaused) { resumeLogsLiveStream(); }
+        else { pauseLogsLiveStream(); }
+    });
+
     document.getElementById('logsCopyMatchesBtn')?.addEventListener('click', () => {
-        const pattern = document.getElementById('logsHighlightInput')?.value.trim();
-        if (!pattern) { return; }
-        let rx;
-        try { rx = new RegExp(pattern, 'gi'); } catch { return; }
+        const rx = buildHighlightRegex();
+        if (!rx) { return; }
         const matches = [];
         document.querySelectorAll('#logsOutput .log-line:not(.log-line--hidden) .log-msg').forEach((el) => {
+            rx.lastIndex = 0;
             const found = el.dataset.text?.match(rx) || [];
             matches.push(...found);
         });
@@ -507,10 +714,30 @@ function bindLogEventListeners() {
     document.getElementById('logsOutput')?.addEventListener('scroll', (e) => {
         const output = e.currentTarget;
         logAutoScroll = output.scrollTop + output.clientHeight >= output.scrollHeight - 20;
+        hideLogsRegexMenu();
+    });
+    document.addEventListener('contextmenu', showLogsRegexMenu, true);
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest?.('#logsRegexMenu')) { hideLogsRegexMenu(); }
     });
     document.getElementById('logsNetInput')?.addEventListener('input', () => {
         caughtBuffer = [];
+        buildCatchMatcher();
         renderCaughtLogLines();
+    });
+    document.getElementById('logsSearchMode')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.logs-catch-mode-btn[data-mode]');
+        if (!btn) { return; }
+        document.querySelectorAll('#logsSearchMode .logs-catch-mode-btn').forEach((item) => item.classList.toggle('is-active', item === btn));
+    });
+    document.getElementById('logsCatchMode')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.logs-catch-mode-btn[data-mode]');
+        if (!btn) { return; }
+        document.querySelectorAll('#logsCatchMode .logs-catch-mode-btn').forEach((item) => item.classList.toggle('is-active', item === btn));
+        caughtBuffer = [];
+        buildCatchMatcher();
+        renderCaughtLogLines();
+        document.getElementById('logsNetInput')?.focus();
     });
     document.getElementById('logsNetClear')?.addEventListener('click', () => {
         caughtBuffer = [];
@@ -583,5 +810,8 @@ if (typeof module !== 'undefined') {
         renderCaughtLogLines,
         refreshLiveLogLines,
         formatLogContent,
+        generateRegexFromSelection,
+        buildCatchExtractor,
+        buildCatchMatcher,
     };
 }

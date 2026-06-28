@@ -373,6 +373,7 @@ az login</pre>
                 <button class="logs-mode-tab" id="logsTabLive">Live</button>
                 <button class="logs-mode-tab is-active" id="logsTabSearch">Search</button>
             </div>
+            <button class="logs-pause-btn hidden" id="logsPauseBtn" type="button">Pause</button>
         </div>
 
         <div class="logs-modal-actions">
@@ -395,7 +396,13 @@ az login</pre>
                 <input class="logs-search-term" id="logsLiveFilterInput" type="text" placeholder="Filter lines…" />
                 <input class="logs-search-term" id="logsLiveHighlightInput" type="text" placeholder="Highlight regex…" />
                 <input class="logs-search-term" id="logsNetInput" type="text" placeholder="Catch matching lines…" />
+                <div class="logs-catch-mode" id="logsCatchMode">
+                    <button class="logs-catch-mode-btn is-active" type="button" data-mode="text">Text</button>
+                    <button class="logs-catch-mode-btn" type="button" data-mode="regex">Regex</button>
+                </div>
             </div>
+            <div class="logs-catch-error hidden" id="logsLiveHighlightError"></div>
+            <div class="logs-catch-error hidden" id="logsCatchError"></div>
         </div>
     </div>
     <div id="logsSearchControls" class="logs-search-panel">
@@ -407,6 +414,10 @@ az login</pre>
             </div>
             <div class="logs-search-row-bottom">
                 <input class="logs-search-term" id="logsSearchInput" type="text" placeholder="Search logs…" />
+                <div class="logs-catch-mode" id="logsSearchMode">
+                    <button class="logs-catch-mode-btn is-active" type="button" data-mode="text">Text</button>
+                    <button class="logs-catch-mode-btn" type="button" data-mode="regex">Regex</button>
+                </div>
                 <select class="logs-format-select" id="logsFormatSelect" title="Log format">
                     <option value="raw">Raw</option>
                     <option value="message">App message</option>
@@ -425,6 +436,7 @@ az login</pre>
                 <input class="logs-search-term" id="logsHighlightInput" type="text" placeholder="Highlight regex…" />
                 <button class="logs-search-btn" id="logsCopyMatchesBtn">Copy matches</button>
             </div>
+            <div class="logs-catch-error hidden" id="logsHighlightError"></div>
             <div class="logs-search-progress" id="logsSearchProgress" style="display:none">
                 <span id="logsSearchProgressText"></span>
                 <button class="logs-search-cancel-btn" id="logsSearchCancelBtn">Cancel</button>

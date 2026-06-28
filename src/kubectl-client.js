@@ -435,7 +435,7 @@ function getLogLineTimestamp(line) {
 let activeSearchProc = null;
 function cancelSearch() { try { activeSearchProc?.kill(); } catch { /* ignore */ } activeSearchProc = null; }
 
-async function searchLogs({ context, namespace, podName, selector, sinceTime, untilTime, searchTerm, maxLines, kubectlPath, onProgress }) {
+async function searchLogs({ context, namespace, podName, selector, sinceTime, untilTime, searchTerm, searchIsRegex, maxLines, kubectlPath, onProgress }) {
     const { spawn } = require('node:child_process');
     const kPath = kubectlPath || resolveCommand('kubectl', 'KUBECTL_PATH');
     const ctxArgs = context ? ['--context', context] : [];
@@ -448,7 +448,8 @@ async function searchLogs({ context, namespace, podName, selector, sinceTime, un
     const args = [...ctxArgs, '--namespace', namespace, 'logs', '--timestamps', ...sinceArgs, ...targetArgs];
     const limit = maxLines || 0;
     const untilMs = untilTime ? new Date(untilTime).getTime() : null;
-    const termLower = searchTerm ? searchTerm.toLowerCase() : null;
+    const termLower = (searchTerm && !searchIsRegex) ? searchTerm.toLowerCase() : null;
+    const termRegex = (searchTerm && searchIsRegex) ? (() => { try { return new RegExp(searchTerm, 'i'); } catch { return null; } })() : null;
 
     return new Promise((resolve, reject) => {
         const proc = spawn(kPath, args, { env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() } });
@@ -468,6 +469,7 @@ async function searchLogs({ context, namespace, podName, selector, sinceTime, un
                 if (lineMs !== null && lineMs > untilMs) { return false; }
             }
             if (termLower && !line.toLowerCase().includes(termLower)) { return false; }
+            if (termRegex && !termRegex.test(line)) { return false; }
             results.push(line);
             return limit && results.length >= limit;
         };
