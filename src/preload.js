@@ -86,6 +86,7 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
     onSettingsImport: (cb) => ipcRenderer.on('settings:import', (_e, config) => cb(config)),
     onScreenshotCopied: (cb) => ipcRenderer.on('screenshot:copied', () => cb()),
     onScreenshotFailed: (cb) => ipcRenderer.on('screenshot:failed', (_e, message) => cb(message)),
+    onQuickOpenLogs: (cb) => ipcRenderer.on('logs:quickOpen', () => cb()),
     openExternal: (url) => ipcRenderer.invoke('external:open', url),
     requestNotificationPermission: () => ipcRenderer.invoke('notifications:requestPermission'),
     searchLogs: async (config) => {
@@ -95,6 +96,9 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
     },
     startLogStream: (config) => ipcRenderer.invoke('logs:start', config),
     stopLogStream: () => ipcRenderer.invoke('logs:stop'),
+    onSearchProgress: (cb) => ipcRenderer.on('logs:search:progress', (_e, p) => cb(p)),
+    offSearchProgress: () => ipcRenderer.removeAllListeners('logs:search:progress'),
+    cancelSearch: () => ipcRenderer.invoke('logs:search:cancel'),
     onLogLine: (cb) => ipcRenderer.on('logs:line', (_e, line) => cb(line)),
     onLogError: (cb) => ipcRenderer.on('logs:error', (_e, msg) => cb(msg)),
     onLogClosed: (cb) => ipcRenderer.on('logs:closed', () => cb()),

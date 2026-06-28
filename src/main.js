@@ -23,7 +23,7 @@ const { autoUpdater } = require('electron-updater');
 
 let buildDate = null;
 try { buildDate = require('./build-info.json').date; } catch { /* not available in dev */ }
-const { fetchDeployments, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs } = require('./kubectl-client');
+const { fetchDeployments, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs, cancelSearch } = require('./kubectl-client');
 const { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr } = require('./github-client');
 const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, rerunFailedJobs } = require('./azure-client');
 const { fetchPullRequests, clearPrListCache } = require('./pr-client');
@@ -253,9 +253,13 @@ app.whenReady().then(() => {
         });
     }
 
-    ipcMain.handle('logs:search', async (_event, config) => {
+    ipcMain.handle('logs:search:cancel', () => { cancelSearch(); });
+    ipcMain.handle('logs:search', async (event, config) => {
         try {
-            const result = await searchLogs(config);
+            const result = await searchLogs({
+                ...config,
+                onProgress: (p) => { event.sender.send('logs:search:progress', p); },
+            });
             return { ok: true, result };
         } catch (err) {
             return { ok: false, error: { message: err.message } };
@@ -328,6 +332,14 @@ app.whenReady().then(() => {
                         } catch (err) {
                             win.webContents.send('screenshot:failed', err.message || 'Could not capture screenshot.');
                         }
+                    },
+                },
+                {
+                    label: 'Open Logs…',
+                    accelerator: 'CmdOrCtrl+L',
+                    click: () => {
+                        const win = BrowserWindow.getFocusedWindow();
+                        if (win) { win.webContents.send('logs:quickOpen'); }
                     },
                 },
                 { type: 'separator' },

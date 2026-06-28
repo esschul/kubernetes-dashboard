@@ -432,33 +432,74 @@ function getLogLineTimestamp(line) {
     return Number.isNaN(time) ? null : time;
 }
 
-async function searchLogs({ context, namespace, podName, selector, sinceTime, untilTime, searchTerm, kubectlPath }) {
-    const { execFile } = require('node:child_process');
+let activeSearchProc = null;
+function cancelSearch() { try { activeSearchProc?.kill(); } catch { /* ignore */ } activeSearchProc = null; }
+
+async function searchLogs({ context, namespace, podName, selector, sinceTime, untilTime, searchTerm, maxLines, kubectlPath, onProgress }) {
+    const { spawn } = require('node:child_process');
     const kPath = kubectlPath || resolveCommand('kubectl', 'KUBECTL_PATH');
     const ctxArgs = context ? ['--context', context] : [];
     const sinceArgs = sinceTime ? ['--since-time', sinceTime] : [];
+    const singleTailArgs = sinceTime ? [] : [`--tail=${maxLines || 2000}`];
+    const selectorTailArgs = sinceTime ? ['--tail=-1'] : [`--tail=${maxLines || 2000}`];
     const targetArgs = selector
-        ? ['--selector', selector, '--prefix', '--max-log-requests=20', '--tail=-1']
-        : [podName];
+        ? ['--selector', selector, '--prefix', '--max-log-requests=20', ...selectorTailArgs]
+        : [podName, ...singleTailArgs];
     const args = [...ctxArgs, '--namespace', namespace, 'logs', '--timestamps', ...sinceArgs, ...targetArgs];
+    const limit = maxLines || 0;
+    const untilMs = untilTime ? new Date(untilTime).getTime() : null;
+    const termLower = searchTerm ? searchTerm.toLowerCase() : null;
+
     return new Promise((resolve, reject) => {
-        execFile(kPath, args, { env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() }, maxBuffer: 50 * 1024 * 1024 }, (err, stdout, stderr) => {
-            if (err) { console.error('[searchLogs] kubectl error:', err.message, stderr); }
-            const out = stdout || (err && err.stdout) || '';
-            if (!out && err) { return reject(err); }
-            const untilMs = untilTime ? new Date(untilTime).getTime() : null;
-            const lines = out.split('\n').filter(Boolean)
-                .filter((line) => {
-                    if (!untilMs || Number.isNaN(untilMs)) { return true; }
-                    const lineMs = getLogLineTimestamp(line);
-                    return lineMs === null || lineMs <= untilMs;
-                });
-            const filtered = searchTerm
-                ? lines.filter((l) => l.toLowerCase().includes(searchTerm.toLowerCase()))
-                : lines;
-            resolve(filtered);
+        const proc = spawn(kPath, args, { env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() } });
+        activeSearchProc = proc;
+        const results = [];
+        let remainder = '';
+        let stderrBuf = '';
+        let done = false;
+        let scanned = 0;
+        let lastProgress = 0;
+
+        const processLine = (line) => {
+            if (!line) { return false; }
+            scanned++;
+            if (untilMs) {
+                const lineMs = getLogLineTimestamp(line);
+                if (lineMs !== null && lineMs > untilMs) { return false; }
+            }
+            if (termLower && !line.toLowerCase().includes(termLower)) { return false; }
+            results.push(line);
+            return limit && results.length >= limit;
+        };
+
+        const finish = () => {
+            if (done) { return; }
+            done = true;
+            try { proc.kill(); } catch { /* ignore */ }
+            if (remainder) { processLine(remainder); }
+            if (onProgress) { onProgress({ scanned, matched: results.length, done: true }); }
+            if (results.length === 0 && stderrBuf) { console.error('[searchLogs] no results, stderr:', stderrBuf); }
+            resolve(results);
+        };
+
+        proc.stdout.on('data', (chunk) => {
+            if (done) { return; }
+            const text = remainder + chunk.toString();
+            const lines = text.split('\n');
+            remainder = lines.pop();
+            for (const line of lines) {
+                if (processLine(line)) { finish(); return; }
+            }
+            if (onProgress && scanned - lastProgress >= 500) {
+                lastProgress = scanned;
+                onProgress({ scanned, matched: results.length, done: false });
+            }
         });
+
+        proc.stderr.on('data', (chunk) => { stderrBuf += chunk.toString(); });
+        proc.on('error', (err) => { if (!done) { done = true; reject(err); } });
+        proc.on('close', () => { finish(); });
     });
 }
 
-module.exports = { fetchDeployments, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs, getLogLineTimestamp };
+module.exports = { fetchDeployments, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs, cancelSearch, getLogLineTimestamp };

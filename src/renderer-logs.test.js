@@ -29,7 +29,7 @@ function makeClassList() {
 }
 
 function makeElement(tagName) {
-    return {
+    const el = {
         tagName,
         children: [],
         dataset: {},
@@ -40,7 +40,12 @@ function makeElement(tagName) {
             this.children.push(child);
             this.textContent += child.textContent || '';
         },
+        querySelector(sel) {
+            const cls = sel.replace('.', '');
+            return this.children.find((c) => c.className && c.className.split(' ').includes(cls)) || null;
+        },
     };
+    return el;
 }
 
 function makeOutput() {
@@ -76,7 +81,7 @@ global.document = {
     removeEventListener: () => {},
 };
 
-const { appendLogLine } = require('./renderer-logs');
+const { appendLogLine, formatLogContent } = require('./renderer-logs');
 
 console.log('\nrenderer live logs');
 
@@ -104,4 +109,75 @@ test('live log append applies the live filter when streaming', () => {
     assert.equal(output.children[0].classList.contains('log-line--hidden'), true);
     assert.equal(output.children[1].classList.contains('log-line--hidden'), false);
     elements.logsLiveFilterInput.value = '';
+});
+
+// ── formatLogContent ──────────────────────────────────────────────────────────
+console.log('\nformatLogContent');
+
+const jsonLine = '2026-06-25T12:00:00.000Z {"message":"postal code not found","level":"WARN","timestamp":"2026-06-25T12:00:00Z"}';
+const accessLine = '2026-06-25T12:00:00.000Z 192.168.1.1 - - [25/Jun/2026:12:00:00 +0000] "GET /api/status HTTP/1.1" 200 1234';
+const plainLine = '2026-06-25T12:00:00.000Z No postal code found in cache for 87052 in SE';
+const prefixedJsonLine = '[pod/svc-abc/svc] 2026-06-25T12:00:00.000Z {"message":"hello","level":"INFO"}';
+
+test('raw format returns msg as-is', () => {
+    const { msg, skip } = formatLogContent(plainLine, 'raw');
+    assert.equal(msg, 'No postal code found in cache for 87052 in SE');
+    assert.ok(!skip);
+});
+
+test('message format extracts message field from JSON', () => {
+    const { msg, skip } = formatLogContent(jsonLine, 'message');
+    assert.equal(msg, 'postal code not found');
+    assert.ok(!skip);
+});
+
+test('message format falls back to raw msg when message field is empty', () => {
+    const line = '2026-06-25T12:00:00.000Z {"level":"WARN"}';
+    const { msg } = formatLogContent(line, 'message');
+    assert.ok(msg.includes('{'));
+});
+
+test('message format skips non-JSON lines', () => {
+    const { skip } = formatLogContent(plainLine, 'message');
+    assert.equal(skip, true);
+});
+
+test('app format returns raw JSON string', () => {
+    const { msg, skip } = formatLogContent(jsonLine, 'app');
+    assert.ok(msg.startsWith('{'));
+    assert.ok(!skip);
+});
+
+test('app format skips non-JSON lines', () => {
+    const { skip } = formatLogContent(plainLine, 'app');
+    assert.equal(skip, true);
+});
+
+test('access format shows non-JSON lines', () => {
+    const { msg, skip } = formatLogContent(plainLine, 'access');
+    assert.equal(msg, 'No postal code found in cache for 87052 in SE');
+    assert.ok(!skip);
+});
+
+test('access format skips valid JSON lines', () => {
+    const { skip } = formatLogContent(jsonLine, 'access');
+    assert.equal(skip, true);
+});
+
+test('access format shows lines with invalid JSON (containing {)', () => {
+    const partialJsonLine = '2026-06-25T12:00:00.000Z Error processing {bad json here';
+    const { skip } = formatLogContent(partialJsonLine, 'access');
+    assert.ok(!skip);
+});
+
+test('message format works on selector-prefixed lines', () => {
+    const { msg, skip } = formatLogContent(prefixedJsonLine, 'message');
+    assert.equal(msg, 'hello');
+    assert.ok(!skip);
+});
+
+test('app format works on selector-prefixed lines', () => {
+    const { msg, skip } = formatLogContent(prefixedJsonLine, 'app');
+    assert.ok(msg.startsWith('{'));
+    assert.ok(!skip);
 });

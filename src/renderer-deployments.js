@@ -34,7 +34,8 @@ function renderDeploymentList(deployments) {
     }
 
     const gen = ++renderGeneration;
-    list.innerHTML = filtered.map(renderDeploymentCard).join('');
+    const isGrid = list.classList.contains('is-grid');
+    list.innerHTML = filtered.map(isGrid ? renderGridCard : renderDeploymentCard).join('');
 
     let delay = 0;
     for (const dep of filtered) {
@@ -92,21 +93,34 @@ async function fetchAndInjectPr(dep, gen) {
 }
 
 function injectPrRow(card, pr, sha) {
-    const existing = card.querySelector('.pr-row');
-    if (existing) {
-        existing.innerHTML = renderPrRow(pr, sha);
-        existing.classList.remove('pr-row--loading');
+    const isGrid = card.classList.contains('deployment-card--grid');
+
+    if (isGrid) {
+        const section = card.querySelector('.grid-pr-section');
+        if (section) {
+            const mergedLabel = pr.mergedAt ? formatRelativeTime(pr.mergedAt) : '';
+            const mergedSuffix = mergedLabel ? ` <span class="grid-pr-meta">${escapeHtml(mergedLabel)}</span>` : '';
+            section.classList.remove('pr-row--loading');
+            section.innerHTML = `<span class="grid-pr-intro">Last change was merged by <strong>${escapeHtml(pr.author)}</strong>:${mergedSuffix}</span>
+                <span class="grid-pr-title" data-url="${escapeHtml(pr.url)}">"${escapeHtml(pr.title)}"</span>`;
+        }
     } else {
-        const row = document.createElement('div');
-        row.className = 'pr-row';
-        row.innerHTML = renderPrRow(pr, sha);
-        card.querySelector('.deployment-card-top').insertAdjacentElement('afterend', row);
+        const existing = card.querySelector('.pr-row');
+        if (existing) {
+            existing.innerHTML = renderPrRow(pr, sha);
+            existing.classList.remove('pr-row--loading');
+        } else {
+            const row = document.createElement('div');
+            row.className = 'pr-row';
+            row.innerHTML = renderPrRow(pr, sha);
+            card.querySelector('.deployment-card-top').insertAdjacentElement('afterend', row);
+        }
     }
 
     const placeholder = card.querySelector('.trello-placeholder');
     if (placeholder && pr.trelloUrl) {
         const trello = document.createElement('span');
-        trello.className = 'trello-link';
+        trello.className = isGrid ? 'grid-action-btn grid-action-btn--external trello-link' : 'trello-link';
         trello.dataset.url = pr.trelloUrl;
         trello.textContent = 'Trello ↗';
         placeholder.replaceWith(trello);
@@ -211,10 +225,70 @@ function renderRolloutHistory(rollouts, repoName) {
         return `<div class="rollout-row${r.isCurrent ? ' is-current' : ''}${isLocalBuild ? ' is-local-build' : ''}"${prAttr}>
             ${rev}
             <span class="rollout-time" title="${escapeHtml(time)}">${rel}</span>
-            <span class="rollout-tag" title="${escapeHtml(r.imageTag || '')}">${r.imageTag ? (r.imageTag.startsWith('local-build') ? '<span class="rollout-tag-full">local-build</span><span class="rollout-tag-short">local</span>' : escapeHtml(/^[0-9a-f]{10,}$/i.test(r.imageTag) ? r.imageTag.substring(0, 10) : r.imageTag)) : ''}</span>
-            <span class="rollout-info">${r.isCurrent ? '<span class="rollout-current">current</span>' : ''}${rollbackBtn}${infoContent}</span>
+            <span class="rollout-action">${r.isCurrent ? '<span class="rollout-current">current</span>' : ''}${rollbackBtn}</span>
+            <span class="rollout-pr">${infoContent}</span>
         </div>`;
     }).join('')}</div>`;
+}
+
+function renderGridCard(dep) {
+    const statusClass = dep.status.replace(/[^a-z-]/g, '');
+    const deployedLabel = dep.deployedAt ? formatRelativeTime(dep.deployedAt) : '—';
+    const deployedAbsolute = dep.deployedAt ? new Date(dep.deployedAt).toLocaleString() : '';
+    const datadogUrl = getDatadogLogsUrl(dep.name);
+    const podCount = dep.pods.length;
+    const healthyCount = dep.pods.filter((p) => getPodStatusClass(p.status) === 'pod-status--running').length;
+    const hasHistory = dep.rollouts?.length > 0;
+    const hasDatadog = !!datadogUrl;
+    const imageTag = getImageTag(dep.image);
+    const isLocalBuild = imageTag && imageTag.startsWith('local-build');
+    const hasPr = !isLocalBuild && dep.gitSha && /^[0-9a-f]{7,}/i.test(dep.gitSha);
+
+    const latestRollout = dep.rollouts?.[0];
+    const localBranch = latestRollout?.branch || '';
+    const localBy = latestRollout?.deployedBy || '';
+
+    let podLine;
+    if (podCount === 0) {
+        podLine = `<p class="grid-card-pods"><span class="grid-card-status is-failing">No pods running</span></p>`;
+    } else if (dep.status === 'failing' || dep.status === 'error') {
+        podLine = `<p class="grid-card-pods">Running with ${podCount} pod${podCount !== 1 ? 's' : ''} — <span class="grid-card-status is-${escapeHtml(statusClass)}">${escapeHtml(dep.status)}</span></p>`;
+    } else {
+        podLine = `<p class="grid-card-pods">Currently running with ${podCount} <span class="grid-card-status is-${podCount === healthyCount ? 'healthy' : escapeHtml(statusClass)}">${podCount === healthyCount ? 'healthy' : escapeHtml(dep.status)}</span> pod${podCount !== 1 ? 's' : ''}</p>`;
+    }
+
+    let prSection;
+    if (isLocalBuild) {
+        prSection = `<div class="grid-pr-section">
+            <span class="grid-pr-intro">Local build${localBy ? ` by <strong>${escapeHtml(localBy)}</strong>` : ''}</span>
+            ${localBranch ? `<span class="grid-pr-title">${escapeHtml(localBranch)}</span>` : ''}
+        </div>`;
+    } else {
+        prSection = `<div class="grid-pr-section pr-row pr-row--loading">
+            ${hasPr ? `<span class="pr-loading">Loading…</span>` : ''}
+        </div>`;
+    }
+
+    const logsSvg = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" style="display:inline;vertical-align:-1px;margin-right:4px"><rect x="2" y="2" width="12" height="2" rx="1" fill="currentColor"/><rect x="2" y="7" width="9" height="2" rx="1" fill="currentColor"/><rect x="2" y="12" width="11" height="2" rx="1" fill="currentColor"/></svg>`;
+    const restartSvg = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" style="display:inline;vertical-align:-1px"><path d="M13.5 8A5.5 5.5 0 1 1 8 2.5V1l3 2.5L8 6V4.5a3.5 3.5 0 1 0 3.5 3.5h2z" fill="currentColor"/></svg>`;
+
+    return `
+    <div class="deployment-card deployment-card--grid" data-name="${escapeHtml(dep.namespace + '/' + dep.name)}" data-dep-name="${escapeHtml(dep.name)}" data-sha="${escapeHtml(dep.gitSha || '')}">
+        <div class="grid-card-age" title="${escapeHtml(deployedAbsolute)}">Last updated <strong>${escapeHtml(deployedLabel)}</strong></div>
+        <div class="grid-card-eyebrow">${escapeHtml(dep.namespace || '')}</div>
+        <h3 class="grid-card-name">${escapeHtml(dep.name)}</h3>
+        ${podLine}
+        ${prSection}
+        <hr class="grid-card-divider">
+        <div class="grid-card-actions">
+            ${hasDatadog ? `<span class="grid-action-btn grid-action-btn--external datadog-link" data-url="${escapeHtml(datadogUrl)}">Datadog ↗</span>` : ''}
+            <span class="trello-placeholder"></span>
+            <button class="grid-action-btn logs-open-btn" data-dep-name="${escapeHtml(dep.name)}">${logsSvg}Logs</button>
+            <button class="grid-action-btn restart-btn" data-dep-name="${escapeHtml(dep.name)}">Restart ${restartSvg}</button>
+            ${hasHistory ? `<button class="grid-action-btn grid-history-btn">History</button>` : ''}
+        </div>
+        <div class="rollout-history hidden">${renderRolloutHistory(dep.rollouts || [], dep.imageRepoName)}</div>
+    </div>`;
 }
 
 function renderDeploymentCard(dep) {

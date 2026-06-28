@@ -89,6 +89,14 @@
                 <button class="filter-chip" data-filter="failing">Failing <span></span></button>
                 <button class="filter-chip" data-filter="progressing">Progressing <span></span></button>
                 <button class="filter-chip" data-filter="has-trello">Trello <span></span></button>
+                <div class="view-toggle" id="deploymentViewToggle">
+                    <button class="view-toggle-btn" id="viewToggleList" title="List view">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="2" rx="1" fill="currentColor"/><rect x="1" y="7" width="14" height="2" rx="1" fill="currentColor"/><rect x="1" y="11" width="14" height="2" rx="1" fill="currentColor"/></svg>
+                    </button>
+                    <button class="view-toggle-btn is-active" id="viewToggleGrid" title="Grid view">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1" fill="currentColor"/><rect x="9" y="1" width="6" height="6" rx="1" fill="currentColor"/><rect x="1" y="9" width="6" height="6" rx="1" fill="currentColor"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor"/></svg>
+                    </button>
+                </div>
             </div>
             <div class="deployment-list" id="deploymentList"></div>
         </div>
@@ -329,6 +337,13 @@ az login</pre>
         <button class="modal-btn modal-btn--confirm" id="restartConfirmBtn">Restart</button>
     </div>
 </dialog>
+<dialog id="historyModal">
+    <div class="history-modal-header">
+        <h3 class="modal-title" id="historyModalTitle">History</h3>
+        <button class="modal-btn modal-btn--cancel" id="historyModalCloseBtn">Close</button>
+    </div>
+    <div class="rollout-history" id="historyModalBody"></div>
+</dialog>
 <dialog id="rollbackModal">
     <h3 class="modal-title" id="rollbackModalTitle">Roll back deployment?</h3>
     <p class="modal-desc" id="rollbackModalDesc"></p>
@@ -338,6 +353,16 @@ az login</pre>
         <button class="modal-btn modal-btn--cancel" id="rollbackCancelBtn">Cancel</button>
         <button class="modal-btn modal-btn--confirm" id="rollbackConfirmBtn">Roll back</button>
     </div>
+</dialog>
+<dialog id="logsQuickOpenModal">
+    <div class="logs-quick-header">
+        <h3 class="modal-title">What logs would you like?</h3>
+        <button class="modal-btn modal-btn--cancel" id="logsQuickCloseBtn">Close</button>
+    </div>
+    <div class="logs-quick-env" id="logsQuickEnv"></div>
+    <input class="logs-quick-input" id="logsQuickInput" type="text" placeholder="Type deployment name…" />
+    <div class="logs-quick-status" id="logsQuickStatus"></div>
+    <div class="logs-quick-results" id="logsQuickResults"></div>
 </dialog>
 <dialog id="logsModal">
     <div class="logs-modal-header">
@@ -350,17 +375,27 @@ az login</pre>
             </div>
         </div>
 
-        <div id="logsLiveControls" class="hidden">
-            <div class="logs-modal-controls">
-                <select class="logs-pod-select" id="logsPodSelect"></select>
-                <input class="logs-filter-input" id="logsLiveFilterInput" type="text" placeholder="Filter lines…" />
-                <input class="logs-net-input" id="logsNetInput" type="text" placeholder="Catch matching lines…" />
-            </div>
-        </div>
-
         <div class="logs-modal-actions">
             <button class="logs-copy-btn" id="logsCopyBtn">Copy all</button>
             <button class="modal-btn modal-btn--cancel" id="logsCloseBtn">Close</button>
+        </div>
+    </div>
+    <div id="logsLiveControls" class="logs-search-panel hidden">
+        <div class="logs-search-row">
+            <div class="logs-search-row-top">
+                <select class="logs-pod-select" id="logsPodSelect"></select>
+                <select class="logs-format-select" id="logsLiveFormatSelect" title="Log format">
+                    <option value="raw">Raw</option>
+                    <option value="message">App message</option>
+                    <option value="app">App (JSON)</option>
+                    <option value="access">Access log</option>
+                </select>
+            </div>
+            <div class="logs-search-row-bottom">
+                <input class="logs-search-term" id="logsLiveFilterInput" type="text" placeholder="Filter lines…" />
+                <input class="logs-search-term" id="logsLiveHighlightInput" type="text" placeholder="Highlight regex…" />
+                <input class="logs-search-term" id="logsNetInput" type="text" placeholder="Catch matching lines…" />
+            </div>
         </div>
     </div>
     <div id="logsSearchControls" class="logs-search-panel">
@@ -372,11 +407,27 @@ az login</pre>
             </div>
             <div class="logs-search-row-bottom">
                 <input class="logs-search-term" id="logsSearchInput" type="text" placeholder="Search logs…" />
+                <select class="logs-format-select" id="logsFormatSelect" title="Log format">
+                    <option value="raw">Raw</option>
+                    <option value="message">App message</option>
+                    <option value="app">App (JSON)</option>
+                    <option value="access">Access log</option>
+                </select>
+                <select class="logs-format-select" id="logsSearchLimit" title="Max lines">
+                    <option value="500">500 lines</option>
+                    <option value="2000" selected>2 000 lines</option>
+                    <option value="5000">5 000 lines</option>
+                    <option value="20000">20 000 lines</option>
+                </select>
                 <button class="logs-search-btn" id="logsSearchBtn">Search</button>
             </div>
             <div class="logs-search-row-bottom" id="logsHighlightRow">
                 <input class="logs-search-term" id="logsHighlightInput" type="text" placeholder="Highlight regex…" />
                 <button class="logs-search-btn" id="logsCopyMatchesBtn">Copy matches</button>
+            </div>
+            <div class="logs-search-progress" id="logsSearchProgress" style="display:none">
+                <span id="logsSearchProgressText"></span>
+                <button class="logs-search-cancel-btn" id="logsSearchCancelBtn">Cancel</button>
             </div>
         </div>
     </div>
@@ -386,7 +437,10 @@ az login</pre>
         <div class="logs-net" id="logsNet">
             <div class="logs-net-header">
                 <span class="logs-net-label">Caught</span>
-                <button class="logs-net-clear" id="logsNetClear" title="Clear">✕</button>
+                <div class="logs-net-actions">
+                    <button class="logs-net-btn" id="logsNetCopy" title="Copy caught lines">Copy</button>
+                    <button class="logs-net-clear" id="logsNetClear" title="Clear">✕</button>
+                </div>
             </div>
             <textarea class="logs-net-output" id="logsNetOutput" readonly placeholder="Lines matching the catch filter will appear here…"></textarea>
             <div class="logs-speedometer" aria-label="Log line rate">

@@ -12,8 +12,13 @@ const STORAGE_KEYS = {
 let activeFilter = readStoredJson(STORAGE_KEYS.activeFilter, 'all');
 let refreshInProgress = false;
 let latestDeployments = [];
+const quickLogsDeploymentCache = new Map();
 const prCache = new Map(); // key: `${depName}/${gitSha}` → pr object or null
 let renderGeneration = 0;  // incremented on every render; guards stale async injections
+
+function quickLogsCacheKey(context, namespace) {
+    return `${context || '(current)'}::${namespace || '(all)'}`;
+}
 
 // --- Storage helpers ---
 function readStoredJson(key, fallback) {
@@ -285,8 +290,225 @@ document.getElementById('envSwitcher').addEventListener('click', (e) => {
     refreshAll();
 });
 
+// --- Quick logs opener ---
+let quickLogsDeployments = [];
+let quickLogsFiltered = [];
+let quickLogsSelectedIndex = 0;
+let quickLogsContext = '';
+let quickLogsLoadingToken = 0;
+
+function getQuickLogEnvironments(config) {
+    const envs = config.envContexts || {};
+    const entries = [
+        ['Prod', envs.prod],
+        ['QA', envs.qa],
+        ['Test', envs.test],
+    ].filter(([, ctx]) => ctx);
+    const hasCurrent = entries.some(([, ctx]) => ctx === config.context);
+    if (!hasCurrent && config.context) { entries.unshift(['Current', config.context]); }
+    if (entries.length === 0 && config.context) { entries.push(['Current', config.context]); }
+    return entries.map(([label, context]) => ({ label, context }));
+}
+
+function renderQuickLogsEnvs(config) {
+    const envEl = document.getElementById('logsQuickEnv');
+    const envs = getQuickLogEnvironments(config);
+    envEl.innerHTML = envs.map(({ label, context }, index) => {
+        const isActive = context === quickLogsContext;
+        const colorClass = ENV_COLOR_CLASS[label] || '';
+        const shortcut = index < 3 ? `⌘${index + 1}` : '';
+        return `<div class="logs-quick-env-item">
+            <button class="logs-quick-env-btn ${colorClass} ${isActive ? 'is-active' : ''}" data-context="${escapeHtml(context)}">${escapeHtml(label)}</button>
+            ${shortcut ? `<span class="logs-quick-env-shortcut">${escapeHtml(shortcut)}</span>` : ''}
+        </div>`;
+    }).join('');
+}
+
+function getQuickLogsQuery() {
+    return document.getElementById('logsQuickInput').value.trim().toLowerCase();
+}
+
+function renderQuickLogsResults() {
+    const resultsEl = document.getElementById('logsQuickResults');
+    const query = getQuickLogsQuery();
+    quickLogsFiltered = quickLogsDeployments
+        .filter((dep) => {
+            const haystack = `${dep.name || ''} ${dep.namespace || ''} ${dep.status || ''}`.toLowerCase();
+            return !query || haystack.includes(query);
+        })
+        .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
+    const visibleCount = Math.min(quickLogsFiltered.length, 40);
+    if (quickLogsSelectedIndex >= visibleCount) { quickLogsSelectedIndex = Math.max(0, visibleCount - 1); }
+    if (quickLogsSelectedIndex < 0) { quickLogsSelectedIndex = 0; }
+
+    if (quickLogsFiltered.length === 0) {
+        resultsEl.innerHTML = '<div class="logs-quick-empty">No deployments found.</div>';
+        return;
+    }
+
+    resultsEl.innerHTML = quickLogsFiltered.slice(0, 40).map((dep, idx) => {
+        const pods = dep.pods?.length || 0;
+        const selected = idx === quickLogsSelectedIndex;
+        return `<button class="logs-quick-result ${selected ? 'is-selected' : ''}" data-index="${idx}">
+            <span class="logs-quick-name">${escapeHtml(dep.name)}</span>
+            <span class="logs-quick-meta">${escapeHtml(dep.namespace || '')} · ${escapeHtml(dep.status || '')} · ${pods} pod${pods === 1 ? '' : 's'}</span>
+        </button>`;
+    }).join('');
+}
+
+async function loadQuickLogsDeployments(context) {
+    const token = ++quickLogsLoadingToken;
+    const statusEl = document.getElementById('logsQuickStatus');
+    const config = loadConfig();
+    quickLogsContext = context;
+    renderQuickLogsEnvs(config);
+    if (!context) {
+        statusEl.textContent = 'No Kubernetes context configured.';
+        quickLogsDeployments = [];
+        renderQuickLogsResults();
+        return;
+    }
+    const cacheKey = quickLogsCacheKey(context, config.namespace);
+    const cached = context === config.context && latestDeployments.length > 0
+        ? latestDeployments
+        : quickLogsDeploymentCache.get(cacheKey);
+    if (cached?.length) {
+        quickLogsDeployments = cached;
+        quickLogsSelectedIndex = 0;
+        statusEl.textContent = `${cached.length} deployment${cached.length === 1 ? '' : 's'}`;
+        renderQuickLogsResults();
+        return;
+    }
+
+    statusEl.textContent = 'Loading deployments…';
+    quickLogsDeployments = [];
+    renderQuickLogsResults();
+
+    try {
+        if (context === config.context && latestDeployments.length > 0) {
+            quickLogsDeployments = latestDeployments;
+        } else {
+            quickLogsDeployments = await window.kubeDashboard.fetchDeployments({ ...config, context });
+        }
+        if (token !== quickLogsLoadingToken) { return; }
+        quickLogsDeploymentCache.set(cacheKey, quickLogsDeployments);
+        statusEl.textContent = `${quickLogsDeployments.length} deployment${quickLogsDeployments.length === 1 ? '' : 's'}`;
+    } catch (err) {
+        if (token !== quickLogsLoadingToken) { return; }
+        statusEl.textContent = err?.message || 'Could not load deployments.';
+        quickLogsDeployments = [];
+    }
+    quickLogsSelectedIndex = 0;
+    renderQuickLogsResults();
+}
+
+function openQuickSelectedLogs() {
+    const dep = quickLogsFiltered.length === 1 ? quickLogsFiltered[0] : quickLogsFiltered[quickLogsSelectedIndex];
+    if (!dep) { return; }
+    const config = loadConfig();
+    const pods = dep.pods?.map((p) => p.name).filter(Boolean) || [];
+    const podObjects = dep.pods || [];
+    const matchLabels = dep.labels || {};
+    const selector = Object.entries(matchLabels).map(([k, v]) => `${k}=${v}`).join(',') || null;
+    document.getElementById('logsQuickOpenModal').close();
+    openLogsModal({
+        depName: dep.name,
+        pods,
+        podObjects,
+        context: quickLogsContext || config.context,
+        namespace: dep.namespace || config.namespace,
+        selector,
+        initialMode: 'live',
+    });
+}
+
+function openQuickLogsModal() {
+    const modal = document.getElementById('logsQuickOpenModal');
+    const input = document.getElementById('logsQuickInput');
+    const config = loadConfig();
+    const envs = getQuickLogEnvironments(config);
+    quickLogsContext = config.context || envs[0]?.context || '';
+    quickLogsSelectedIndex = 0;
+    input.value = '';
+    renderQuickLogsEnvs(config);
+    if (!modal.open) { modal.showModal(); }
+    input.focus();
+    loadQuickLogsDeployments(quickLogsContext);
+}
+
+function switchQuickLogsEnvironmentByIndex(index) {
+    const modal = document.getElementById('logsQuickOpenModal');
+    if (!modal?.open) { return false; }
+    const env = getQuickLogEnvironments(loadConfig())[index];
+    if (!env?.context || env.context === quickLogsContext) { return false; }
+    loadQuickLogsDeployments(env.context);
+    document.getElementById('logsQuickInput').focus();
+    return true;
+}
+
+window.kubeDashboard.onQuickOpenLogs?.(() => {
+    openQuickLogsModal();
+});
+
+document.getElementById('logsQuickCloseBtn')?.addEventListener('click', () => {
+    document.getElementById('logsQuickOpenModal').close();
+});
+
+document.getElementById('logsQuickOpenModal')?.addEventListener('click', (e) => {
+    if (e.target === document.getElementById('logsQuickOpenModal')) { e.target.close(); }
+});
+
+document.getElementById('logsQuickEnv')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.logs-quick-env-btn[data-context]');
+    if (!btn) { return; }
+    loadQuickLogsDeployments(btn.dataset.context);
+    document.getElementById('logsQuickInput').focus();
+});
+
+document.getElementById('logsQuickInput')?.addEventListener('input', () => {
+    quickLogsSelectedIndex = 0;
+    renderQuickLogsResults();
+});
+
+document.getElementById('logsQuickInput')?.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && ['1', '2', '3'].includes(e.key)) {
+        e.preventDefault();
+        switchQuickLogsEnvironmentByIndex(Number(e.key) - 1);
+        return;
+    }
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        quickLogsSelectedIndex = Math.min(quickLogsSelectedIndex + 1, Math.min(quickLogsFiltered.length, 40) - 1);
+        renderQuickLogsResults();
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        quickLogsSelectedIndex = Math.max(quickLogsSelectedIndex - 1, 0);
+        renderQuickLogsResults();
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        openQuickSelectedLogs();
+    } else if (e.key === 'Escape') {
+        document.getElementById('logsQuickOpenModal').close();
+    }
+});
+
+document.getElementById('logsQuickOpenModal')?.addEventListener('keydown', (e) => {
+    if (!(e.metaKey || e.ctrlKey) || !['1', '2', '3'].includes(e.key)) { return; }
+    e.preventDefault();
+    switchQuickLogsEnvironmentByIndex(Number(e.key) - 1);
+});
+
+document.getElementById('logsQuickResults')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.logs-quick-result[data-index]');
+    if (!btn) { return; }
+    quickLogsSelectedIndex = Number(btn.dataset.index) || 0;
+    openQuickSelectedLogs();
+});
+
 function clearAllLists() {
     latestDeployments = [];
+    quickLogsDeploymentCache.clear();
     window._lastPipelineRuns = null;
     latestPrData = null;
     refreshInProgress = false;
@@ -391,6 +613,7 @@ async function refresh() {
     try {
         const deployments = await window.kubeDashboard.fetchDeployments(config);
         latestDeployments = deployments;
+        quickLogsDeploymentCache.set(quickLogsCacheKey(config.context, config.namespace), deployments);
         renderDeploymentList(deployments);
         updateCounts(deployments);
         setStatus(`${deployments.length} deployment${deployments.length !== 1 ? 's' : ''}`);
@@ -494,10 +717,52 @@ document.getElementById('pipelineList').addEventListener('click', (e) => {
     }
 });
 
+// --- Deployment view toggle ---
+(function () {
+    const list = document.getElementById('deploymentList');
+    const btnList = document.getElementById('viewToggleList');
+    const btnGrid = document.getElementById('viewToggleGrid');
+    const saved = localStorage.getItem('deploymentView') || 'list';
+
+    function setView(mode) {
+        const isGrid = mode === 'grid';
+        list.classList.toggle('is-grid', isGrid);
+        btnList.classList.toggle('is-active', !isGrid);
+        btnGrid.classList.toggle('is-active', isGrid);
+        localStorage.setItem('deploymentView', mode);
+    }
+
+    setView(saved);
+    btnList?.addEventListener('click', () => { setView('list'); if (latestDeployments) { renderDeploymentList(latestDeployments); } });
+    btnGrid?.addEventListener('click', () => { setView('grid'); if (latestDeployments) { renderDeploymentList(latestDeployments); } });
+}());
+
+function openHistoryModal(depName, historyEl) {
+    const modal = document.getElementById('historyModal');
+    const body = document.getElementById('historyModalBody');
+    const title = document.getElementById('historyModalTitle');
+    if (!modal || !body || !historyEl) { return; }
+    title.textContent = depName;
+    body.innerHTML = historyEl.innerHTML;
+    body.dataset.depName = depName;
+    modal.showModal();
+    body.querySelectorAll('.rollout-row[data-sha][data-repo]').forEach(async (row) => {
+        const titleEl = row.querySelector('span.rollout-pr-title');
+        try {
+            const pr = await window.kubeDashboard.fetchPrForSha(row.dataset.sha, row.dataset.repo, initialConfig.githubOrg);
+            if (titleEl) {
+                titleEl.innerHTML = pr?.title
+                    ? (pr.url ? `<span class="rollout-pr-link" data-url="${escapeHtml(pr.url)}">#${pr.number} ${escapeHtml(pr.title)}</span>` : escapeHtml(pr.title))
+                    : '';
+            }
+        } catch { if (titleEl) { titleEl.textContent = ''; } }
+    });
+}
+
 // --- Card expand/collapse + PR links ---
 document.getElementById('deploymentList').addEventListener('click', (e) => {
     // Handle PR/Trello/Datadog link clicks without toggling expand
-    const link = e.target.closest('.pr-row-link, .trello-link, .datadog-link, .rollout-pr-link');
+    const link = e.target.closest('.pr-row-link, .trello-link, .datadog-link, .rollout-pr-link, .grid-pr-title');
     if (link) {
         e.stopPropagation();
         window.kubeDashboard.openExternal(link.dataset.url);
@@ -536,7 +801,7 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
         e.stopPropagation();
         const row = rollbackBtn.closest('.rollout-row');
         const card = rollbackBtn.closest('.deployment-card');
-        const depName = card?.dataset.depName;
+        const depName = card?.dataset.depName || document.getElementById('historyModalBody')?.dataset.depName;
         const revision = rollbackBtn.dataset.revision;
         const prTitleEl = row?.querySelector('.rollout-pr-title, .rollout-info');
         const prTitle = prTitleEl?.textContent?.trim();
@@ -547,51 +812,17 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
         return;
     }
 
-    // Handle history button toggle
-    if (e.target.closest('.rollout-history-btn')) {
-        const btn = e.target.closest('.rollout-history-btn');
+    // Handle history buttons (both grid and list)
+    if (e.target.closest('.grid-history-btn, .rollout-history-btn')) {
+        e.stopPropagation();
+        const btn = e.target.closest('.grid-history-btn, .rollout-history-btn');
         const card = btn.closest('.deployment-card');
+        const depName = card?.dataset.depName || '';
         const history = card?.querySelector('.rollout-history');
-        if (history) {
-            const isOpen = !history.classList.contains('hidden');
-            history.classList.toggle('hidden', isOpen);
-            btn.classList.toggle('is-active', !isOpen);
-            if (!isOpen) {
-                const rows = history.querySelectorAll('.rollout-row[data-sha][data-repo]');
-                rows.forEach(async (row) => {
-                    if (row.dataset.prLoaded) { return; }
-                    row.dataset.prLoaded = '1';
-                    const titleEl = row.querySelector('span.rollout-pr-title');
-                    try {
-                        const pr = await window.kubeDashboard.fetchPrForSha(row.dataset.sha, row.dataset.repo, initialConfig.githubOrg);
-                        if (titleEl) {
-                            if (pr?.title) {
-                                titleEl.innerHTML = pr.url
-                                    ? `<span class="rollout-pr-link" data-url="${escapeHtml(pr.url)}">#${pr.number} ${escapeHtml(pr.title)}</span>`
-                                    : escapeHtml(pr.title);
-                            } else {
-                                titleEl.textContent = '';
-                            }
-                        }
-                    } catch {
-                        if (titleEl) { titleEl.textContent = ''; }
-                    }
-                });
-
-                const avatarImgs = history.querySelectorAll('img.rollout-avatar[data-login]');
-                avatarImgs.forEach(async (img) => {
-                    if (img.dataset.avatarLoaded) { return; }
-                    img.dataset.avatarLoaded = '1';
-                    const url = await fetchAvatar(img.dataset.login);
-                    if (url) {
-                        img.src = url;
-                        img.style.display = '';
-                    }
-                });
-            }
-        }
+        openHistoryModal(depName, history);
         return;
     }
+
 
     const card = e.target.closest('.deployment-card');
     if (!card) { return; }
@@ -677,6 +908,27 @@ function closeRollbackModal() {
     document.getElementById('rollbackModal').close();
     rollbackPending = null;
 }
+
+document.getElementById('historyModalCloseBtn')?.addEventListener('click', () => document.getElementById('historyModal').close());
+document.getElementById('historyModal')?.addEventListener('click', (e) => {
+    if (e.target === document.getElementById('historyModal')) { document.getElementById('historyModal').close(); }
+});
+document.getElementById('historyModal')?.addEventListener('click', (e) => {
+    const link = e.target.closest('.rollout-pr-link');
+    if (link) { window.kubeDashboard.openExternal(link.dataset.url); return; }
+
+    const rollbackBtn = e.target.closest('.rollout-rollback-btn');
+    if (rollbackBtn) {
+        const row = rollbackBtn.closest('.rollout-row');
+        const depName = document.getElementById('historyModalBody')?.dataset.depName;
+        const revision = rollbackBtn.dataset.revision;
+        const prTitleEl = row?.querySelector('.rollout-pr-title');
+        const prTitle = prTitleEl?.textContent?.trim();
+        const config = loadConfig();
+        document.getElementById('historyModal').close();
+        openRollbackModal({ depName, namespace: config.namespace, context: config.context, revision, prTitle });
+    }
+});
 
 document.getElementById('rollbackCancelBtn')?.addEventListener('click', () => closeRollbackModal());
 document.getElementById('rollbackModal')?.addEventListener('click', (e) => {

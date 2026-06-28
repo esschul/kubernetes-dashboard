@@ -199,9 +199,14 @@ test('returns Partial for partiallySucceeded', () => {
 // ── parseLogLine ──────────────────────────────────────────────────────────────
 console.log('\nparseLogLine');
 
+function expectedLocalTime(iso) {
+    return new Date(iso).toLocaleTimeString('no', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+}
+
 test('parses ISO timestamp and message', () => {
-    const { ts, msg } = parseLogLine('2026-06-25T12:34:56.789012345Z hello world');
-    assert.equal(ts, '12:34:56');
+    const iso = '2026-06-25T12:34:56.789012345Z';
+    const { ts, msg } = parseLogLine(`${iso} hello world`);
+    assert.equal(ts, expectedLocalTime(iso));
     assert.equal(msg, 'hello world');
 });
 test('returns empty ts for lines without timestamp', () => {
@@ -210,13 +215,15 @@ test('returns empty ts for lines without timestamp', () => {
     assert.equal(msg, 'plain log line');
 });
 test('handles message with spaces and special chars', () => {
-    const { ts, msg } = parseLogLine('2026-06-25T08:00:00.000000000Z GET /api/status 200 OK');
-    assert.equal(ts, '08:00:00');
+    const iso = '2026-06-25T08:00:00.000000000Z';
+    const { ts, msg } = parseLogLine(`${iso} GET /api/status 200 OK`);
+    assert.equal(ts, expectedLocalTime(iso));
     assert.equal(msg, 'GET /api/status 200 OK');
 });
 test('parses timestamp and retains pod prefix from all-pods stream', () => {
-    const { ts, msg } = parseLogLine('[my-pod-abc123] 2026-06-25T12:34:56.789012345Z request received');
-    assert.equal(ts, '12:34:56');
+    const iso = '2026-06-25T12:34:56.789012345Z';
+    const { ts, msg } = parseLogLine(`[my-pod-abc123] ${iso} request received`);
+    assert.equal(ts, expectedLocalTime(iso));
     assert.equal(msg, '[my-pod-abc123] request received');
 });
 test('returns full raw line when prefixed line has no timestamp', () => {

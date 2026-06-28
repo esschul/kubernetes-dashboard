@@ -102,7 +102,10 @@ function parseLogLine(raw) {
     const prefix = prefixMatch ? prefixMatch[0] : '';
     const stripped = raw.slice(prefix.length);
     const m = stripped.match(/^(\d{4}-\d{2}-\d{2}T(\d{2}:\d{2}:\d{2})[^Z]*Z)\s([\s\S]*)$/);
-    if (m) { return { ts: m[2], msg: prefix + m[3], raw }; }
+    if (m) {
+        const localTs = new Date(m[1]).toLocaleTimeString('no', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        return { ts: localTs, msg: prefix + m[3], raw };
+    }
     return { ts: '', msg: raw, raw };
 }
 
