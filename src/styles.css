@@ -2736,6 +2736,24 @@ input, select {
     background: #21262d;
     color: #e6edf3;
 }
+.logs-pause-btn {
+    padding: 4px 11px;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    background: #21262d;
+    color: #e6edf3;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.logs-pause-btn:hover {
+    background: #30363d;
+}
+.logs-pause-btn.is-active {
+    border-color: #e3b341;
+    color: #e3b341;
+}
 
 .logs-search-panel {
     padding: 8px 12px;
@@ -2785,6 +2803,37 @@ input, select {
 }
 .logs-search-term::placeholder { color: #8b949e; }
 .logs-search-term:focus { border-color: #e6edf3; }
+.logs-search-term.is-invalid {
+    border-color: #f85149;
+}
+.logs-catch-mode {
+    display: flex;
+    flex-shrink: 0;
+    gap: 2px;
+    padding: 2px;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 7px;
+}
+.logs-catch-mode-btn {
+    padding: 3px 8px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: #8b949e;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+.logs-catch-mode-btn.is-active {
+    background: #21262d;
+    color: #e6edf3;
+}
+.logs-catch-error {
+    color: #f85149;
+    font-size: 0.72rem;
+    min-height: 14px;
+}
 .logs-search-btn {
     padding: 5px 14px;
     border: 1px solid #30363d;
@@ -2798,6 +2847,10 @@ input, select {
 }
 .logs-search-btn:hover { background: #30363d; }
 .logs-search-btn:disabled { opacity: 0.5; cursor: default; }
+.logs-search-btn.is-active {
+    border-color: #e3b341;
+    color: #e3b341;
+}
 
 #logsHighlightRow { margin-top: 2px; }
 .logs-search-progress {
@@ -2830,10 +2883,33 @@ input, select {
     padding: 0 1px;
 }
 
+.logs-regex-menu {
+    position: fixed;
+    z-index: 2000;
+    padding: 4px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 7px;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.35);
+}
+.logs-regex-menu button {
+    padding: 5px 10px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: #e6edf3;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+.logs-regex-menu button:hover {
+    background: #30363d;
+}
+
 #logsSearchControls { padding-bottom: 4px; }
 .logs-modal-title-row .modal-title { color: #e6edf3; white-space: nowrap; }
 .logs-pod-select,
 .logs-format-select {
+    width: 110px;
     background: #161b22;
     border: 1px solid #30363d;
     border-radius: 6px;
