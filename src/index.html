@@ -390,6 +390,7 @@ az login</pre>
                     <option value="message">App message</option>
                     <option value="app">App (JSON)</option>
                     <option value="access">Access log</option>
+                    <option value="errors">Errors</option>
                 </select>
             </div>
             <div class="logs-search-row-bottom">
@@ -411,6 +412,8 @@ az login</pre>
                 <select class="logs-pod-select" id="logsSearchPodSelect"></select>
                 <input class="logs-search-since" id="logsSearchFrom" type="datetime-local" title="From" />
                 <input class="logs-search-since" id="logsSearchTo" type="datetime-local" title="To" />
+                <button class="logs-time-shortcut" id="logsShortcutToday" type="button">Today</button>
+                <button class="logs-time-shortcut" id="logsShortcutSincePod" type="button">Since pod start</button>
             </div>
             <div class="logs-search-row-bottom">
                 <input class="logs-search-term" id="logsSearchInput" type="text" placeholder="Search logs…" />
@@ -423,6 +426,7 @@ az login</pre>
                     <option value="message">App message</option>
                     <option value="app">App (JSON)</option>
                     <option value="access">Access log</option>
+                    <option value="errors">Errors</option>
                 </select>
                 <select class="logs-format-select" id="logsSearchLimit" title="Max lines">
                     <option value="500">500 lines</option>
@@ -444,7 +448,10 @@ az login</pre>
         </div>
     </div>
     <div class="logs-body">
-        <div class="logs-output" id="logsOutput"></div>
+        <div class="logs-output-wrap">
+            <div class="logs-output" id="logsOutput"></div>
+            <button class="logs-group-btn hidden" id="logsGroupBtn" type="button">Group</button>
+        </div>
         <div class="logs-net-divider" id="logsNetDivider"></div>
         <div class="logs-net" id="logsNet">
             <div class="logs-net-header">

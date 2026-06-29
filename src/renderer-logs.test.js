@@ -48,6 +48,17 @@ function makeElement(tagName) {
     return el;
 }
 
+function makeClassListWithInitial(...names) {
+    const classes = new Set(names);
+    return {
+        contains: (name) => classes.has(name),
+        toggle: (name, force) => {
+            if (force) { classes.add(name); }
+            else { classes.delete(name); }
+        },
+    };
+}
+
 function makeOutput() {
     return {
         children: [],
@@ -61,7 +72,7 @@ function makeOutput() {
 const elements = {
     logsLiveFilterInput: { value: '', addEventListener: () => {} },
     logsSearchInput: { value: '', addEventListener: () => {} },
-    logsNetInput: { value: '', addEventListener: () => {} },
+    logsNetInput: { value: '', addEventListener: () => {}, classList: makeClassListWithInitial() },
     logsNetOutput: { value: '', scrollTop: 0, scrollHeight: 0 },
     logsOutput: { addEventListener: () => {} },
     logsNetClear: { addEventListener: () => {} },
@@ -72,16 +83,31 @@ const elements = {
     logsTabLive: { addEventListener: () => {} },
     logsTabSearch: { addEventListener: () => {} },
     logsSearchBtn: { addEventListener: () => {} },
+    logsCatchError: { textContent: '', classList: makeClassListWithInitial('hidden') },
+    logsCatchTextBtn: { dataset: { mode: 'text' }, classList: makeClassListWithInitial('is-active') },
+    logsCatchRegexBtn: { dataset: { mode: 'regex' }, classList: makeClassListWithInitial() },
 };
 
 global.document = {
     createElement: makeElement,
     getElementById: (id) => elements[id] || null,
+    querySelector(sel) {
+        if (sel === '#logsCatchMode .logs-catch-mode-btn.is-active') {
+            return elements.logsCatchTextBtn.classList.contains('is-active') ? elements.logsCatchTextBtn : elements.logsCatchRegexBtn;
+        }
+        return null;
+    },
+    querySelectorAll(sel) {
+        if (sel === '#logsCatchMode .logs-catch-mode-btn') {
+            return [elements.logsCatchTextBtn, elements.logsCatchRegexBtn];
+        }
+        return [];
+    },
     addEventListener: () => {},
     removeEventListener: () => {},
 };
 
-const { appendLogLine, formatLogContent } = require('./renderer-logs');
+const { appendLogLine, formatLogContent, generateRegexFromSelection, buildCatchExtractor, buildCatchMatcher } = require('./renderer-logs');
 
 console.log('\nrenderer live logs');
 
@@ -180,4 +206,70 @@ test('app format works on selector-prefixed lines', () => {
     const { msg, skip } = formatLogContent(prefixedJsonLine, 'app');
     assert.ok(msg.startsWith('{'));
     assert.ok(!skip);
+});
+
+// ── generateRegexFromSelection ────────────────────────────────────────────────
+console.log('\ngenerateRegexFromSelection');
+
+test('generalizes integers', () => {
+    assert.equal(generateRegexFromSelection('customerId=123456'), 'customerId=\\d+');
+});
+
+test('escapes regex punctuation while generalizing ids', () => {
+    assert.equal(generateRegexFromSelection('GET /api/orders/98765 HTTP/1.1'), 'GET\\s+/api/orders/\\d+\\s+HTTP/\\d+\\.\\d+');
+});
+
+test('generalizes pod-like generated suffixes', () => {
+    assert.equal(generateRegexFromSelection('window-shopper-86d87db7c9-bxq7f'), 'window-shopper-[a-f0-9]+-[a-z0-9]+');
+});
+
+test('returns empty string for blank selection', () => {
+    assert.equal(generateRegexFromSelection('   '), '');
+});
+
+// ── buildCatchMatcher ─────────────────────────────────────────────────────────
+console.log('\nbuildCatchMatcher');
+
+function setCatchMode(mode) {
+    elements.logsCatchTextBtn.classList.toggle('is-active', mode === 'text');
+    elements.logsCatchRegexBtn.classList.toggle('is-active', mode === 'regex');
+}
+
+test('text catch mode matches case-insensitive substrings', () => {
+    setCatchMode('text');
+    elements.logsNetInput.value = 'error';
+    const matcher = buildCatchMatcher();
+    assert.equal(matcher('Request ERROR happened'), true);
+    assert.equal(matcher('Request ok'), false);
+});
+
+test('regex catch mode matches regular expressions', () => {
+    setCatchMode('regex');
+    elements.logsNetInput.value = 'customerId=\\d+';
+    const matcher = buildCatchMatcher();
+    assert.equal(matcher('customerId=12345'), true);
+    assert.equal(matcher('customerId=abc'), false);
+});
+
+test('regex catch mode returns full match even with capture groups', () => {
+    setCatchMode('regex');
+    elements.logsNetInput.value = 'customerId=(\\d+)';
+    const extractor = buildCatchExtractor();
+    assert.deepEqual(extractor('customerId=12345 customerId=67890'), ['customerId=12345', 'customerId=67890']);
+});
+
+test('regex catch mode extracts whole matches when there are no capture groups', () => {
+    setCatchMode('regex');
+    elements.logsNetInput.value = 'customerId=\\d+';
+    const extractor = buildCatchExtractor();
+    assert.deepEqual(extractor('customerId=12345 customerId=67890'), ['customerId=12345', 'customerId=67890']);
+});
+
+test('invalid regex returns no matcher and shows an error', () => {
+    setCatchMode('regex');
+    elements.logsNetInput.value = '[';
+    const matcher = buildCatchMatcher();
+    assert.equal(matcher, null);
+    assert.equal(elements.logsNetInput.classList.contains('is-invalid'), true);
+    assert.notEqual(elements.logsCatchError.textContent, '');
 });

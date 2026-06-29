@@ -52,6 +52,7 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
         return response.result;
     },
     clearPrCache: () => ipcRenderer.invoke('prs:clearCache'),
+    fetchCommitMessage: (nameWithOwner, sha) => ipcRenderer.invoke('pr:fetchCommit', nameWithOwner, sha),
     fetchGithubUser: async (login) => {
         const res = await ipcRenderer.invoke('gh:user', login);
         if (!res.ok) { throw new Error(res.error); }

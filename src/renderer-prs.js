@@ -85,7 +85,128 @@ document.getElementById('prFilterBar').addEventListener('click', (e) => {
     if (latestPrData) { renderPrView(latestPrData); }
 });
 
+function renderMarkdown(text) {
+    if (!text) { return ''; }
+    // Extract real <a> tags before escaping, replace with placeholders
+    const links = [];
+    const withoutLinks = text
+        .replace(/<a\s[^>]*href="(https?:\/\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (_, url, label) => {
+            const i = links.length;
+            links.push({ url, label: label.replace(/<[^>]+>/g, '') });
+            return `\x00link${i}\x00`;
+        })
+        // strip remaining <a> tags (relative hrefs etc), keep their text
+        .replace(/<a\s[^>]*>([\s\S]*?)<\/a>/gi, '$1')
+        // strip <details>/<summary> tags, keep their text
+        .replace(/<\/?details[^>]*>/gi, '')
+        .replace(/<summary>([\s\S]*?)<\/summary>/gi, '\n**$1**\n');
+
+    const escaped = withoutLinks
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    return escaped
+        // restore real HTML links
+        .replace(/\x00link(\d+)\x00/g, (_, i) => {
+            const { url, label } = links[Number(i)];
+            return `<a href="${url}" class="pr-comment-link" data-url="${url}">${escapeHtml(label)}</a>`;
+        })
+        // markdown links [text](url)
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (_, t, u) => `<a href="${u}" class="pr-comment-link" data-url="${u}">${t}</a>`)
+        // bare URLs
+        .replace(/(?<![="'(])(https?:\/\/[^\s<>"')\]]+)/g, (u) => `<a href="${u}" class="pr-comment-link" data-url="${u}">${u}</a>`)
+        // headings ## / ###
+        .replace(/^#{1,6} (.+)$/gm, '<strong>$1</strong>')
+        // bold **text**
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        // inline code `code`
+        .replace(/`([^`]+)`/g, '<code class="pr-comment-code">$1</code>')
+        // markdown table separator rows (|----|) → skip
+        .replace(/^\|[-| :]+\|$/gm, '')
+        // markdown table rows → grid cells
+        .replace(/^\|(.*)\|$/gm, (_, row) => {
+            const cells = row.split('|').map((c) => c.trim());
+            return `<span class="pr-comment-table-row">${cells.map((c) => `<span class="pr-comment-table-cell">${c}</span>`).join('')}</span>`;
+        })
+        // newlines
+        .replace(/\n/g, '<br>')
+        // remove <br> immediately before/after table rows
+        .replace(/(<br>)+(<span class="pr-comment-table-row")/g, '$2')
+        .replace(/(<\/span>)(<br>)+/g, '$1')
+        // collapse multiple consecutive <br> into two max
+        .replace(/(<br>){3,}/g, '<br><br>');
+}
+
+function renderCommentsList(comments) {
+    if (comments.length === 0) { return '<p class="pr-comments-empty">No comments yet.</p>'; }
+    return comments.map((c) => {
+        const date = c.createdAt ? new Date(c.createdAt).toLocaleString('no', { dateStyle: 'short', timeStyle: 'short' }) : '';
+        const author = c.author?.login || c.author?.name || 'unknown';
+        const typeLabel = c.type === 'review' ? ' · review' : '';
+        return `<div class="pr-comment">
+            <div class="pr-comment-header"><span class="pr-comment-author">${escapeHtml(author)}${typeLabel}</span><span class="pr-comment-date">${escapeHtml(date)}</span></div>
+            <div class="pr-comment-body">${renderMarkdown(c.body || '')}</div>
+        </div>`;
+    }).join('');
+}
+
+async function showPrCommentsModal(prKey) {
+    const allPrs = [...(latestPrData?.pullRequests || []), ...(latestPrData?.dependabotPullRequests || [])];
+    const pr = allPrs.find((p) => `${p.repository}/${p.number}` === prKey);
+    if (!pr) { return; }
+
+    const comments = [
+        ...(pr.comments || []).map((c) => ({ ...c, type: 'comment' })),
+        ...(pr.reviews || []).filter((r) => String(r.body || '').trim()).map((r) => ({ ...r, createdAt: r.submittedAt || r.createdAt, type: 'review' })),
+    ].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+    let modal = document.getElementById('prCommentsModal');
+    if (!modal) {
+        modal = document.createElement('dialog');
+        modal.id = 'prCommentsModal';
+        modal.className = 'pr-comments-modal';
+        modal.innerHTML = '<div class="pr-comments-inner"><button class="pr-comments-close" id="prCommentsClose">✕</button><h3 class="pr-comments-title" id="prCommentsTitle"></h3><div class="pr-comments-list" id="prCommentsList"></div></div>';
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (e) => {
+            const link = e.target.closest('.pr-comment-link[data-url]');
+            if (link) { e.preventDefault(); window.kubeDashboard.openExternal(link.dataset.url); }
+        });
+        document.getElementById('prCommentsClose').addEventListener('click', () => modal.close());
+    }
+
+    document.getElementById('prCommentsTitle').textContent = `#${pr.number} ${pr.title} — ${comments.length} comment${comments.length !== 1 ? 's' : ''}`;
+    const list = document.getElementById('prCommentsList');
+
+    const commitPlaceholder = pr.headRefOid
+        ? `<div class="pr-comment pr-comment--commit pr-comment--loading"><div class="pr-comment-header"><span class="pr-comment-author">Commit message</span></div><div class="pr-comment-body">Loading…</div></div>`
+        : '';
+    list.innerHTML = commitPlaceholder + renderCommentsList(comments);
+    modal.showModal();
+
+    if (pr.headRefOid) {
+        try {
+            const commit = await window.kubeDashboard.fetchCommitMessage(pr.repository, pr.headRefOid);
+            const commitEl = list.querySelector('.pr-comment--commit');
+            if (commitEl) {
+                const date = commit.date ? new Date(commit.date).toLocaleString('no', { dateStyle: 'short', timeStyle: 'short' }) : '';
+                commitEl.classList.remove('pr-comment--loading');
+                commitEl.innerHTML = `<div class="pr-comment-header"><span class="pr-comment-author">Commit · ${escapeHtml(commit.author || '')}</span><span class="pr-comment-date">${escapeHtml(date)}</span></div><div class="pr-comment-body">${renderMarkdown(commit.message || '')}</div>`;
+            }
+        } catch {
+            const commitEl = list.querySelector('.pr-comment--commit');
+            if (commitEl) { commitEl.remove(); }
+        }
+    }
+}
+
 document.getElementById('prList').addEventListener('click', (e) => {
+    const commentsPill = e.target.closest('.pr-comments-pill');
+    if (commentsPill) {
+        e.stopPropagation();
+        showPrCommentsModal(commentsPill.dataset.prKey);
+        return;
+    }
     const copyBtn = e.target.closest('.copy-errors-btn');
     if (copyBtn) {
         e.stopPropagation();
@@ -491,7 +612,7 @@ function renderPrCard(pr, isMerged = false) {
         <div class="pr-meta-row">
             <span class="pr-meta">#${pr.number} · ${escapeHtml(dateLabel)}</span>
             ${ageDetails ? `<span class="age-pill ${ageDetails.cssClass}">${escapeHtml(ageDetails.label)}</span>` : ''}
-            ${pr.commentActivityCount > 0 ? `<span class="branch-pill">${pr.commentActivityCount} comment${pr.commentActivityCount !== 1 ? 's' : ''}</span>` : ''}
+            ${pr.headRefOid ? `<span class="branch-pill pr-comments-pill" data-pr-key="${escapeHtml(pr.repository + '/' + pr.number)}" style="cursor:pointer">${pr.commentActivityCount > 0 ? `${pr.commentActivityCount} comment${pr.commentActivityCount !== 1 ? 's' : ''}` : 'Description'}</span>` : ''}
         </div>
         ${(pipelineStatus && isMerged) || deploymentStatus ? `
         <div class="pr-infra-row">

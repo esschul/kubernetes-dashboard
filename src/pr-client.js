@@ -250,4 +250,9 @@ function clearPrListCache() {
     console.log('[gh] prListCache + checkRunsCache cleared (manual refresh)');
 }
 
-module.exports = { fetchPullRequests, clearPrListCache };
+async function fetchCommitMessage(nameWithOwner, sha) {
+    const data = await runGh(['api', `repos/${nameWithOwner}/commits/${sha}`, '--jq', '{message: .commit.message, author: .commit.author.name, date: .commit.author.date}']);
+    return data;
+}
+
+module.exports = { fetchPullRequests, clearPrListCache, fetchCommitMessage };

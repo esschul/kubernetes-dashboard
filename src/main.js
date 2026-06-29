@@ -26,7 +26,7 @@ try { buildDate = require('./build-info.json').date; } catch { /* not available 
 const { fetchDeployments, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs, cancelSearch } = require('./kubectl-client');
 const { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr } = require('./github-client');
 const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, rerunFailedJobs } = require('./azure-client');
-const { fetchPullRequests, clearPrListCache } = require('./pr-client');
+const { fetchPullRequests, clearPrListCache, fetchCommitMessage } = require('./pr-client');
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -206,6 +206,9 @@ app.whenReady().then(() => {
     ipcMain.handle('prs:clearCache', () => {
         clearPrListCache();
         return { ok: true };
+    });
+    ipcMain.handle('pr:fetchCommit', async (_event, nameWithOwner, sha) => {
+        return fetchCommitMessage(nameWithOwner, sha);
     });
 
     let activeLogProcess = null;

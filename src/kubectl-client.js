@@ -435,13 +435,13 @@ function getLogLineTimestamp(line) {
 let activeSearchProc = null;
 function cancelSearch() { try { activeSearchProc?.kill(); } catch { /* ignore */ } activeSearchProc = null; }
 
-async function searchLogs({ context, namespace, podName, selector, sinceTime, untilTime, searchTerm, searchIsRegex, maxLines, kubectlPath, onProgress }) {
+async function searchLogs({ context, namespace, podName, selector, sinceTime, untilTime, searchTerm, searchIsRegex, isErrors, maxLines, kubectlPath, onProgress }) {
     const { spawn } = require('node:child_process');
     const kPath = kubectlPath || resolveCommand('kubectl', 'KUBECTL_PATH');
     const ctxArgs = context ? ['--context', context] : [];
     const sinceArgs = sinceTime ? ['--since-time', sinceTime] : [];
-    const singleTailArgs = sinceTime ? [] : [`--tail=${maxLines || 2000}`];
-    const selectorTailArgs = sinceTime ? ['--tail=-1'] : [`--tail=${maxLines || 2000}`];
+    const singleTailArgs = sinceTime ? [] : ['--tail=-1'];
+    const selectorTailArgs = ['--tail=-1'];
     const targetArgs = selector
         ? ['--selector', selector, '--prefix', '--max-log-requests=20', ...selectorTailArgs]
         : [podName, ...singleTailArgs];
@@ -470,6 +470,7 @@ async function searchLogs({ context, namespace, podName, selector, sinceTime, un
             }
             if (termLower && !line.toLowerCase().includes(termLower)) { return false; }
             if (termRegex && !termRegex.test(line)) { return false; }
+            if (isErrors && !/"stack(?:Trace|_trace)?"\s*:/.test(line)) { return false; }
             results.push(line);
             return limit && results.length >= limit;
         };

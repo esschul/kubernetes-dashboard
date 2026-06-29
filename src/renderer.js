@@ -333,7 +333,7 @@ function renderQuickLogsResults() {
     const query = getQuickLogsQuery();
     quickLogsFiltered = quickLogsDeployments
         .filter((dep) => {
-            const haystack = `${dep.name || ''} ${dep.namespace || ''} ${dep.status || ''}`.toLowerCase();
+            const haystack = (dep.name || '').toLowerCase();
             return !query || haystack.includes(query);
         })
         .sort((a, b) => String(a.name).localeCompare(String(b.name)));
@@ -411,6 +411,8 @@ function openQuickSelectedLogs() {
     const podObjects = dep.pods || [];
     const matchLabels = dep.labels || {};
     const selector = Object.entries(matchLabels).map(([k, v]) => `${k}=${v}`).join(',') || null;
+    const latestRollout = dep.rollouts?.[0];
+    const deployMeta = { branch: latestRollout?.branch || null, imageTag: latestRollout?.imageTag || null, gitSha: dep.gitSha || null };
     document.getElementById('logsQuickOpenModal').close();
     openLogsModal({
         depName: dep.name,
@@ -419,6 +421,7 @@ function openQuickSelectedLogs() {
         context: quickLogsContext || config.context,
         namespace: dep.namespace || config.namespace,
         selector,
+        deployMeta,
         initialMode: 'live',
     });
 }
@@ -780,7 +783,13 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
         const config = loadConfig();
         const matchLabels = dep?.labels || {};
         const selector = Object.entries(matchLabels).map(([k, v]) => `${k}=${v}`).join(',') || null;
-        openLogsModal({ depName, pods, podObjects, context: config.context, namespace: config.namespace, selector });
+        const latestRollout = dep?.rollouts?.[0];
+        const deployMeta = {
+            branch: latestRollout?.branch || null,
+            imageTag: latestRollout?.imageTag || null,
+            gitSha: dep?.gitSha || null,
+        };
+        openLogsModal({ depName, pods, podObjects, context: config.context, namespace: config.namespace, selector, deployMeta, initialMode: 'live' });
         return;
     }
 

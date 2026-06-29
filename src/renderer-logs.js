@@ -228,10 +228,31 @@ function formatLogContent(raw, format) {
                 const obj = JSON.parse(msg.slice(jsonStart));
                 if (format === 'message') {
                     const message = obj.message || obj.msg || obj.Message || '';
-                    return { ts, msg: message || msg, cls: '' };
+                    const errObj = obj.err || obj.error || obj.exception || null;
+                    const stack = obj.stackTrace || obj.stack_trace || obj.stack
+                        || errObj?.stack || errObj?.stackTrace || errObj?.stack_trace
+                        || null;
+                    const errMsg = errObj?.message && errObj.message !== message ? errObj.message : null;
+                    return { ts, msg: message || msg, stack: stack || null, errMsg, cls: '' };
                 }
-                // app: show raw JSON string
                 return { ts, msg: msg.slice(jsonStart), cls: '' };
+            } catch { /* fall through */ }
+        }
+        return { skip: true };
+    }
+
+    if (format === 'errors') {
+        const jsonStart = msg.indexOf('{');
+        if (jsonStart !== -1) {
+            try {
+                const obj = JSON.parse(msg.slice(jsonStart));
+                const errObj = obj.err || obj.error || obj.exception || null;
+                const stack = obj.stackTrace || obj.stack_trace || obj.stack
+                    || errObj?.stack || errObj?.stackTrace || errObj?.stack_trace || null;
+                if (!stack) { return { skip: true }; }
+                const message = obj.message || obj.msg || obj.Message || '';
+                const errMsg = errObj?.message && errObj.message !== message ? errObj.message : null;
+                return { ts, msg: message || msg, stack, errMsg, cls: '' };
             } catch { /* fall through */ }
         }
         return { skip: true };
@@ -256,9 +277,9 @@ function renderLogEl(raw, format) {
         el.dataset.raw = raw;
         return el;
     }
-    const { ts, msg, level, levelCls, extra, cls } = result;
+    const { ts, msg, level, levelCls, extra, cls, stack, errMsg } = result;
     const el = document.createElement('div');
-    el.className = `log-line${cls ? ` ${cls}` : ''}`;
+    el.className = `log-line${cls ? ` ${cls}` : ''}${stack ? ' log-line--has-stack' : ''}`;
     el.dataset.raw = raw;
     const tsEl = document.createElement('span');
     tsEl.className = 'log-ts';
@@ -279,6 +300,44 @@ function renderLogEl(raw, format) {
         exEl.className = 'log-extra';
         exEl.textContent = extra;
         el.appendChild(exEl);
+    }
+    if (stack) {
+        const details = document.createElement('details');
+        details.className = 'log-stack';
+        const summary = document.createElement('summary');
+        summary.className = 'log-stack-summary';
+        summary.textContent = errMsg ? `Error: ${errMsg}` : 'Stack trace';
+        details.appendChild(summary);
+        const pre = document.createElement('pre');
+        pre.className = 'log-stack-body';
+        pre.textContent = typeof stack === 'string' ? stack : JSON.stringify(stack, null, 2);
+        details.appendChild(pre);
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'log-stack-copy-btn';
+        copyBtn.textContent = 'Copy for AI';
+        copyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const { depName, deployMeta } = logsModalContext || {};
+            const stackText = typeof stack === 'string' ? stack : JSON.stringify(stack, null, 2);
+            const lines = [
+                `Application: ${depName || 'unknown'}`,
+                deployMeta?.branch ? `Branch: ${deployMeta.branch}` : null,
+                deployMeta?.imageTag && deployMeta.imageTag !== deployMeta.gitSha ? `Version: ${deployMeta.imageTag}` : null,
+                deployMeta?.gitSha ? `Commit: ${deployMeta.gitSha}` : null,
+                `Time: ${ts}`,
+                ``,
+                `Error: ${msg}`,
+                errMsg ? `Cause: ${errMsg}` : null,
+                ``,
+                `Stack trace:`,
+                stackText,
+            ].filter((l) => l !== null).join('\n');
+            navigator.clipboard.writeText(lines).catch(() => {});
+            copyBtn.textContent = 'Copied!';
+            setTimeout(() => { copyBtn.textContent = 'Copy for AI'; }, 1500);
+        });
+        details.appendChild(copyBtn);
+        el.appendChild(details);
     }
     return el;
 }
@@ -491,13 +550,13 @@ function resumeLogsLiveStream() {
     startLogsLiveStream(context, namespace, selector, { preserveOutput: true });
 }
 
-function openLogsModal({ depName, pods, podObjects, context, namespace, selector, initialMode = 'search' }) {
+function openLogsModal({ depName, pods, podObjects, context, namespace, selector, deployMeta = {}, initialMode = 'search' }) {
     logBuffer = [];
     caughtBuffer = [];
     logAutoScroll = true;
     stopLogRateTimer();
     resetLogRateGauge();
-    logsModalContext = { depName, pods, podObjects, context, namespace, selector };
+    logsModalContext = { depName, pods, podObjects, context, namespace, selector, deployMeta };
 
     const modal = document.getElementById('logsModal');
     const output = document.getElementById('logsOutput');
@@ -513,6 +572,7 @@ function openLogsModal({ depName, pods, podObjects, context, namespace, selector
         pill.className = `logs-env-pill${envLabel ? ` is-env-${envLabel}` : ''}`;
     }
     output.textContent = '';
+    document.getElementById('logsGroupBtn')?.classList.add('hidden');
     document.getElementById('logsLiveFilterInput').value = '';
     document.getElementById('logsLiveHighlightInput').value = '';
     document.getElementById('logsSearchInput').value = '';
@@ -635,6 +695,7 @@ function bindLogEventListeners() {
         });
 
         try {
+            const format = document.getElementById('logsFormatSelect')?.value || 'raw';
             const lines = await window.kubeDashboard.searchLogs({
                 context, namespace,
                 podName: isAll ? null : searchSelect.value,
@@ -643,17 +704,21 @@ function bindLogEventListeners() {
                 untilTime,
                 searchTerm,
                 searchIsRegex,
+                isErrors: format === 'errors',
                 maxLines,
             });
             window.kubeDashboard.offSearchProgress?.();
+            const groupBtn = document.getElementById('logsGroupBtn');
             if (lines.length === 0) {
                 appendLogLine('[no results]', output, { countRate: false, applyLiveFilter: false });
+                if (groupBtn) { groupBtn.classList.add('hidden'); }
             } else {
                 for (const line of lines) { appendLogLine(line, output, { countRate: false, applyLiveFilter: false }); }
                 if (lines.length >= LOG_SEARCH_MAX_LINES) {
                     appendLogLine(`[truncated — showing first ${LOG_SEARCH_MAX_LINES} of ${lines.length} lines]`, output, { countRate: false, applyLiveFilter: false });
                 }
                 applyHighlight();
+                if (groupBtn) { groupBtn.classList.remove('hidden'); groupBtn.classList.remove('is-active'); groupBtn.textContent = 'Group'; }
             }
         } catch (err) {
             window.kubeDashboard.offSearchProgress?.();
@@ -661,6 +726,44 @@ function bindLogEventListeners() {
             appendLogLine(`[error] ${err.message}`, output, { countRate: false, applyLiveFilter: false });
         } finally {
             btn.disabled = false;
+        }
+    });
+
+    document.getElementById('logsGroupBtn')?.addEventListener('click', () => {
+        const output = document.getElementById('logsOutput');
+        const btn = document.getElementById('logsGroupBtn');
+        const isGrouped = btn.classList.toggle('is-active');
+        btn.textContent = isGrouped ? 'Ungroup' : 'Group';
+
+        if (isGrouped) {
+            // group: count identical messages, collapse into single rows
+            const counts = new Map();
+            const order = [];
+            output.querySelectorAll('.log-line:not(.log-line--hidden)').forEach((el) => {
+                const key = el.querySelector('.log-msg')?.textContent?.trim() || '';
+                if (!key) { return; }
+                if (!counts.has(key)) { counts.set(key, { el, count: 0 }); order.push(key); }
+                counts.get(key).count++;
+                if (counts.get(key).el !== el) { el.dataset.grouped = 'hide'; el.style.display = 'none'; }
+            });
+            order.forEach((key) => {
+                const { el, count } = counts.get(key);
+                let badge = el.querySelector('.log-group-count');
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'log-group-count';
+                    el.appendChild(badge);
+                }
+                badge.textContent = count > 1 ? `×${count}` : '';
+                badge.style.display = count > 1 ? '' : 'none';
+            });
+        } else {
+            // ungroup: restore all hidden lines, remove badges
+            output.querySelectorAll('[data-grouped="hide"]').forEach((el) => {
+                el.style.display = '';
+                delete el.dataset.grouped;
+            });
+            output.querySelectorAll('.log-group-count').forEach((el) => el.remove());
         }
     });
 
@@ -676,6 +779,41 @@ function bindLogEventListeners() {
 
     document.getElementById('logsSearchInput')?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { document.getElementById('logsSearchBtn')?.click(); }
+    });
+
+    function toLocalDatetimeValue(date) {
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
+    document.getElementById('logsShortcutToday')?.addEventListener('click', () => {
+        const now = new Date();
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0);
+        document.getElementById('logsSearchFrom').value = toLocalDatetimeValue(startOfDay);
+        document.getElementById('logsSearchTo').value = toLocalDatetimeValue(now);
+    });
+
+    document.getElementById('logsShortcutSincePod')?.addEventListener('click', () => {
+        const { podObjects } = logsModalContext || {};
+        const searchSelect = document.getElementById('logsSearchPodSelect');
+        const selectedPod = searchSelect?.value === '__all__' ? null : searchSelect?.value;
+        const pod = selectedPod
+            ? podObjects?.find((p) => p.name === selectedPod)
+            : podObjects?.[0];
+        const startTime = pod?.startTime;
+        if (!startTime) { return; }
+        document.getElementById('logsSearchFrom').value = toLocalDatetimeValue(new Date(startTime));
+        document.getElementById('logsSearchTo').value = toLocalDatetimeValue(new Date());
+    });
+
+    document.getElementById('logsModal')?.addEventListener('keydown', (e) => {
+        if (e.key === 'f' && e.metaKey) {
+            e.preventDefault();
+            const isLive = document.getElementById('logsTabLive')?.classList.contains('is-active');
+            const input = document.getElementById(isLive ? 'logsLiveHighlightInput' : 'logsHighlightInput');
+            input?.focus();
+            input?.select();
+        }
     });
 
     document.getElementById('logsHighlightInput')?.addEventListener('input', () => {
