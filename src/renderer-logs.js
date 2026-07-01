@@ -915,6 +915,10 @@ function bindLogEventListeners() {
     document.getElementById('logsLiveFormatSelect')?.addEventListener('change', () => reRenderLogOutput());
 
     document.getElementById('logsCloseBtn')?.addEventListener('click', closeLogsModal);
+    document.getElementById('logsOtherBtn')?.addEventListener('click', () => {
+        closeLogsModal();
+        openQuickLogsModal();
+    });
     document.getElementById('logsModal')?.addEventListener('close', () => {
         window.kubeDashboard.stopLogStream();
         window.kubeDashboard.offLogListeners();

@@ -160,7 +160,7 @@ async function fetchPullRequests({ org, topic, watchedRepos = [], namespace }) {
     // Watched repos: fetch PRs labelled with the namespace name
     const label = namespace || topic;
     const watchedReposFull = watchedRepos.map((r) => r.includes('/') ? r : `${org}/${r}`);
-    const watchedLists = await Promise.all(watchedReposFull.map(async (nameWithOwner) => {
+    const watchedLists = (await Promise.allSettled(watchedReposFull.map(async (nameWithOwner) => {
         const [open, merged, mergedYesterday] = await Promise.all([
             fetchPrList(nameWithOwner, `open:label:${label}`, ['pr', 'list', '--repo', nameWithOwner, '--label', label, '--limit', '100', '--json', OPEN_PR_FIELDS]),
             fetchPrList(nameWithOwner, `merged:${today}:label:${label}`, ['pr', 'list', '--repo', nameWithOwner, '--label', label, '--state', 'merged', '--search', `merged:${today}`, '--limit', '100', '--json', MERGED_PR_FIELDS]),
@@ -171,9 +171,9 @@ async function fetchPullRequests({ org, topic, watchedRepos = [], namespace }) {
             mergedPullRequests: merged.map((pr) => normalizePr(pr, nameWithOwner)),
             mergedYesterdayPullRequests: mergedYesterday.map((pr) => normalizePr(pr, nameWithOwner)),
         };
-    }));
+    }))).filter((r) => r.status === 'fulfilled').map((r) => r.value);
 
-    const lists = await Promise.all(repositories.map(async ({ nameWithOwner }) => {
+    const lists = (await Promise.allSettled(repositories.map(async ({ nameWithOwner }) => {
         const [open, merged, mergedYesterday] = await Promise.all([
             fetchPrList(nameWithOwner, 'open', ['pr', 'list', '--repo', nameWithOwner, '--limit', '100', '--json', OPEN_PR_FIELDS]),
             fetchPrList(nameWithOwner, `merged:${today}`, ['pr', 'list', '--repo', nameWithOwner, '--state', 'merged', '--search', `merged:${today}`, '--limit', '100', '--json', MERGED_PR_FIELDS]),
@@ -184,7 +184,7 @@ async function fetchPullRequests({ org, topic, watchedRepos = [], namespace }) {
             mergedPullRequests: merged.map((pr) => normalizePr(pr, nameWithOwner)),
             mergedYesterdayPullRequests: mergedYesterday.map((pr) => normalizePr(pr, nameWithOwner)),
         };
-    }));
+    }))).filter((r) => r.status === 'fulfilled').map((r) => r.value);
 
     // Fetch PRs authored by the current user across the whole org
     const AUTHOR_FIELDS = `number,title,url,author,isDraft,createdAt,updatedAt,reviewDecision,repository`;

@@ -295,6 +295,7 @@ let quickLogsDeployments = [];
 let quickLogsFiltered = [];
 let quickLogsSelectedIndex = 0;
 let quickLogsContext = '';
+let quickLogsNamespace = '';
 let quickLogsLoadingToken = 0;
 
 function getQuickLogEnvironments(config) {
@@ -369,8 +370,9 @@ async function loadQuickLogsDeployments(context) {
         renderQuickLogsResults();
         return;
     }
-    const cacheKey = quickLogsCacheKey(context, config.namespace);
-    const cached = context === config.context && latestDeployments.length > 0
+    const ns = quickLogsNamespace || config.namespace;
+    const cacheKey = quickLogsCacheKey(context, ns);
+    const cached = context === config.context && ns === config.namespace && latestDeployments.length > 0
         ? latestDeployments
         : quickLogsDeploymentCache.get(cacheKey);
     if (cached?.length) {
@@ -386,10 +388,10 @@ async function loadQuickLogsDeployments(context) {
     renderQuickLogsResults();
 
     try {
-        if (context === config.context && latestDeployments.length > 0) {
+        if (context === config.context && ns === config.namespace && latestDeployments.length > 0) {
             quickLogsDeployments = latestDeployments;
         } else {
-            quickLogsDeployments = await window.kubeDashboard.fetchDeployments({ ...config, context });
+            quickLogsDeployments = await window.kubeDashboard.fetchDeployments({ ...config, context, namespace: ns });
         }
         if (token !== quickLogsLoadingToken) { return; }
         quickLogsDeploymentCache.set(cacheKey, quickLogsDeployments);
@@ -426,17 +428,35 @@ function openQuickSelectedLogs() {
     });
 }
 
+async function populateQuickLogsNamespaces(config) {
+    const nsSelect = document.getElementById('logsQuickNs');
+    if (!nsSelect) { return; }
+    nsSelect.innerHTML = '<option value="">Loading…</option>';
+    try {
+        const namespaces = await window.kubeDashboard.fetchNamespaces({ ...config, context: quickLogsContext });
+        const current = quickLogsNamespace || config.namespace || '';
+        nsSelect.innerHTML = namespaces.map((ns) =>
+            `<option value="${escapeHtml(ns)}" ${ns === current ? 'selected' : ''}>${escapeHtml(ns)}</option>`
+        ).join('');
+        if (!quickLogsNamespace) { quickLogsNamespace = nsSelect.value; }
+    } catch {
+        nsSelect.innerHTML = `<option value="${escapeHtml(config.namespace || '')}">${escapeHtml(config.namespace || 'unknown')}</option>`;
+    }
+}
+
 function openQuickLogsModal() {
     const modal = document.getElementById('logsQuickOpenModal');
     const input = document.getElementById('logsQuickInput');
     const config = loadConfig();
     const envs = getQuickLogEnvironments(config);
     quickLogsContext = config.context || envs[0]?.context || '';
+    quickLogsNamespace = config.namespace || '';
     quickLogsSelectedIndex = 0;
     input.value = '';
     renderQuickLogsEnvs(config);
     if (!modal.open) { modal.showModal(); }
     input.focus();
+    populateQuickLogsNamespaces(config);
     loadQuickLogsDeployments(quickLogsContext);
 }
 
@@ -465,8 +485,15 @@ document.getElementById('logsQuickOpenModal')?.addEventListener('click', (e) => 
 document.getElementById('logsQuickEnv')?.addEventListener('click', (e) => {
     const btn = e.target.closest('.logs-quick-env-btn[data-context]');
     if (!btn) { return; }
+    quickLogsNamespace = '';
     loadQuickLogsDeployments(btn.dataset.context);
+    populateQuickLogsNamespaces(loadConfig());
     document.getElementById('logsQuickInput').focus();
+});
+
+document.getElementById('logsQuickNs')?.addEventListener('change', (e) => {
+    quickLogsNamespace = e.target.value;
+    loadQuickLogsDeployments(quickLogsContext);
 });
 
 document.getElementById('logsQuickInput')?.addEventListener('input', () => {
@@ -740,6 +767,56 @@ document.getElementById('pipelineList').addEventListener('click', (e) => {
     btnGrid?.addEventListener('click', () => { setView('grid'); if (latestDeployments) { renderDeploymentList(latestDeployments); } });
 }());
 
+function openIssuesModal(dep) {
+    const modal = document.getElementById('issuesModal');
+    const body = document.getElementById('issuesModalBody');
+    const title = document.getElementById('issuesModalTitle');
+    if (!modal || !body) { return; }
+    title.textContent = `Issues — ${dep.name}`;
+
+    const rows = dep.failures.map((f) => {
+        let typeLabel = '';
+        let detail = '';
+        if (f.type === 'crash-loop') {
+            typeLabel = '<span class="issue-badge issue-badge--crash">CrashLoopBackOff</span>';
+            detail = `<div class="issue-detail">${escapeHtml(f.container)} in pod <code>${escapeHtml(f.pod)}</code> — ${f.restarts} restart${f.restarts !== 1 ? 's' : ''}</div>`;
+        } else if (f.type === 'oom') {
+            typeLabel = '<span class="issue-badge issue-badge--oom">OOMKilled</span>';
+            detail = `<div class="issue-detail">${escapeHtml(f.container)} in pod <code>${escapeHtml(f.pod)}</code> — ${f.restarts} restart${f.restarts !== 1 ? 's' : ''}</div>`;
+        } else if (f.type === 'image-pull') {
+            typeLabel = '<span class="issue-badge issue-badge--image">ImagePullBackOff</span>';
+            detail = `<div class="issue-detail">${escapeHtml(f.message)}</div>`;
+        } else if (f.type === 'event') {
+            typeLabel = '<span class="issue-badge issue-badge--event">Event</span>';
+            const countLabel = f.count > 1 ? ` <span class="issue-count">×${f.count}</span>` : '';
+            detail = `<div class="issue-detail">${escapeHtml(f.message)}${countLabel}</div>`;
+        } else {
+            typeLabel = '<span class="issue-badge issue-badge--event">Warning</span>';
+            detail = `<div class="issue-detail">${escapeHtml(f.message || '')}</div>`;
+        }
+        return `<div class="issue-row">${typeLabel}${detail}</div>`;
+    });
+
+    const podRows = dep.pods.filter((p) => p.status !== 'Running' && p.status !== 'Completed').map((p) => `
+        <div class="issue-pod-row">
+            <code class="issue-pod-name">${escapeHtml(p.name)}</code>
+            <span class="issue-pod-status issue-badge issue-badge--crash">${escapeHtml(p.status)}</span>
+            ${p.restarts > 0 ? `<span class="issue-pod-restarts">${p.restarts} restart${p.restarts !== 1 ? 's' : ''}</span>` : ''}
+        </div>`).join('');
+
+    body.innerHTML = `
+        <section class="issue-section">
+            <h4 class="issue-section-title">Detected issues</h4>
+            ${rows.join('')}
+        </section>
+        ${podRows ? `<section class="issue-section">
+            <h4 class="issue-section-title">Unhealthy pods</h4>
+            ${podRows}
+        </section>` : ''}
+    `;
+    modal.showModal();
+}
+
 function openHistoryModal(depName, historyEl) {
     const modal = document.getElementById('historyModal');
     const body = document.getElementById('historyModalBody');
@@ -818,6 +895,17 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
         const tag = tagEl?.textContent?.trim();
         const config = loadConfig();
         openRollbackModal({ depName, namespace: config.namespace, context: config.context, revision, prTitle, tag });
+        return;
+    }
+
+    // Handle issues button
+    if (e.target.closest('.grid-issues-btn')) {
+        e.stopPropagation();
+        const btn = e.target.closest('.grid-issues-btn');
+        const card = btn.closest('.deployment-card');
+        const depName = card?.dataset.depName || '';
+        const dep = latestDeployments.find((d) => d.name === depName);
+        if (dep) { openIssuesModal(dep); }
         return;
     }
 
@@ -918,6 +1006,10 @@ function closeRollbackModal() {
     rollbackPending = null;
 }
 
+document.getElementById('issuesModalCloseBtn')?.addEventListener('click', () => document.getElementById('issuesModal').close());
+document.getElementById('issuesModal')?.addEventListener('click', (e) => {
+    if (e.target === document.getElementById('issuesModal')) { document.getElementById('issuesModal').close(); }
+});
 document.getElementById('historyModalCloseBtn')?.addEventListener('click', () => document.getElementById('historyModal').close());
 document.getElementById('historyModal')?.addEventListener('click', (e) => {
     if (e.target === document.getElementById('historyModal')) { document.getElementById('historyModal').close(); }

@@ -672,6 +672,41 @@ h3 {
 }
 .grid-card-actions .trello-placeholder:empty { display: none; }
 
+.grid-issues-btn {
+    display: block;
+    width: calc(100% - 32px);
+    margin: 0 16px 12px;
+    padding: 8px 14px;
+    background: var(--danger-bg);
+    border: 1.5px solid #ef4444;
+    border-radius: 9px;
+    color: var(--danger-text);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+}
+.grid-issues-btn:hover { filter: brightness(0.95); }
+.issues-modal-body { padding: 8px 0 16px; min-width: 420px; }
+.issue-section { margin-bottom: 20px; }
+.issue-section-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 10px; padding: 0 24px; }
+.issue-row { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 24px; border-bottom: 1px solid var(--line); }
+.issue-row:last-child { border-bottom: none; }
+.issue-badge { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-bottom: 4px; }
+.issue-badge--crash { background: #fde8e8; color: #a32a20; }
+.issue-badge--oom { background: #fef3c7; color: #92400e; }
+.issue-badge--image { background: #dbeafe; color: #1e40af; }
+.issue-badge--event { background: var(--panel-muted); color: var(--muted); }
+:root[data-theme="dark"] .issue-badge--crash { background: #3d1a1a; color: #fca5a5; }
+:root[data-theme="dark"] .issue-badge--oom { background: #2d1f0a; color: #fbbf24; }
+:root[data-theme="dark"] .issue-badge--image { background: #1a2030; color: #93c5fd; }
+.issue-detail { font-size: 0.83rem; color: var(--text); line-height: 1.5; }
+.issue-detail code { font-size: 0.78rem; color: var(--muted); }
+.issue-count { font-size: 0.75rem; color: var(--muted); margin-left: 6px; }
+.issue-pod-row { display: flex; align-items: center; gap: 10px; padding: 8px 24px; border-bottom: 1px solid var(--line); }
+.issue-pod-row:last-child { border-bottom: none; }
+.issue-pod-name { font-size: 0.78rem; color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.issue-pod-restarts { font-size: 0.75rem; color: var(--muted); }
 .grid-card-actions .grid-action-btn {
     background: var(--panel-muted);
     border: 1.5px solid var(--line);
@@ -2462,14 +2497,18 @@ input, select {
 /* Rollback modal */
 #rollbackModal,
 #restartModal,
-#historyModal {
+#historyModal,
+#issuesModal {
     background: var(--panel);
     border: 1px solid var(--line);
     border-radius: 12px;
     padding: 24px;
     max-width: 90vw;
+    color: var(--text);
     box-shadow: 0 8px 32px rgba(0,0,0,0.18);
 }
+#issuesModal { width: min(600px, 90vw); max-height: 80vh; overflow-y: auto; }
+#issuesModal[open] { display: flex; flex-direction: column; gap: 12px; }
 #rollbackModal,
 #restartModal {
     width: 480px;
@@ -2482,7 +2521,8 @@ input, select {
 }
 #rollbackModal::backdrop,
 #restartModal::backdrop,
-#historyModal::backdrop {
+#historyModal::backdrop,
+#issuesModal::backdrop {
     background: rgba(0,0,0,0.45);
 }
 .modal-title {
@@ -2624,9 +2664,13 @@ input, select {
 .logs-quick-env-btn.is-env-qa.is-active { border-color: #22c55e; background: #22c55e; color: #fff; }
 .logs-quick-env-btn.is-env-test.is-active { border-color: #3b82f6; background: #3b82f6; color: #fff; }
 
-.logs-quick-input {
-    width: calc(100% - 64px);
+.logs-quick-search-row {
+    display: flex;
+    gap: 8px;
     margin: 18px 32px 10px;
+}
+.logs-quick-input {
+    flex: 1;
     padding: 12px 14px;
     border: 1px solid #30363d;
     border-radius: 8px;
@@ -2635,8 +2679,19 @@ input, select {
     font-size: 0.95rem;
     outline: none;
 }
-
 .logs-quick-input:focus { border-color: #58a6ff; }
+.logs-quick-ns {
+    padding: 8px 10px;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    background: #161b22;
+    color: #8b949e;
+    font-size: 0.85rem;
+    outline: none;
+    cursor: pointer;
+    max-width: 160px;
+}
+.logs-quick-ns:focus { border-color: #58a6ff; }
 
 .logs-quick-status {
     min-height: 18px;
@@ -3026,6 +3081,16 @@ input, select {
     cursor: pointer;
 }
 .logs-copy-btn:hover { border-color: #58a6ff; color: #58a6ff; }
+.logs-other-btn {
+    background: transparent;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #8b949e;
+    font-size: 0.8rem;
+    padding: 5px 12px;
+    cursor: pointer;
+}
+.logs-other-btn:hover { border-color: #58a6ff; color: #58a6ff; }
 .logs-body {
     display: flex;
     flex: 1;

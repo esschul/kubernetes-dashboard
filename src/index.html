@@ -337,6 +337,13 @@ az login</pre>
         <button class="modal-btn modal-btn--confirm" id="restartConfirmBtn">Restart</button>
     </div>
 </dialog>
+<dialog id="issuesModal">
+    <div class="history-modal-header">
+        <h3 class="modal-title" id="issuesModalTitle">Issues</h3>
+        <button class="modal-btn modal-btn--cancel" id="issuesModalCloseBtn">Close</button>
+    </div>
+    <div class="issues-modal-body" id="issuesModalBody"></div>
+</dialog>
 <dialog id="historyModal">
     <div class="history-modal-header">
         <h3 class="modal-title" id="historyModalTitle">History</h3>
@@ -360,7 +367,10 @@ az login</pre>
         <button class="modal-btn modal-btn--cancel" id="logsQuickCloseBtn">Close</button>
     </div>
     <div class="logs-quick-env" id="logsQuickEnv"></div>
-    <input class="logs-quick-input" id="logsQuickInput" type="text" placeholder="Type deployment name…" />
+    <div class="logs-quick-search-row">
+        <input class="logs-quick-input" id="logsQuickInput" type="text" placeholder="Type deployment name…" />
+        <select class="logs-quick-ns" id="logsQuickNs" title="Namespace"></select>
+    </div>
     <div class="logs-quick-status" id="logsQuickStatus"></div>
     <div class="logs-quick-results" id="logsQuickResults"></div>
 </dialog>
@@ -378,6 +388,7 @@ az login</pre>
 
         <div class="logs-modal-actions">
             <button class="logs-copy-btn" id="logsCopyBtn">Copy all</button>
+            <button class="logs-other-btn" id="logsOtherBtn" type="button">Other logs</button>
             <button class="modal-btn modal-btn--cancel" id="logsCloseBtn">Close</button>
         </div>
     </div>

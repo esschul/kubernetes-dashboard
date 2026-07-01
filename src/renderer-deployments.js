@@ -280,6 +280,7 @@ function renderGridCard(dep) {
         ${podLine}
         ${prSection}
         <hr class="grid-card-divider">
+        ${dep.failures?.length > 0 && dep.status !== 'healthy' ? `<button class="grid-issues-btn" data-dep-name="${escapeHtml(dep.name)}">⚠ ${dep.failures.length} issue${dep.failures.length !== 1 ? 's' : ''}</button>` : ''}
         <div class="grid-card-actions">
             ${hasDatadog ? `<span class="grid-action-btn grid-action-btn--external datadog-link" data-url="${escapeHtml(datadogUrl)}">Datadog ↗</span>` : ''}
             <span class="trello-placeholder"></span>
