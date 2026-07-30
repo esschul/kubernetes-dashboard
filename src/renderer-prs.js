@@ -24,9 +24,8 @@ const MANIFEST_FILES = [
     { manifest: 'Pipfile', locks: ['Pipfile.lock'] },
     // PHP
     { manifest: 'composer.json', locks: ['composer.lock'] },
-    // Gradle
-    { manifest: 'build.gradle', locks: ['gradle.lockfile'] },
-    { manifest: 'build.gradle.kts', locks: ['gradle.lockfile'] },
+    // Gradle — only flag if project has already opted into lock files
+    { manifest: 'gradle.lockfile', locks: ['gradle.lockfile'] },
 ];
 
 function analyzeDependabotPr(pr) {

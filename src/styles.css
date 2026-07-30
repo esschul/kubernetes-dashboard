@@ -1431,6 +1431,13 @@ h3 {
     max-width: 160px;
     overflow: hidden;
     text-overflow: ellipsis;
+    border: 1px solid transparent;
+}
+
+.pr-comments-pill:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
 }
 
 .branch-type-badge {
