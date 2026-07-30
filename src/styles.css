@@ -268,6 +268,21 @@ button:disabled {
     display: grid;
 }
 
+.app-shell.is-sidebar-collapsed .nav-item[data-failed="1"] .nav-icon {
+    position: relative;
+}
+.app-shell.is-sidebar-collapsed .nav-item[data-failed="1"] .nav-icon::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ef4444;
+    border: 2px solid var(--sidebar);
+}
+
 .app-shell.is-sidebar-collapsed .nav {
     margin-top: 20px;
 }
@@ -454,6 +469,16 @@ h3 {
     color: #ffe596;
 }
 
+.dep-warn-pill {
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.dep-warn-pill--danger { background: var(--danger-bg); color: var(--danger-text); border: 1px solid currentColor; }
+.dep-warn-pill--warning { background: #fef3c7; color: #92400e; border: 1px solid currentColor; }
+:root[data-theme="dark"] .dep-warn-pill--warning { background: #2d1f0a; color: #fbbf24; }
 .age-pill {
     padding: 4px 8px;
     border: 1px solid transparent;

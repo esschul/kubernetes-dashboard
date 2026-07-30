@@ -15,6 +15,54 @@ const BOT_AVATAR_SVG = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w
 
 function isDependabotPr(pr) { return pr.author?.login === DEPENDABOT_LOGIN; }
 
+const MANIFEST_FILES = [
+    // npm
+    { manifest: 'package.json', locks: ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'] },
+    // Python
+    { manifest: 'requirements.txt', locks: ['poetry.lock', 'Pipfile.lock'] },
+    { manifest: 'pyproject.toml', locks: ['poetry.lock', 'Pipfile.lock'] },
+    { manifest: 'Pipfile', locks: ['Pipfile.lock'] },
+    // PHP
+    { manifest: 'composer.json', locks: ['composer.lock'] },
+    // Gradle
+    { manifest: 'build.gradle', locks: ['gradle.lockfile'] },
+    { manifest: 'build.gradle.kts', locks: ['gradle.lockfile'] },
+];
+
+function analyzeDependabotPr(pr) {
+    const warnings = [];
+    const title = pr.title || '';
+    const files = (pr.files || []).map((f) => (typeof f === 'string' ? f : f.path || f.filename || ''));
+
+    // Detect major version bump from title: "Bump X from A to B"
+    const bumpMatch = title.match(/bump .+ from (\d+)\.\S+ to (\d+)\./i);
+    if (bumpMatch) {
+        const fromMajor = parseInt(bumpMatch[1], 10);
+        const toMajor = parseInt(bumpMatch[2], 10);
+        if (toMajor > fromMajor) { warnings.push({ type: 'major', label: 'Major bump', level: 'danger' }); }
+    }
+
+    // Detect new dependency (no "from X to Y" in title)
+    const isUpdate = /\bfrom\s+\S+\s+to\s+/i.test(title);
+    if (!isUpdate && /\badd\b|\bnew\b/i.test(title)) {
+        warnings.push({ type: 'new-dep', label: 'New dep', level: 'warning' });
+    }
+
+    // Detect missing lock file
+    for (const { manifest, locks } of MANIFEST_FILES) {
+        const hasManifest = files.some((f) => f === manifest || f.endsWith(`/${manifest}`));
+        if (hasManifest) {
+            const hasLock = locks.some((lock) => files.some((f) => f === lock || f.endsWith(`/${lock}`)));
+            if (!hasLock) {
+                warnings.push({ type: 'no-lock', label: 'No lock file', level: 'warning' });
+                break;
+            }
+        }
+    }
+
+    return warnings;
+}
+
 function getLocalDateKey(value) {
     const date = value ? new Date(value) : new Date();
     const y = date.getFullYear();
@@ -613,6 +661,7 @@ function renderPrCard(pr, isMerged = false) {
             <span class="pr-meta">#${pr.number} · ${escapeHtml(dateLabel)}</span>
             ${ageDetails ? `<span class="age-pill ${ageDetails.cssClass}">${escapeHtml(ageDetails.label)}</span>` : ''}
             ${pr.headRefOid ? `<span class="branch-pill pr-comments-pill" data-pr-key="${escapeHtml(pr.repository + '/' + pr.number)}" style="cursor:pointer">${pr.commentActivityCount > 0 ? `${pr.commentActivityCount} comment${pr.commentActivityCount !== 1 ? 's' : ''}` : 'Description'}</span>` : ''}
+            ${isDependabotPr(pr) ? analyzeDependabotPr(pr).map((w) => `<span class="dep-warn-pill dep-warn-pill--${w.level}">${escapeHtml(w.label)}</span>`).join('') : ''}
         </div>
         ${(pipelineStatus && isMerged) || deploymentStatus ? `
         <div class="pr-infra-row">

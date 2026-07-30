@@ -1,6 +1,6 @@
 {
   "name": "kubernetes-dashboard",
-  "version": "1.1.25",
+  "version": "1.1.26",
   "private": true,
   "description": "Electron dashboard for Kubernetes deployments using kubectl",
   "main": "src/main.js",

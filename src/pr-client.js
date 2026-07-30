@@ -8,7 +8,7 @@ const execFileAsync = promisify(execFile);
 
 const DEPENDABOT_LOGIN = 'app/dependabot';
 // headRefOid = head commit SHA, used to fetch check runs via REST
-const OPEN_PR_FIELDS = 'number,title,url,author,isDraft,createdAt,updatedAt,reviewDecision,headRefOid,comments,reviews';
+const OPEN_PR_FIELDS = 'number,title,url,author,isDraft,createdAt,updatedAt,reviewDecision,headRefOid,comments,reviews,files';
 const MERGED_PR_FIELDS = 'number,title,url,author,isDraft,createdAt,updatedAt,mergedAt,reviewDecision';
 
 const RECENT_PUSH_MS = 24 * 60 * 60 * 1000; // 24 hours — fetch checks for all recently active PRs

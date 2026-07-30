@@ -67,6 +67,8 @@ async function refreshPipelines() {
             `${teamPipelines.length} pipeline${teamPipelines.length !== 1 ? 's' : ''} today`;
         setLastUpdated();
         const count = document.getElementById('pipelinesCount');
+        const pipelinesNavItem = count?.closest('.nav-item');
+        if (pipelinesNavItem) { pipelinesNavItem.dataset.failed = failed > 0 ? '1' : '0'; }
         if (failed > 0) {
             count.textContent = `${failed} failed`;
             count.style.background = '#ffe0de';

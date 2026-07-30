@@ -675,7 +675,7 @@ function bindLogEventListeners() {
         output.textContent = '';
         logBuffer = [];
         const highlightInput = document.getElementById('logsHighlightInput');
-        if (highlightInput) { highlightInput.value = ''; }
+        if (highlightInput) { highlightInput.value = searchTerm || ''; }
         setHighlightError('');
 
         const progressEl = document.getElementById('logsSearchProgress');
