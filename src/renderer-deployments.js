@@ -313,7 +313,7 @@ function renderDeploymentCard(dep) {
             <div class="deployment-pill-row">
                 <span class="trello-placeholder"></span>
                 <button class="logs-open-btn" data-dep-name="${escapeHtml(dep.name)}">Logs</button>
-                ${datadogUrl ? `<span class="datadog-link" data-url="${escapeHtml(datadogUrl)}">Datadog</span>` : ''}
+                ${datadogUrl ? `<span class="datadog-link" data-url="${escapeHtml(datadogUrl)}">Datadog ↗</span>` : ''}
                 <span class="status-pill is-${escapeHtml(statusClass)}">${escapeHtml(statusLabel)}</span>
                 <span class="age-pill ${agePillClass}" title="${escapeHtml(deployedAbsolute)}">${escapeHtml(deployedLabel)}</span>
                 ${dep.rollouts?.length > 0 ? `<button class="rollout-history-btn" title="Show rollout history">History</button>` : ''}
