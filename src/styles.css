@@ -1148,17 +1148,19 @@ h3 {
 .trello-link, .datadog-link {
     padding: 4px 8px;
     border: 1px solid var(--line);
-    border-radius: 999px;
-    background: var(--panel-muted);
+    border-radius: 6px;
+    background: var(--panel);
     color: var(--muted);
     font-size: 0.78rem;
-    font-weight: 700;
+    font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
 }
 
 .trello-link:hover, .datadog-link:hover {
-    background: var(--line);
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
 }
 
 .pr-meta code {
@@ -2803,15 +2805,15 @@ input, select {
 .logs-open-btn {
     padding: 3px 10px;
     border: 1px solid var(--line);
-    border-radius: 999px;
-    background: transparent;
+    border-radius: 6px;
+    background: var(--panel);
     color: var(--muted);
     font-size: 0.78rem;
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
 }
-.logs-open-btn:hover { border-color: var(--accent); color: var(--accent); }
+.logs-open-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 .pod-expand-header {
     display: flex;
@@ -2822,15 +2824,15 @@ input, select {
 .restart-btn {
     padding: 3px 10px;
     border: 1px solid var(--line);
-    border-radius: 999px;
-    background: transparent;
+    border-radius: 6px;
+    background: var(--panel);
     color: var(--muted);
     font-size: 0.78rem;
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
 }
-.restart-btn:hover { border-color: var(--accent); color: var(--accent); }
+.restart-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 /* Logs modal */
 #logsModal {
