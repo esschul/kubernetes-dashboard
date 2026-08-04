@@ -1145,7 +1145,7 @@ h3 {
     flex-shrink: 0;
 }
 
-.trello-link, .datadog-link {
+.trello-link:not(.grid-action-btn), .datadog-link:not(.grid-action-btn) {
     padding: 4px 8px;
     border: 1px solid var(--line);
     border-radius: 6px;
@@ -1157,7 +1157,7 @@ h3 {
     white-space: nowrap;
 }
 
-.trello-link:hover, .datadog-link:hover {
+.trello-link:not(.grid-action-btn):hover, .datadog-link:not(.grid-action-btn):hover {
     background: var(--accent);
     color: #fff;
     border-color: var(--accent);
@@ -2820,7 +2820,7 @@ input, select {
 }
 
 /* Logs button on deployment card */
-.logs-open-btn {
+.logs-open-btn:not(.grid-action-btn) {
     padding: 3px 10px;
     border: 1px solid var(--line);
     border-radius: 6px;
@@ -2831,7 +2831,7 @@ input, select {
     cursor: pointer;
     white-space: nowrap;
 }
-.logs-open-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.logs-open-btn:not(.grid-action-btn):hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 .pod-expand-header {
     display: flex;
@@ -2839,7 +2839,7 @@ input, select {
     margin-bottom: 8px;
 }
 
-.restart-btn {
+.restart-btn:not(.grid-action-btn) {
     padding: 3px 10px;
     border: 1px solid var(--line);
     border-radius: 6px;
@@ -2850,7 +2850,7 @@ input, select {
     cursor: pointer;
     white-space: nowrap;
 }
-.restart-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.restart-btn:not(.grid-action-btn):hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 /* Logs modal */
 #logsModal {
