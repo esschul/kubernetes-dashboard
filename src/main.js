@@ -24,7 +24,7 @@ const { autoUpdater } = require('electron-updater');
 let buildDate = null;
 try { buildDate = require('./build-info.json').date; } catch { /* not available in dev */ }
 const { fetchDeployments, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs, cancelSearch } = require('./kubectl-client');
-const { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr } = require('./github-client');
+const { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr, closePr } = require('./github-client');
 const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, rerunFailedJobs } = require('./azure-client');
 const { fetchPullRequests, clearPrListCache, fetchCommitMessage } = require('./pr-client');
 
@@ -197,6 +197,15 @@ app.whenReady().then(() => {
     ipcMain.handle('pr:merge', async (_event, config) => {
         try {
             await mergePr(config);
+            return { ok: true };
+        } catch (err) {
+            return { ok: false, error: err.message };
+        }
+    });
+
+    ipcMain.handle('pr:close', async (_event, config) => {
+        try {
+            await closePr(config);
             return { ok: true };
         } catch (err) {
             return { ok: false, error: err.message };

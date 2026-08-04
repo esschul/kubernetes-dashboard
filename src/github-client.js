@@ -197,4 +197,10 @@ async function mergePr({ repoFullName, prNumber, method }) {
     await execFileAsync(ghPath, ['pr', 'merge', String(prNumber), flag, '--repo', repoFullName, '--admin'], opts);
 }
 
-module.exports = { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr };
+async function closePr({ repoFullName, prNumber }) {
+    const ghPath = resolveCommand('gh', 'GH_PATH');
+    const opts = { timeout: 30_000, maxBuffer: 1024 * 1024, env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() } };
+    await execFileAsync(ghPath, ['pr', 'close', String(prNumber), '--repo', repoFullName], opts);
+}
+
+module.exports = { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr, closePr };

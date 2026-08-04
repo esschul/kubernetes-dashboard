@@ -64,6 +64,7 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
     installUpdate: () => ipcRenderer.send('update-install'),
     approvePr: (config) => ipcRenderer.invoke('pr:approve', config),
     mergePr: (config) => ipcRenderer.invoke('pr:merge', config),
+    closePr: (config) => ipcRenderer.invoke('pr:close', config),
     rerunFailedJobs: async (config) => {
         const response = await ipcRenderer.invoke('pipeline:rerun', config);
         if (!response.ok) { throw response.error; }

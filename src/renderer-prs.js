@@ -323,6 +323,43 @@ document.getElementById('prList').addEventListener('click', (e) => {
         });
         return;
     }
+    const regenerateBtn = e.target.closest('.pr-regenerate-btn');
+    if (regenerateBtn) {
+        e.stopPropagation();
+        const row = regenerateBtn.closest('.pr-actions-row--regenerate, .pr-actions-row');
+        row.dataset.originalContent = row.innerHTML;
+        row.innerHTML = `
+            <span class="pr-action-confirm-label">Close PR? Dependabot will recreate it.</span>
+            <button class="pr-action-btn pr-regenerate-confirm-btn">Confirm</button>
+            <button class="pr-action-btn pr-action-btn--muted pr-regenerate-cancel-btn">Cancel</button>`;
+        return;
+    }
+    const cancelBtn = e.target.closest('.pr-regenerate-cancel-btn');
+    if (cancelBtn) {
+        e.stopPropagation();
+        const row = cancelBtn.closest('.pr-actions-row--regenerate, .pr-actions-row');
+        const originalContent = row.dataset.originalContent;
+        if (originalContent) { row.innerHTML = originalContent; }
+        return;
+    }
+    const confirmBtn = e.target.closest('.pr-regenerate-confirm-btn');
+    if (confirmBtn) {
+        e.stopPropagation();
+        const row = confirmBtn.closest('.pr-actions-row--regenerate, .pr-actions-row');
+        const prNumber = Number(row.dataset.prNumber);
+        const repoFullName = row.dataset.prRepo;
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Closing…';
+        window.kubeDashboard.closePr({ repoFullName, prNumber }).then((res) => {
+            if (res.ok) {
+                row.innerHTML = '<span class="pr-action-done">Closed ✓ — dependabot will recreate</span>';
+            } else {
+                row.innerHTML = `<button class="pr-action-btn pr-action-btn--muted pr-regenerate-btn">Close</button>`;
+                row.querySelector('.pr-regenerate-btn').title = res.error || 'Failed to close';
+            }
+        });
+        return;
+    }
     const card = e.target.closest('.pr-card[data-url]');
     if (card) { window.kubeDashboard.openExternal(card.dataset.url); }
 });
@@ -615,16 +652,17 @@ function renderPrCard(pr, isMerged = false) {
     const prKey = `${pr.repository}/${pr.number}`;
     const isApproved = approvedPrKeys.has(prKey) || pr.reviewDecision === 'APPROVED';
     const showActions = !isMerged && isDependabotPr(pr) && pr.checkStatus === 'success';
+    const closeBtn = !isMerged && isDependabotPr(pr) ? `<button class="pr-action-btn pr-action-btn--muted pr-regenerate-btn" title="Close PR so dependabot recreates it with the latest version">Close</button>` : '';
     const actionsHtml = showActions ? `
         <div class="pr-actions-row" data-pr-number="${pr.number}" data-pr-repo="${escapeHtml(pr.repository)}">
-            ${!isApproved ? `<button class="pr-action-btn pr-approve-btn">Approve</button>` : `
+            ${!isApproved ? `<button class="pr-action-btn pr-approve-btn">Approve</button>${closeBtn}` : `
             <select class="pr-merge-method-select">
                 <option value="squash" selected>Squash</option>
                 <option value="merge">Merge</option>
                 <option value="rebase">Rebase</option>
             </select>
-            <button class="pr-action-btn pr-merge-btn">Merge</button>`}
-        </div>` : '';
+            <button class="pr-action-btn pr-merge-btn">Merge</button>${closeBtn}`}
+        </div>` : closeBtn ? `<div class="pr-actions-row pr-actions-row--regenerate" data-pr-number="${pr.number}" data-pr-repo="${escapeHtml(pr.repository)}">${closeBtn}</div>` : '';
 
     const config = loadConfig();
     const showAvatars = config.showPrAvatars ?? true;

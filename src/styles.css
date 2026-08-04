@@ -2067,6 +2067,17 @@ input, select {
     opacity: 0.5;
     cursor: default;
 }
+.pr-action-confirm-label { font-size: 0.78rem; color: var(--muted); margin-right: 6px; }
+.pr-action-btn--muted {
+    background: transparent;
+    border-color: var(--line);
+    color: var(--muted);
+}
+.pr-action-btn--muted:hover:not(:disabled) {
+    background: var(--panel-muted);
+    border-color: var(--muted);
+    color: var(--text);
+}
 
 .pr-merge-method-select {
     padding: 4px 8px;
