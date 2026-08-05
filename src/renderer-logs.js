@@ -673,7 +673,6 @@ function bindLogEventListeners() {
         const maxLines = parseInt(document.getElementById('logsSearchLimit')?.value || '2000', 10);
 
         btn.disabled = true;
-        output.textContent = '';
         logBuffer = [];
         const highlightInput = document.getElementById('logsHighlightInput');
         if (highlightInput) { highlightInput.value = searchTerm || ''; }
@@ -681,13 +680,15 @@ function bindLogEventListeners() {
 
         const progressEl = document.getElementById('logsSearchProgress');
         const progressText = document.getElementById('logsSearchProgressText');
-        if (progressEl) { progressEl.style.display = 'flex'; }
         document.getElementById('logsSearchCancelBtn').style.display = '';
 
         window.kubeDashboard.offSearchProgress?.();
+        window.kubeDashboard.cancelSearch?.();
+        output.textContent = '';
+        if (progressEl) { progressEl.style.display = 'flex'; }
+        if (progressText) { progressText.textContent = 'Scanning…'; }
         const cancelBtn = document.getElementById('logsSearchCancelBtn');
         const format = document.getElementById('logsFormatSelect')?.value || 'raw';
-        output.textContent = '';
         window.kubeDashboard.onSearchProgress?.((p) => {
             if (progressText) {
                 progressText.textContent = p.done
