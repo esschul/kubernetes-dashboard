@@ -575,6 +575,7 @@ function openLogsModal({ depName, pods, podObjects, context, namespace, selector
     document.getElementById('logsGroupBtn')?.classList.add('hidden');
     document.getElementById('logsLiveFilterInput').value = '';
     document.getElementById('logsLiveHighlightInput').value = '';
+    document.getElementById('logsHighlightInput').value = '';
     document.getElementById('logsSearchInput').value = '';
     document.getElementById('logsNetInput').value = '';
     document.getElementById('logsNetOutput').value = '';
@@ -685,17 +686,22 @@ function bindLogEventListeners() {
 
         window.kubeDashboard.offSearchProgress?.();
         const cancelBtn = document.getElementById('logsSearchCancelBtn');
+        const format = document.getElementById('logsFormatSelect')?.value || 'raw';
+        output.textContent = '';
         window.kubeDashboard.onSearchProgress?.((p) => {
             if (progressText) {
                 progressText.textContent = p.done
                     ? `Done — ${p.scanned.toLocaleString()} lines scanned, ${p.matched.toLocaleString()} matched`
                     : `Scanning… ${p.scanned.toLocaleString()} lines, ${p.matched.toLocaleString()} matched`;
             }
+            if (p.newLines?.length) {
+                for (const line of p.newLines) { appendLogLine(line, output, { countRate: false, applyLiveFilter: false }); }
+                applyHighlight();
+            }
             if (p.done && cancelBtn) { cancelBtn.style.display = 'none'; }
         });
 
         try {
-            const format = document.getElementById('logsFormatSelect')?.value || 'raw';
             const lines = await window.kubeDashboard.searchLogs({
                 context, namespace,
                 podName: isAll ? null : searchSelect.value,
@@ -709,11 +715,11 @@ function bindLogEventListeners() {
             });
             window.kubeDashboard.offSearchProgress?.();
             const groupBtn = document.getElementById('logsGroupBtn');
-            if (lines.length === 0) {
+            // Lines already rendered progressively via onSearchProgress; just handle edge cases
+            if (lines.length === 0 && output.children.length === 0) {
                 appendLogLine('[no results]', output, { countRate: false, applyLiveFilter: false });
                 if (groupBtn) { groupBtn.classList.add('hidden'); }
             } else {
-                for (const line of lines) { appendLogLine(line, output, { countRate: false, applyLiveFilter: false }); }
                 if (lines.length >= LOG_SEARCH_MAX_LINES) {
                     appendLogLine(`[truncated — showing first ${LOG_SEARCH_MAX_LINES} of ${lines.length} lines]`, output, { countRate: false, applyLiveFilter: false });
                 }

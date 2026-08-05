@@ -461,6 +461,8 @@ async function searchLogs({ context, namespace, podName, selector, sinceTime, un
         let scanned = 0;
         let lastProgress = 0;
 
+        let lastReported = 0;
+
         const processLine = (line) => {
             if (!line) { return false; }
             scanned++;
@@ -480,7 +482,7 @@ async function searchLogs({ context, namespace, podName, selector, sinceTime, un
             done = true;
             try { proc.kill(); } catch { /* ignore */ }
             if (remainder) { processLine(remainder); }
-            if (onProgress) { onProgress({ scanned, matched: results.length, done: true }); }
+            if (onProgress) { onProgress({ scanned, matched: results.length, done: true, newLines: results.slice(lastReported) }); }
             if (results.length === 0 && stderrBuf) { console.error('[searchLogs] no results, stderr:', stderrBuf); }
             resolve(results);
         };
@@ -495,7 +497,9 @@ async function searchLogs({ context, namespace, podName, selector, sinceTime, un
             }
             if (onProgress && scanned - lastProgress >= 500) {
                 lastProgress = scanned;
-                onProgress({ scanned, matched: results.length, done: false });
+                const newLines = results.slice(lastReported);
+                lastReported = results.length;
+                onProgress({ scanned, matched: results.length, done: false, newLines });
             }
         });
 
