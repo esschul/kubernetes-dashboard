@@ -122,22 +122,15 @@ async function fetchRepoList(org, topic) {
         return cached.repos;
     }
     console.log(`[gh] repoList cache MISS — fetching from GitHub`);
-    // Use REST API instead of GraphQL (gh repo list uses GraphQL which has lower rate limits)
-    let repos = [];
-    let page = 1;
-    while (true) {
-        const batch = await runGh([
-            'api', `orgs/${org}/repos`,
-            '--method', 'GET',
-            '-f', 'per_page=100',
-            '-f', `page=${page}`,
-            '--jq', `[.[] | select(.archived == false) | select((.topics // []) | index("${topic}") != null) | {nameWithOwner: .full_name}]`,
-        ]);
-        if (!batch.length) { break; }
-        repos = repos.concat(batch);
-        if (batch.length < 100) { break; }
-        page++;
-    }
+    // Use Search API (REST) instead of GraphQL — server-side topic filter, one request, cached 30 min
+    const result = await runGh([
+        'api', 'search/repositories',
+        '--method', 'GET',
+        '-f', `q=topic:${topic} org:${org} archived:false`,
+        '-f', 'per_page=100',
+        '--jq', '[.items[] | {nameWithOwner: .full_name}]',
+    ]);
+    const repos = result;
     repoListCache.set(key, { repos, fetchedAt: Date.now() });
     console.log(`[gh] repoList fetched ${repos.length} repos, cached for 30 min`);
     return repos;
