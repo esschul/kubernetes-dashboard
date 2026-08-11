@@ -249,10 +249,11 @@ function renderGridCard(dep) {
     const localBy = latestRollout?.deployedBy || '';
 
     const isProgressing = dep.status === 'progressing';
-    const podNames = dep.pods.map((p) => {
+    const podNames = dep.pods.map((p, i) => {
         const sc = getPodStatusClass(p.status);
         const isRunning = sc === 'pod-status--running';
-        return `<span class="grid-pod-chip ${isRunning ? 'grid-pod-chip--running' : 'grid-pod-chip--pending'}" title="${escapeHtml(p.name)}">${escapeHtml(p.name.replace(/^.*-([^-]+-[^-]+)$/, '$1'))}</span>`;
+        const label = isRunning ? 'Running' : (p.status || 'Starting up');
+        return `<span class="grid-pod-chip ${isRunning ? 'grid-pod-chip--running' : 'grid-pod-chip--pending'}" title="${escapeHtml(p.name)}">Pod ${i + 1} — ${escapeHtml(label)}</span>`;
     }).join('');
 
     let podLine;

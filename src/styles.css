@@ -671,14 +671,10 @@ h3 {
     width: 100%;
 }
 .grid-pod-chip {
-    font-size: 0.7rem;
-    padding: 1px 6px;
+    font-size: 0.72rem;
+    padding: 2px 8px;
     border-radius: 4px;
-    font-family: monospace;
     white-space: nowrap;
-    max-width: 120px;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 .grid-pod-chip--running {
     background: rgba(34, 197, 94, 0.12);
