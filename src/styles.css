@@ -715,6 +715,15 @@ h3 {
 .grid-pod-back-status--bad { color: #ef4444; }
 .grid-pod-back-uptime { color: var(--muted); font-size: 0.75rem; margin-left: auto; }
 .grid-pod-back-restarts { color: #f59e0b; font-size: 0.75rem; width: 100%; padding-left: 52px; }
+.grid-pod-back-crash-msg {
+    width: 100%;
+    padding-left: 52px;
+    font-size: 0.73rem;
+    color: var(--muted);
+    font-family: monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
 :root[data-theme="dark"] .grid-pod-back-status--ok { color: #4ade80; }
 :root[data-theme="dark"] .grid-pod-back-status--bad { color: #f87171; }
 

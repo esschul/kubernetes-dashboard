@@ -205,12 +205,18 @@ function normalizePod(pod) {
     if (cs.state?.waiting?.reason) { podStatus = cs.state.waiting.reason; }
     else if (cs.state?.terminated?.reason) { podStatus = cs.state.terminated.reason; }
 
+    const lastTerminated = cs.lastState?.terminated;
+    const crashReason = lastTerminated
+        ? { reason: lastTerminated.reason || null, exitCode: lastTerminated.exitCode ?? null, message: lastTerminated.message || null }
+        : null;
+
     return {
         name: pod.name,
         status: podStatus,
         ready,
         restarts,
         startTime: pod.startTime || null,
+        crashReason,
     };
 }
 

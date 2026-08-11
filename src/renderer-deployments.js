@@ -265,7 +265,16 @@ function renderGridCard(dep) {
         const isRunning = sc === 'is-running';
         const uptime = p.startTime ? formatRelativeTime(p.startTime) : '—';
         const extras = [];
-        if (p.restarts > 0) extras.push(`<span class="grid-pod-back-restarts">${p.restarts} restart${p.restarts !== 1 ? 's' : ''}</span>`);
+        if (p.restarts > 0 && p.crashReason) {
+            const cr = p.crashReason;
+            const parts = [];
+            if (cr.reason) parts.push(cr.reason);
+            if (cr.exitCode != null) parts.push(`exit ${cr.exitCode}`);
+            extras.push(`<span class="grid-pod-back-restarts">${p.restarts} restart${p.restarts !== 1 ? 's' : ''} — last: ${escapeHtml(parts.join(', ') || 'unknown')}</span>`);
+            if (cr.message) extras.push(`<span class="grid-pod-back-crash-msg">${escapeHtml(cr.message.slice(0, 200))}</span>`);
+        } else if (p.restarts > 0) {
+            extras.push(`<span class="grid-pod-back-restarts">${p.restarts} restart${p.restarts !== 1 ? 's' : ''}</span>`);
+        }
         return `<div class="grid-pod-back-row">
             <span class="grid-pod-back-name">Pod ${i + 1}</span>
             <span class="grid-pod-back-status ${isRunning ? 'grid-pod-back-status--ok' : 'grid-pod-back-status--bad'}">${isRunning ? 'Running' : escapeHtml(p.status || 'Unknown')}</span>
