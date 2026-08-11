@@ -265,7 +265,7 @@ function renderGridCard(dep) {
     } else {
         podLine = `<p class="grid-card-pods">Currently running with ${podCount} <span class="grid-card-status is-${podCount === healthyCount ? 'healthy' : escapeHtml(statusClass)}">${podCount === healthyCount ? 'healthy' : escapeHtml(dep.status)}</span> pod${podCount !== 1 ? 's' : ''}</p>`;
     }
-    const podChips = podCount > 0 ? `<div class="grid-pod-chips">${podNames}</div>` : '';
+    const podChips = podCount > 0 ? `<details class="grid-pod-details"><summary class="grid-pod-summary">Pods</summary><div class="grid-pod-chips">${podNames}</div></details>` : '';
 
     let prSection;
     if (isLocalBuild) {

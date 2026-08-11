@@ -654,11 +654,31 @@ h3 {
 }
 .grid-rolling-label { animation: none; }
 
+.grid-pod-details {
+    margin: 2px 0 4px;
+}
+.grid-pod-summary {
+    font-size: 0.75rem;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.grid-pod-summary::-webkit-details-marker { display: none; }
+.grid-pod-summary::before {
+    content: '▶';
+    font-size: 0.6rem;
+    transition: transform 0.15s;
+}
+.grid-pod-details[open] .grid-pod-summary::before { transform: rotate(90deg); }
 .grid-pod-chips {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
-    margin: 4px 0 6px;
+    margin: 4px 0 2px;
 }
 .grid-pod-chip {
     font-size: 0.7rem;
