@@ -648,11 +648,21 @@ async function refresh() {
         updateCounts(deployments);
         setStatus(`${deployments.length} deployment${deployments.length !== 1 ? 's' : ''}`);
         setLastUpdated();
+        scheduleNextRefresh(deployments);
     } catch (err) {
         showError(err);
         setStatus('Refresh failed');
     } finally {
         refreshInProgress = false;
+    }
+}
+
+let rollingRefreshTimer = null;
+function scheduleNextRefresh(deployments) {
+    clearTimeout(rollingRefreshTimer);
+    const hasProgressing = deployments.some((d) => d.status === 'progressing');
+    if (hasProgressing) {
+        rollingRefreshTimer = setTimeout(() => refresh(), 10_000);
     }
 }
 

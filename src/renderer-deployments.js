@@ -248,14 +248,24 @@ function renderGridCard(dep) {
     const localBranch = latestRollout?.branch || '';
     const localBy = latestRollout?.deployedBy || '';
 
+    const isProgressing = dep.status === 'progressing';
+    const podNames = dep.pods.map((p) => {
+        const sc = getPodStatusClass(p.status);
+        const isRunning = sc === 'pod-status--running';
+        return `<span class="grid-pod-chip ${isRunning ? 'grid-pod-chip--running' : 'grid-pod-chip--pending'}" title="${escapeHtml(p.name)}">${escapeHtml(p.name.replace(/^.*-([^-]+-[^-]+)$/, '$1'))}</span>`;
+    }).join('');
+
     let podLine;
     if (podCount === 0) {
         podLine = `<p class="grid-card-pods"><span class="grid-card-status is-failing">No pods running</span></p>`;
+    } else if (isProgressing) {
+        podLine = `<p class="grid-card-pods"><span class="grid-card-status is-progressing grid-rolling-label">Rolling out…</span> ${healthyCount}/${podCount} ready</p>`;
     } else if (dep.status === 'failing' || dep.status === 'error') {
         podLine = `<p class="grid-card-pods">Running with ${podCount} pod${podCount !== 1 ? 's' : ''} — <span class="grid-card-status is-${escapeHtml(statusClass)}">${escapeHtml(dep.status)}</span></p>`;
     } else {
         podLine = `<p class="grid-card-pods">Currently running with ${podCount} <span class="grid-card-status is-${podCount === healthyCount ? 'healthy' : escapeHtml(statusClass)}">${podCount === healthyCount ? 'healthy' : escapeHtml(dep.status)}</span> pod${podCount !== 1 ? 's' : ''}</p>`;
     }
+    const podChips = podCount > 0 ? `<div class="grid-pod-chips">${podNames}</div>` : '';
 
     let prSection;
     if (isLocalBuild) {
@@ -273,11 +283,12 @@ function renderGridCard(dep) {
     const restartSvg = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" style="display:inline;vertical-align:-1px"><path d="M13.5 8A5.5 5.5 0 1 1 8 2.5V1l3 2.5L8 6V4.5a3.5 3.5 0 1 0 3.5 3.5h2z" fill="currentColor"/></svg>`;
 
     return `
-    <div class="deployment-card deployment-card--grid" data-name="${escapeHtml(dep.namespace + '/' + dep.name)}" data-dep-name="${escapeHtml(dep.name)}" data-sha="${escapeHtml(dep.gitSha || '')}">
+    <div class="deployment-card deployment-card--grid${isProgressing ? ' is-rolling-out' : ''}" data-name="${escapeHtml(dep.namespace + '/' + dep.name)}" data-dep-name="${escapeHtml(dep.name)}" data-sha="${escapeHtml(dep.gitSha || '')}">
         <div class="grid-card-age" title="${escapeHtml(deployedAbsolute)}">Last updated <strong>${escapeHtml(deployedLabel)}</strong></div>
         <div class="grid-card-eyebrow">${escapeHtml(dep.namespace || '')}</div>
         <h3 class="grid-card-name">${escapeHtml(dep.name)}</h3>
         ${podLine}
+        ${podChips}
         ${prSection}
         <hr class="grid-card-divider">
         ${dep.failures?.length > 0 && dep.status !== 'healthy' ? `<button class="grid-issues-btn" data-dep-name="${escapeHtml(dep.name)}">⚠ ${dep.failures.length} issue${dep.failures.length !== 1 ? 's' : ''}</button>` : ''}

@@ -644,6 +644,53 @@ h3 {
 .grid-card-status.is-failing  { color: #ef4444; }
 .grid-card-status.is-progressing { color: #f59e0b; }
 
+@keyframes rolling-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.0); border-color: #f59e0b; }
+    50% { box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.25); border-color: #f59e0b; }
+}
+.deployment-card--grid.is-rolling-out {
+    border-color: #f59e0b;
+    animation: rolling-pulse 2s ease-in-out infinite;
+}
+.grid-rolling-label { animation: none; }
+
+.grid-pod-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 4px 0 6px;
+}
+.grid-pod-chip {
+    font-size: 0.7rem;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+    white-space: nowrap;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.grid-pod-chip--running {
+    background: rgba(34, 197, 94, 0.12);
+    color: #15803d;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+.grid-pod-chip--pending {
+    background: rgba(245, 158, 11, 0.12);
+    color: #b45309;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+:root[data-theme="dark"] .grid-pod-chip--running {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border-color: rgba(34, 197, 94, 0.25);
+}
+:root[data-theme="dark"] .grid-pod-chip--pending {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border-color: rgba(245, 158, 11, 0.25);
+}
+
 .deployment-card--grid .grid-pr-section {
     font-size: 0.8rem;
     border-top: none;
