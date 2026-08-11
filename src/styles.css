@@ -770,8 +770,6 @@ h3 {
     margin-top: 4px;
 }
 .grid-card-actions .trello-placeholder:empty { display: none; }
-.grid-card-pods-row { margin-top: 7px; }
-.grid-card-pods-row .grid-pods-btn { width: 100%; }
 
 .grid-issues-btn {
     display: block;

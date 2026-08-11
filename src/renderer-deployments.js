@@ -237,7 +237,7 @@ function renderGridCard(dep) {
     const deployedAbsolute = dep.deployedAt ? new Date(dep.deployedAt).toLocaleString() : '';
     const datadogUrl = getDatadogLogsUrl(dep.name);
     const podCount = dep.pods.length;
-    const healthyCount = dep.pods.filter((p) => getPodStatusClass(p.status) === 'pod-status--running').length;
+    const healthyCount = dep.pods.filter((p) => getPodStatusClass(p.status) === 'is-running').length;
     const hasHistory = dep.rollouts?.length > 0;
     const hasDatadog = !!datadogUrl;
     const imageTag = getImageTag(dep.image);
@@ -262,7 +262,7 @@ function renderGridCard(dep) {
 
     const podBackRows = dep.pods.map((p, i) => {
         const sc = getPodStatusClass(p.status);
-        const isRunning = sc === 'pod-status--running';
+        const isRunning = sc === 'is-running';
         const uptime = p.startTime ? formatRelativeTime(p.startTime) : '—';
         const extras = [];
         if (p.restarts > 0) extras.push(`<span class="grid-pod-back-restarts">${p.restarts} restart${p.restarts !== 1 ? 's' : ''}</span>`);
@@ -310,9 +310,9 @@ function renderGridCard(dep) {
                 <span class="trello-placeholder"></span>
                 <button class="grid-action-btn logs-open-btn" data-dep-name="${escapeHtml(dep.name)}">${logsSvg}Logs</button>
                 <button class="grid-action-btn restart-btn" data-dep-name="${escapeHtml(dep.name)}">Restart ${restartSvg}</button>
+                ${podsBtn}
                 ${hasHistory ? `<button class="grid-action-btn grid-history-btn">History</button>` : ''}
             </div>
-            ${podsBtn ? `<div class="grid-card-pods-row">${podsBtn}</div>` : ''}
             <div class="rollout-history hidden">${renderRolloutHistory(dep.rollouts || [], dep.imageRepoName)}</div>
         </div>
         ${podBack}
