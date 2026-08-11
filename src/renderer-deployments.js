@@ -264,13 +264,13 @@ function renderGridCard(dep) {
         const sc = getPodStatusClass(p.status);
         const isRunning = sc === 'pod-status--running';
         const uptime = p.startTime ? formatRelativeTime(p.startTime) : '—';
-        const restartLine = p.restarts > 0 ? `<span class="grid-pod-back-restarts">${p.restarts} restart${p.restarts !== 1 ? 's' : ''}</span>` : '';
-        const issue = !isRunning && p.status ? `<span class="grid-pod-back-issue">${escapeHtml(p.status)}</span>` : '';
-        return `<div class="grid-pod-back-row ${isRunning ? '' : 'grid-pod-back-row--failing'}">
+        const extras = [];
+        if (p.restarts > 0) extras.push(`<span class="grid-pod-back-restarts">${p.restarts} restart${p.restarts !== 1 ? 's' : ''}</span>`);
+        return `<div class="grid-pod-back-row">
             <span class="grid-pod-back-name">Pod ${i + 1}</span>
             <span class="grid-pod-back-status ${isRunning ? 'grid-pod-back-status--ok' : 'grid-pod-back-status--bad'}">${isRunning ? 'Running' : escapeHtml(p.status || 'Unknown')}</span>
             <span class="grid-pod-back-uptime">${escapeHtml(uptime)}</span>
-            ${restartLine}${issue}
+            ${extras.join('')}
         </div>`;
     }).join('');
 

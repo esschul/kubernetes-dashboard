@@ -700,30 +700,21 @@ h3 {
 }
 .grid-pod-back-close:hover { color: var(--text); }
 .grid-pod-back-row {
-    display: grid;
-    grid-template-columns: 48px 1fr auto;
-    gap: 4px 8px;
-    align-items: baseline;
-    padding: 5px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
     border-bottom: 1px solid var(--line);
-    font-size: 0.8rem;
+    font-size: 0.82rem;
+    flex-wrap: wrap;
 }
 .grid-pod-back-row:last-child { border-bottom: none; }
-.grid-pod-back-name { color: var(--muted); font-weight: 600; }
-.grid-pod-back-status--ok { color: #22c55e; font-weight: 600; }
-.grid-pod-back-status--bad { color: #ef4444; font-weight: 600; }
-.grid-pod-back-uptime { color: var(--muted); font-size: 0.75rem; text-align: right; }
-.grid-pod-back-restarts {
-    grid-column: 2 / 4;
-    color: #f59e0b;
-    font-size: 0.74rem;
-}
-.grid-pod-back-issue {
-    grid-column: 2 / 4;
-    color: #ef4444;
-    font-size: 0.74rem;
-    font-weight: 600;
-}
+.grid-pod-back-name { color: var(--muted); font-weight: 600; min-width: 44px; }
+.grid-pod-back-status { font-weight: 600; }
+.grid-pod-back-status--ok { color: #22c55e; }
+.grid-pod-back-status--bad { color: #ef4444; }
+.grid-pod-back-uptime { color: var(--muted); font-size: 0.75rem; margin-left: auto; }
+.grid-pod-back-restarts { color: #f59e0b; font-size: 0.75rem; width: 100%; padding-left: 52px; }
 :root[data-theme="dark"] .grid-pod-back-status--ok { color: #4ade80; }
 :root[data-theme="dark"] .grid-pod-back-status--bad { color: #f87171; }
 
@@ -773,11 +764,12 @@ h3 {
 }
 
 .grid-card-actions {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    display: flex;
+    flex-wrap: wrap;
     gap: 7px;
     margin-top: 4px;
 }
+.grid-card-actions .grid-action-btn { flex: 1 1 auto; }
 .grid-card-actions .trello-placeholder:empty { display: none; }
 
 .grid-issues-btn {
