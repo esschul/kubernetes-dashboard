@@ -249,13 +249,6 @@ function renderGridCard(dep) {
     const localBy = latestRollout?.deployedBy || '';
 
     const isProgressing = dep.status === 'progressing';
-    const podNames = dep.pods.map((p, i) => {
-        const sc = getPodStatusClass(p.status);
-        const isRunning = sc === 'pod-status--running';
-        const label = isRunning ? 'Running' : (p.status || 'Starting up');
-        return `<span class="grid-pod-chip ${isRunning ? 'grid-pod-chip--running' : 'grid-pod-chip--pending'}" title="${escapeHtml(p.name)}">Pod ${i + 1} — ${escapeHtml(label)}</span>`;
-    }).join('');
-
     let podLine;
     if (podCount === 0) {
         podLine = `<p class="grid-card-pods"><span class="grid-card-status is-failing">No pods running</span></p>`;
@@ -266,7 +259,26 @@ function renderGridCard(dep) {
     } else {
         podLine = `<p class="grid-card-pods">Currently running with ${podCount} <span class="grid-card-status is-${podCount === healthyCount ? 'healthy' : escapeHtml(statusClass)}">${podCount === healthyCount ? 'healthy' : escapeHtml(dep.status)}</span> pod${podCount !== 1 ? 's' : ''}</p>`;
     }
-    const podChips = podCount > 0 ? `<button class="grid-action-btn grid-pods-btn" data-dep-name="${escapeHtml(dep.name)}">Pods <span class="grid-pods-count">${podCount}</span></button><div class="grid-pod-chips hidden" data-pods-for="${escapeHtml(dep.name)}">${podNames}</div>` : '';
+
+    const podBackRows = dep.pods.map((p, i) => {
+        const sc = getPodStatusClass(p.status);
+        const isRunning = sc === 'pod-status--running';
+        const uptime = p.startTime ? formatRelativeTime(p.startTime) : '—';
+        const restartLine = p.restarts > 0 ? `<span class="grid-pod-back-restarts">${p.restarts} restart${p.restarts !== 1 ? 's' : ''}</span>` : '';
+        const issue = !isRunning && p.status ? `<span class="grid-pod-back-issue">${escapeHtml(p.status)}</span>` : '';
+        return `<div class="grid-pod-back-row ${isRunning ? '' : 'grid-pod-back-row--failing'}">
+            <span class="grid-pod-back-name">Pod ${i + 1}</span>
+            <span class="grid-pod-back-status ${isRunning ? 'grid-pod-back-status--ok' : 'grid-pod-back-status--bad'}">${isRunning ? 'Running' : escapeHtml(p.status || 'Unknown')}</span>
+            <span class="grid-pod-back-uptime">${escapeHtml(uptime)}</span>
+            ${restartLine}${issue}
+        </div>`;
+    }).join('');
+
+    const podBack = podCount > 0 ? `<div class="grid-card-pod-back hidden" data-pods-for="${escapeHtml(dep.name)}">
+        <div class="grid-pod-back-header"><strong>Pods</strong><button class="grid-pod-back-close">✕</button></div>
+        ${podBackRows}
+    </div>` : '';
+    const podsBtn = podCount > 0 ? `<button class="grid-action-btn grid-pods-btn${isProgressing ? ' grid-pods-btn--rolling' : ''}" data-dep-name="${escapeHtml(dep.name)}">Pods <span class="grid-pods-count">${podCount}</span>${isProgressing ? '<span class="grid-pods-pulse"></span>' : ''}</button>` : '';
 
     let prSection;
     if (isLocalBuild) {
@@ -285,22 +297,25 @@ function renderGridCard(dep) {
 
     return `
     <div class="deployment-card deployment-card--grid${isProgressing ? ' is-rolling-out' : ''}" data-name="${escapeHtml(dep.namespace + '/' + dep.name)}" data-dep-name="${escapeHtml(dep.name)}" data-sha="${escapeHtml(dep.gitSha || '')}">
-        <div class="grid-card-age" title="${escapeHtml(deployedAbsolute)}">Last updated <strong>${escapeHtml(deployedLabel)}</strong></div>
-        <div class="grid-card-eyebrow">${escapeHtml(dep.namespace || '')}</div>
-        <h3 class="grid-card-name">${escapeHtml(dep.name)}</h3>
-        ${podLine}
-        ${prSection}
-        <hr class="grid-card-divider">
-        ${dep.failures?.length > 0 && dep.status !== 'healthy' ? `<button class="grid-issues-btn" data-dep-name="${escapeHtml(dep.name)}">⚠ ${dep.failures.length} issue${dep.failures.length !== 1 ? 's' : ''}</button>` : ''}
-        <div class="grid-card-actions">
-            ${hasDatadog ? `<span class="grid-action-btn grid-action-btn--external datadog-link" data-url="${escapeHtml(datadogUrl)}">Datadog ↗</span>` : ''}
-            <span class="trello-placeholder"></span>
-            <button class="grid-action-btn logs-open-btn" data-dep-name="${escapeHtml(dep.name)}">${logsSvg}Logs</button>
-            <button class="grid-action-btn restart-btn" data-dep-name="${escapeHtml(dep.name)}">Restart ${restartSvg}</button>
-            ${hasHistory ? `<button class="grid-action-btn grid-history-btn">History</button>` : ''}
+        <div class="grid-card-front">
+            <div class="grid-card-age" title="${escapeHtml(deployedAbsolute)}">Last updated <strong>${escapeHtml(deployedLabel)}</strong></div>
+            <div class="grid-card-eyebrow">${escapeHtml(dep.namespace || '')}</div>
+            <h3 class="grid-card-name">${escapeHtml(dep.name)}</h3>
+            ${podLine}
+            ${prSection}
+            <hr class="grid-card-divider">
+            ${dep.failures?.length > 0 && dep.status !== 'healthy' ? `<button class="grid-issues-btn" data-dep-name="${escapeHtml(dep.name)}">⚠ ${dep.failures.length} issue${dep.failures.length !== 1 ? 's' : ''}</button>` : ''}
+            <div class="grid-card-actions">
+                ${hasDatadog ? `<span class="grid-action-btn grid-action-btn--external datadog-link" data-url="${escapeHtml(datadogUrl)}">Datadog ↗</span>` : ''}
+                <span class="trello-placeholder"></span>
+                <button class="grid-action-btn logs-open-btn" data-dep-name="${escapeHtml(dep.name)}">${logsSvg}Logs</button>
+                <button class="grid-action-btn restart-btn" data-dep-name="${escapeHtml(dep.name)}">Restart ${restartSvg}</button>
+                ${podsBtn}
+                ${hasHistory ? `<button class="grid-action-btn grid-history-btn">History</button>` : ''}
+            </div>
+            <div class="rollout-history hidden">${renderRolloutHistory(dep.rollouts || [], dep.imageRepoName)}</div>
         </div>
-        ${podChips}
-        <div class="rollout-history hidden">${renderRolloutHistory(dep.rollouts || [], dep.imageRepoName)}</div>
+        ${podBack}
     </div>`;
 }
 

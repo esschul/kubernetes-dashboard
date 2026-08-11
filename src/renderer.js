@@ -913,8 +913,19 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
         e.stopPropagation();
         const btn = e.target.closest('.grid-pods-btn');
         const depName = btn.dataset.depName;
-        const chips = document.querySelector(`.grid-pod-chips[data-pods-for="${CSS.escape(depName)}"]`);
-        if (chips) { chips.classList.toggle('hidden'); btn.classList.toggle('is-active'); }
+        const card = btn.closest('.deployment-card');
+        const front = card?.querySelector('.grid-card-front');
+        const back = card?.querySelector('.grid-card-pod-back');
+        if (front && back) { front.classList.add('hidden'); back.classList.remove('hidden'); }
+        return;
+    }
+
+    if (e.target.closest('.grid-pod-back-close')) {
+        e.stopPropagation();
+        const card = e.target.closest('.deployment-card');
+        const front = card?.querySelector('.grid-card-front');
+        const back = card?.querySelector('.grid-card-pod-back');
+        if (front && back) { back.classList.add('hidden'); front.classList.remove('hidden'); }
         return;
     }
 

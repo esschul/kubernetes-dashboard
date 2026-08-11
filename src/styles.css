@@ -663,39 +663,69 @@ h3 {
     line-height: 1.5;
     margin-left: 2px;
 }
-.grid-pod-chips {
+.grid-pods-pulse {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #f59e0b;
+    margin-left: 5px;
+    vertical-align: middle;
+    animation: pod-pulse 1.2s ease-in-out infinite;
+}
+@keyframes pod-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.7); }
+}
+
+/* Pod back panel */
+.grid-card-pod-back {
+    padding: 4px 0;
+}
+.grid-pod-back-header {
     display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin: 4px 0 2px;
-    width: 100%;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
 }
-.grid-pod-chip {
-    font-size: 0.72rem;
-    padding: 2px 8px;
-    border-radius: 4px;
-    white-space: nowrap;
+.grid-pod-back-close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 2px 4px;
+    line-height: 1;
 }
-.grid-pod-chip--running {
-    background: rgba(34, 197, 94, 0.12);
-    color: #15803d;
-    border: 1px solid rgba(34, 197, 94, 0.3);
+.grid-pod-back-close:hover { color: var(--text); }
+.grid-pod-back-row {
+    display: grid;
+    grid-template-columns: 48px 1fr auto;
+    gap: 4px 8px;
+    align-items: baseline;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.8rem;
 }
-.grid-pod-chip--pending {
-    background: rgba(245, 158, 11, 0.12);
-    color: #b45309;
-    border: 1px solid rgba(245, 158, 11, 0.3);
+.grid-pod-back-row:last-child { border-bottom: none; }
+.grid-pod-back-name { color: var(--muted); font-weight: 600; }
+.grid-pod-back-status--ok { color: #22c55e; font-weight: 600; }
+.grid-pod-back-status--bad { color: #ef4444; font-weight: 600; }
+.grid-pod-back-uptime { color: var(--muted); font-size: 0.75rem; text-align: right; }
+.grid-pod-back-restarts {
+    grid-column: 2 / 4;
+    color: #f59e0b;
+    font-size: 0.74rem;
 }
-:root[data-theme="dark"] .grid-pod-chip--running {
-    background: rgba(34, 197, 94, 0.15);
-    color: #4ade80;
-    border-color: rgba(34, 197, 94, 0.25);
+.grid-pod-back-issue {
+    grid-column: 2 / 4;
+    color: #ef4444;
+    font-size: 0.74rem;
+    font-weight: 600;
 }
-:root[data-theme="dark"] .grid-pod-chip--pending {
-    background: rgba(245, 158, 11, 0.15);
-    color: #fbbf24;
-    border-color: rgba(245, 158, 11, 0.25);
-}
+:root[data-theme="dark"] .grid-pod-back-status--ok { color: #4ade80; }
+:root[data-theme="dark"] .grid-pod-back-status--bad { color: #f87171; }
 
 .deployment-card--grid .grid-pr-section {
     font-size: 0.8rem;
