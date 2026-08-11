@@ -764,13 +764,14 @@ h3 {
 }
 
 .grid-card-actions {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 7px;
     margin-top: 4px;
 }
-.grid-card-actions .grid-action-btn { flex: 1 1 auto; }
 .grid-card-actions .trello-placeholder:empty { display: none; }
+.grid-card-pods-row { margin-top: 7px; }
+.grid-card-pods-row .grid-pods-btn { width: 100%; }
 
 .grid-issues-btn {
     display: block;
