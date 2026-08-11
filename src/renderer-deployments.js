@@ -265,7 +265,7 @@ function renderGridCard(dep) {
     } else {
         podLine = `<p class="grid-card-pods">Currently running with ${podCount} <span class="grid-card-status is-${podCount === healthyCount ? 'healthy' : escapeHtml(statusClass)}">${podCount === healthyCount ? 'healthy' : escapeHtml(dep.status)}</span> pod${podCount !== 1 ? 's' : ''}</p>`;
     }
-    const podChips = podCount > 0 ? `<details class="grid-pod-details"><summary class="grid-pod-summary">Pods</summary><div class="grid-pod-chips">${podNames}</div></details>` : '';
+    const podChips = podCount > 0 ? `<button class="grid-action-btn grid-pods-btn" data-dep-name="${escapeHtml(dep.name)}">Pods <span class="grid-pods-count">${podCount}</span></button><div class="grid-pod-chips hidden" data-pods-for="${escapeHtml(dep.name)}">${podNames}</div>` : '';
 
     let prSection;
     if (isLocalBuild) {
@@ -288,7 +288,6 @@ function renderGridCard(dep) {
         <div class="grid-card-eyebrow">${escapeHtml(dep.namespace || '')}</div>
         <h3 class="grid-card-name">${escapeHtml(dep.name)}</h3>
         ${podLine}
-        ${podChips}
         ${prSection}
         <hr class="grid-card-divider">
         ${dep.failures?.length > 0 && dep.status !== 'healthy' ? `<button class="grid-issues-btn" data-dep-name="${escapeHtml(dep.name)}">⚠ ${dep.failures.length} issue${dep.failures.length !== 1 ? 's' : ''}</button>` : ''}
@@ -299,6 +298,7 @@ function renderGridCard(dep) {
             <button class="grid-action-btn restart-btn" data-dep-name="${escapeHtml(dep.name)}">Restart ${restartSvg}</button>
             ${hasHistory ? `<button class="grid-action-btn grid-history-btn">History</button>` : ''}
         </div>
+        ${podChips}
         <div class="rollout-history hidden">${renderRolloutHistory(dep.rollouts || [], dep.imageRepoName)}</div>
     </div>`;
 }

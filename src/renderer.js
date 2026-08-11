@@ -909,6 +909,15 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
     }
 
     // Handle issues button
+    if (e.target.closest('.grid-pods-btn')) {
+        e.stopPropagation();
+        const btn = e.target.closest('.grid-pods-btn');
+        const depName = btn.dataset.depName;
+        const chips = document.querySelector(`.grid-pod-chips[data-pods-for="${CSS.escape(depName)}"]`);
+        if (chips) { chips.classList.toggle('hidden'); btn.classList.toggle('is-active'); }
+        return;
+    }
+
     if (e.target.closest('.grid-issues-btn')) {
         e.stopPropagation();
         const btn = e.target.closest('.grid-issues-btn');
