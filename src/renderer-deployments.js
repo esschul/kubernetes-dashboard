@@ -317,11 +317,11 @@ function renderGridCard(dep) {
             <div class="grid-card-actions">
                 ${hasDatadog ? `<span class="grid-action-btn grid-action-btn--external datadog-link" data-url="${escapeHtml(datadogUrl)}">Datadog ↗</span>` : ''}
                 <span class="trello-placeholder"></span>
-                <button class="grid-action-btn logs-open-btn${!hasDatadog ? ' grid-col-3' : ''}" data-dep-name="${escapeHtml(dep.name)}">${logsSvg}Logs</button>
+                <button class="grid-action-btn logs-open-btn" data-dep-name="${escapeHtml(dep.name)}">${logsSvg}Logs</button>
                 <button class="grid-action-btn restart-btn" data-dep-name="${escapeHtml(dep.name)}">Restart ${restartSvg}</button>
                 ${hasHistory ? `<button class="grid-action-btn grid-history-btn">History</button>` : ''}
-                ${podsBtn}
             </div>
+            ${podsBtn ? `<div class="grid-card-pods-row">${podsBtn}</div>` : ''}
             <div class="rollout-history hidden">${renderRolloutHistory(dep.rollouts || [], dep.imageRepoName)}</div>
         </div>
         ${podBack}
