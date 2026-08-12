@@ -573,9 +573,9 @@ h3 {
 .deployment-card--grid {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 10px;
     cursor: default;
-    padding: 22px 24px;
+    padding: 16px 20px;
     transition: box-shadow 0.15s;
 }
 
@@ -779,8 +779,6 @@ h3 {
     margin-top: 4px;
 }
 .grid-card-actions .trello-placeholder:empty { display: none; }
-.grid-card-pods-row { margin-top: 7px; }
-.grid-card-pods-row .grid-pods-btn { width: 100%; }
 
 .grid-issues-btn {
     display: block;
@@ -821,7 +819,7 @@ h3 {
     background: var(--panel-muted);
     border: 1.5px solid var(--line);
     border-radius: 9px;
-    padding: 8px 14px;
+    padding: 5px 10px;
     font-size: 0.8rem;
     color: var(--text);
     cursor: pointer;
