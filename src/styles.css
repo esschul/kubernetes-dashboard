@@ -573,9 +573,9 @@ h3 {
 .deployment-card--grid {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 14px;
     cursor: default;
-    padding: 16px 20px;
+    padding: 22px 24px;
     transition: box-shadow 0.15s;
 }
 
