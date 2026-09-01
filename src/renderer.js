@@ -193,6 +193,37 @@ function buildTeamRow(team = {}, namespaces = []) {
     return div;
 }
 
+async function populateDepSelect(depSel, namespace, savedValue) {
+    depSel.innerHTML = '';
+    depSel.appendChild(new Option('(select)', ''));
+    if (!namespace) { return; }
+    depSel.appendChild(new Option('Loading…', ''));
+    depSel.disabled = true;
+    try {
+        const config = loadConfig();
+        const deps = await window.kubeDashboard.fetchDeployments({ ...config, namespace });
+        depSel.innerHTML = '';
+        depSel.appendChild(new Option('(select)', ''));
+        deps.sort((a, b) => a.name.localeCompare(b.name)).forEach((d) => depSel.appendChild(new Option(d.name, d.name)));
+        if (savedValue) {
+            if (![...depSel.options].some((o) => o.value === savedValue)) {
+                depSel.appendChild(new Option(savedValue, savedValue));
+            }
+            depSel.value = savedValue;
+        }
+    } catch {
+        depSel.innerHTML = '';
+        depSel.appendChild(new Option('(select)', ''));
+        if (savedValue) {
+            depSel.appendChild(new Option(savedValue, savedValue));
+            depSel.value = savedValue;
+        }
+    } finally {
+        depSel.disabled = false;
+        updateSaveButtonState();
+    }
+}
+
 function buildDepRow(dep = {}, namespaces = []) {
     const div = document.createElement('div');
     div.className = 'settings-dep-row';
@@ -201,22 +232,25 @@ function buildDepRow(dep = {}, namespaces = []) {
     nsSel.appendChild(new Option('(select)', ''));
     namespaces.forEach((ns) => nsSel.appendChild(new Option(ns, ns)));
     nsSel.value = dep.namespace || '';
-    const depIn = document.createElement('input');
-    depIn.type = 'text';
-    depIn.className = 'dep-name-in';
-    depIn.placeholder = 'e.g. analytics-api';
-    depIn.value = dep.deployment || '';
+    const depSel = document.createElement('select');
+    depSel.className = 'dep-name-in';
+    depSel.appendChild(new Option('(select)', ''));
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.className = 'settings-row-remove-btn';
     removeBtn.title = 'Remove';
     removeBtn.textContent = '×';
     removeBtn.addEventListener('click', () => { div.remove(); updateSaveButtonState(); });
+    nsSel.addEventListener('change', () => {
+        populateDepSelect(depSel, nsSel.value, '');
+        updateSaveButtonState();
+    });
+    depSel.addEventListener('change', updateSaveButtonState);
     div.appendChild(nsSel);
-    div.appendChild(depIn);
+    div.appendChild(depSel);
     div.appendChild(removeBtn);
-    [nsSel, depIn].forEach((el) => el.addEventListener('change', updateSaveButtonState));
-    depIn.addEventListener('input', updateSaveButtonState);
+    // Populate deployment list for pre-saved value
+    if (dep.namespace) { populateDepSelect(depSel, dep.namespace, dep.deployment || ''); }
     return div;
 }
 
