@@ -31,9 +31,16 @@ function readStoredJson(key, fallback) {
 }
 
 function loadConfig() {
-    const cfg = readStoredJson(STORAGE_KEYS.config, { context: '', namespace: '' });
-    // azureTeam was added later — default to namespace for existing configs
-    if (cfg.azureTeam === undefined) { cfg.azureTeam = cfg.namespace || ''; }
+    const cfg = readStoredJson(STORAGE_KEYS.config, {});
+    // Migration: old single-team config → teams array
+    if (!cfg.teams) {
+        cfg.teams = [{ namespace: cfg.namespace || '', githubTopic: cfg.githubTopic || '', azureTeam: cfg.azureTeam || cfg.namespace || '' }];
+    }
+    if (!cfg.watchedDeployments) { cfg.watchedDeployments = []; }
+    // Computed shorthands for backwards-compat with existing call sites
+    cfg.namespace = cfg.teams[0]?.namespace || '';
+    cfg.githubTopic = cfg.teams[0]?.githubTopic || '';
+    cfg.azureTeam = cfg.teams[0]?.azureTeam || cfg.teams[0]?.namespace || '';
     return cfg;
 }
 
@@ -146,6 +153,98 @@ document.querySelectorAll('.filter-chip[data-filter]').forEach((c) => {
 });
 
 // --- Settings form ---
+
+let cachedNamespaceList = [];
+
+function buildTeamRow(team = {}, namespaces = []) {
+    const div = document.createElement('div');
+    div.className = 'settings-team-row';
+    const nsSel = document.createElement('select');
+    nsSel.className = 'team-namespace-sel';
+    nsSel.appendChild(new Option('(select)', ''));
+    namespaces.forEach((ns) => nsSel.appendChild(new Option(ns, ns)));
+    nsSel.value = team.namespace || '';
+    const topicIn = document.createElement('input');
+    topicIn.type = 'text';
+    topicIn.className = 'team-topic-in';
+    topicIn.placeholder = team.namespace || 'same as namespace';
+    topicIn.value = team.githubTopic || '';
+    const azureIn = document.createElement('input');
+    azureIn.type = 'text';
+    azureIn.className = 'team-azure-in';
+    azureIn.placeholder = team.namespace || 'same as namespace';
+    azureIn.value = team.azureTeam || '';
+    nsSel.addEventListener('change', () => {
+        if (!topicIn.value) { topicIn.placeholder = nsSel.value || 'same as namespace'; }
+        if (!azureIn.value) { azureIn.placeholder = nsSel.value || 'same as namespace'; }
+        updateSaveButtonState();
+    });
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'settings-row-remove-btn';
+    removeBtn.title = 'Remove';
+    removeBtn.textContent = '×';
+    removeBtn.addEventListener('click', () => { div.remove(); updateSaveButtonState(); });
+    div.appendChild(nsSel);
+    div.appendChild(topicIn);
+    div.appendChild(azureIn);
+    div.appendChild(removeBtn);
+    [topicIn, azureIn].forEach((el) => el.addEventListener('input', updateSaveButtonState));
+    return div;
+}
+
+function buildDepRow(dep = {}, namespaces = []) {
+    const div = document.createElement('div');
+    div.className = 'settings-dep-row';
+    const nsSel = document.createElement('select');
+    nsSel.className = 'dep-namespace-sel';
+    nsSel.appendChild(new Option('(select)', ''));
+    namespaces.forEach((ns) => nsSel.appendChild(new Option(ns, ns)));
+    nsSel.value = dep.namespace || '';
+    const depIn = document.createElement('input');
+    depIn.type = 'text';
+    depIn.className = 'dep-name-in';
+    depIn.placeholder = 'e.g. analytics-api';
+    depIn.value = dep.deployment || '';
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'settings-row-remove-btn';
+    removeBtn.title = 'Remove';
+    removeBtn.textContent = '×';
+    removeBtn.addEventListener('click', () => { div.remove(); updateSaveButtonState(); });
+    div.appendChild(nsSel);
+    div.appendChild(depIn);
+    div.appendChild(removeBtn);
+    [nsSel, depIn].forEach((el) => el.addEventListener('change', updateSaveButtonState));
+    depIn.addEventListener('input', updateSaveButtonState);
+    return div;
+}
+
+function renderTeamsRows(teams, namespaces) {
+    const container = document.getElementById('teamsRows');
+    container.replaceChildren(...teams.map((t) => buildTeamRow(t, namespaces)));
+}
+
+function renderWatchedDepRows(deps, namespaces) {
+    const container = document.getElementById('watchedDepRows');
+    container.replaceChildren(...deps.map((d) => buildDepRow(d, namespaces)));
+}
+
+function readTeamsRows() {
+    return [...document.querySelectorAll('#teamsRows .settings-team-row')].map((row) => ({
+        namespace: row.querySelector('.team-namespace-sel')?.value || '',
+        githubTopic: row.querySelector('.team-topic-in')?.value.trim() || '',
+        azureTeam: row.querySelector('.team-azure-in')?.value.trim() || '',
+    })).filter((t) => t.namespace);
+}
+
+function readWatchedDepRows() {
+    return [...document.querySelectorAll('#watchedDepRows .settings-dep-row')].map((row) => ({
+        namespace: row.querySelector('.dep-namespace-sel')?.value || '',
+        deployment: row.querySelector('.dep-name-in')?.value.trim() || '',
+    })).filter((d) => d.namespace && d.deployment);
+}
+
 function populateSettingsForm() {
     window.kubeDashboard.getBuildDate().then((date) => {
         const el = document.getElementById('buildDateLabel');
@@ -153,38 +252,32 @@ function populateSettingsForm() {
     });
     const config = loadConfig();
     ensureSelectOption('contextInput', config.context || '');
-    ensureSelectOption('namespaceInput', config.namespace || '');
     document.getElementById('githubOrgInput').value = config.githubOrg || '';
-    document.getElementById('githubTopicInput').value = config.githubTopic || '';
-    document.getElementById('githubWatchedReposInput').value = (config.githubWatchedRepos || []).join('\n');
     document.getElementById('datadogSiteInput').value = config.datadogSite || '';
-    document.getElementById('showPrAvatarsInput').checked = config.showPrAvatars ?? true;
     document.getElementById('notificationsEnabledInput').checked = config.notificationsEnabled || false;
     document.getElementById('pipelineNotificationsEnabledInput').checked = config.pipelineNotificationsEnabled || false;
     document.getElementById('azureOrgInput').value = config.azureOrg || '';
     document.getElementById('azureProjectInput').value = config.azureProject || '';
-    document.getElementById('azureTeamInput').value = config.azureTeam ?? config.namespace ?? '';
     document.getElementById('envProdInput').value = config.envContexts?.prod || '';
     document.getElementById('envQaInput').value = config.envContexts?.qa || '';
     document.getElementById('envTestInput').value = config.envContexts?.test || '';
+    renderTeamsRows(config.teams || [], cachedNamespaceList);
+    renderWatchedDepRows(config.watchedDeployments || [], cachedNamespaceList);
     updateSaveButtonState();
 }
 
 function readFormConfig() {
+    const teams = readTeamsRows();
     return {
         context: document.getElementById('contextInput').value,
-        namespace: document.getElementById('namespaceInput').value,
+        teams,
+        watchedDeployments: readWatchedDepRows(),
         githubOrg: document.getElementById('githubOrgInput').value.trim(),
-        githubTopic: document.getElementById('githubTopicInput').value.trim(),
-        githubWatchedRepos: document.getElementById('githubWatchedReposInput').value
-            .split('\n').map((r) => r.trim()).filter(Boolean),
         datadogSite: document.getElementById('datadogSiteInput').value.trim().replace(/\/$/, ''),
-        showPrAvatars: document.getElementById('showPrAvatarsInput').checked,
         notificationsEnabled: document.getElementById('notificationsEnabledInput').checked,
         pipelineNotificationsEnabled: document.getElementById('pipelineNotificationsEnabledInput').checked,
         azureOrg: document.getElementById('azureOrgInput').value.trim(),
         azureProject: document.getElementById('azureProjectInput').value.trim(),
-        azureTeam: document.getElementById('azureTeamInput').value.trim(),
         envContexts: {
             prod: document.getElementById('envProdInput').value,
             qa: document.getElementById('envQaInput').value,
@@ -196,23 +289,34 @@ function readFormConfig() {
 function updateSaveButtonState() {
     const saved = loadConfig();
     const current = readFormConfig();
-    const isDirty = JSON.stringify(saved) !== JSON.stringify(current);
+    // Compare only the fields we actually write (loadConfig adds computed shorthands we don't store)
+    const normalize = (c) => ({
+        context: c.context, teams: c.teams, watchedDeployments: c.watchedDeployments,
+        githubOrg: c.githubOrg, datadogSite: c.datadogSite,
+        notificationsEnabled: c.notificationsEnabled, pipelineNotificationsEnabled: c.pipelineNotificationsEnabled,
+        azureOrg: c.azureOrg, azureProject: c.azureProject, envContexts: c.envContexts,
+    });
+    const isDirty = JSON.stringify(normalize(saved)) !== JSON.stringify(normalize(current));
     document.getElementById('saveSettings').classList.toggle('is-dirty', isDirty);
 }
 
-// Watch all settings inputs for changes
-document.getElementById('namespaceInput')?.addEventListener('change', () => {
-    const teamInput = document.getElementById('azureTeamInput');
-    if (!teamInput.value.trim()) {
-        teamInput.value = document.getElementById('namespaceInput').value;
-    }
-});
-
-['contextInput', 'namespaceInput', 'githubOrgInput', 'githubTopicInput', 'githubWatchedReposInput', 'datadogSiteInput',
-    'azureOrgInput', 'azureProjectInput', 'azureTeamInput', 'envProdInput', 'envQaInput', 'envTestInput', 'showPrAvatarsInput', 'notificationsEnabledInput', 'pipelineNotificationsEnabledInput',
+// Static settings inputs dirty-check
+['contextInput', 'githubOrgInput', 'datadogSiteInput',
+    'azureOrgInput', 'azureProjectInput', 'envProdInput', 'envQaInput', 'envTestInput',
+    'notificationsEnabledInput', 'pipelineNotificationsEnabledInput',
 ].forEach((id) => {
     document.getElementById(id)?.addEventListener('change', updateSaveButtonState);
     document.getElementById(id)?.addEventListener('input', updateSaveButtonState);
+});
+
+document.getElementById('addTeamBtn').addEventListener('click', () => {
+    document.getElementById('teamsRows').appendChild(buildTeamRow({}, cachedNamespaceList));
+    updateSaveButtonState();
+});
+
+document.getElementById('addWatchedDepBtn').addEventListener('click', () => {
+    document.getElementById('watchedDepRows').appendChild(buildDepRow({}, cachedNamespaceList));
+    updateSaveButtonState();
 });
 
 document.getElementById('contextInput').addEventListener('change', () => {
@@ -551,20 +655,15 @@ function clearAllLists() {
 
 async function loadNamespacesForSelectedContext() {
     const context = document.getElementById('contextInput').value;
-    const currentNamespace = document.getElementById('namespaceInput').value;
     const namespaces = await window.kubeDashboard.fetchNamespaces({ context });
-    replaceSelectOptions('namespaceInput', namespaces, '(select a namespace)', currentNamespace);
+    cachedNamespaceList = namespaces;
+    // Re-render team and watched-dep rows with updated namespace options (preserving current values)
+    const savedTeams = readTeamsRows();
+    const savedDeps = readWatchedDepRows();
+    renderTeamsRows(savedTeams, namespaces);
+    renderWatchedDepRows(savedDeps, namespaces);
 }
 
-function replaceSelectOptions(id, values, emptyLabel, selectedValue) {
-    const select = document.getElementById(id);
-    select.replaceChildren(new Option(emptyLabel, ''));
-    for (const value of values) {
-        select.appendChild(new Option(value, value));
-    }
-    if (selectedValue) { ensureSelectOption(id, selectedValue); }
-    select.value = selectedValue || '';
-}
 
 function ensureSelectOption(id, value) {
     const select = document.getElementById(id);
@@ -579,7 +678,9 @@ function ensureSelectOption(id, value) {
 }
 
 document.getElementById('saveSettings').addEventListener('click', () => {
-    const config = readFormConfig();
+    const raw = readFormConfig();
+    // Derive compat shorthands so rest of handler works the same
+    const config = { ...raw, namespace: raw.teams[0]?.namespace || '', githubTopic: raw.teams[0]?.githubTopic || '', azureTeam: raw.teams[0]?.azureTeam || raw.teams[0]?.namespace || '' };
     const oldConfig = loadConfig();
     if ((config.notificationsEnabled && !oldConfig.notificationsEnabled) ||
         (config.pipelineNotificationsEnabled && !oldConfig.pipelineNotificationsEnabled)) {
@@ -590,7 +691,7 @@ document.getElementById('saveSettings').addEventListener('click', () => {
     updateContextLabel(config);
     renderEnvSwitcher(config);
     if (!config.namespace) {
-        setStatus('Set a namespace in Settings before refreshing deployments.');
+        setStatus('Set at least one team in Settings before refreshing deployments.');
         return;
     }
     if (config.namespace !== oldConfig.namespace) {
@@ -632,7 +733,7 @@ async function refresh() {
         latestDeployments = [];
         renderDeploymentList([]);
         updateCounts([]);
-        setStatus('Set a namespace in Settings before refreshing deployments.');
+        setStatus('Set at least one team in Settings before refreshing deployments.');
         switchView('settings');
         return;
     }
@@ -642,13 +743,29 @@ async function refresh() {
 
     try {
         const deployments = await window.kubeDashboard.fetchDeployments(config);
-        latestDeployments = deployments;
         quickLogsDeploymentCache.set(quickLogsCacheKey(config.context, config.namespace), deployments);
-        renderDeploymentList(deployments);
-        updateCounts(deployments);
-        setStatus(`${deployments.length} deployment${deployments.length !== 1 ? 's' : ''}`);
+
+        // Fetch watched deployments from other namespaces in parallel
+        const watched = config.watchedDeployments || [];
+        const extraNamespaces = [...new Set(watched.map((d) => d.namespace).filter((ns) => ns && ns !== config.namespace))];
+        let watchedDeps = [];
+        if (extraNamespaces.length > 0) {
+            const results = await Promise.allSettled(
+                extraNamespaces.map((ns) => window.kubeDashboard.fetchDeployments({ ...config, namespace: ns }))
+            );
+            watchedDeps = results
+                .filter((r) => r.status === 'fulfilled')
+                .flatMap((r) => r.value)
+                .filter((dep) => watched.some((w) => w.namespace === dep.namespace && w.deployment === dep.name));
+        }
+
+        const allDeployments = [...deployments, ...watchedDeps];
+        latestDeployments = allDeployments;
+        renderDeploymentList(allDeployments);
+        updateCounts(allDeployments);
+        setStatus(`${allDeployments.length} deployment${allDeployments.length !== 1 ? 's' : ''}`);
         setLastUpdated();
-        scheduleNextRefresh(deployments);
+        scheduleNextRefresh(allDeployments);
     } catch (err) {
         showError(err);
         setStatus('Refresh failed');
@@ -1007,6 +1124,8 @@ if (initialConfig.githubOrg && initialPrTopic) {
 if (initialConfig.namespace) { refresh(); }
 if (initialConfig.azureOrg && initialConfig.azureProject) { refreshPipelines(); }
 if (initialConfig.githubOrg && initialPrTopic) { refreshPullRequests(true); }
+// Load available namespaces so settings team/dep rows can be populated
+loadClusterSettingsIfEmpty();
 
 // Auto-refresh every 2 minutes
 setInterval(refreshAll, 2 * 60 * 1000);

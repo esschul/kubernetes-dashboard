@@ -4,6 +4,9 @@
 let prRefreshInProgress = false;
 let activePrTab = 'open';
 let activePrFilter = 'all';
+let activeMergedSub = 'today';
+let mergedSearchPrs = null;
+let mergedSearchFetching = false;
 let latestPrData = null;
 const seenPrKeys = new Set();
 const approvedPrKeys = new Set();
@@ -109,11 +112,116 @@ document.getElementById('prTabSwitcher').addEventListener('click', (e) => {
     document.querySelectorAll('.env-btn[data-pr-tab]').forEach((b) => {
         b.classList.toggle('is-active', b.dataset.prTab === activePrTab);
     });
+    document.getElementById('mergedSubfilter').classList.toggle('hidden', activePrTab !== 'merged');
+    document.getElementById('mergedSearchPanel').classList.toggle('hidden', activePrTab !== 'merged' || activeMergedSub !== 'search');
     activePrFilter = 'all';
     document.querySelectorAll('.filter-chip[data-pr-filter]').forEach((c) => {
         c.classList.toggle('is-active', c.dataset.prFilter === 'all');
     });
     if (latestPrData) { renderPrView(latestPrData); }
+});
+
+document.getElementById('mergedSubfilter').addEventListener('click', (e) => {
+    const btn = e.target.closest('.merged-sub-btn[data-merged-sub]');
+    if (!btn) { return; }
+    activeMergedSub = btn.dataset.mergedSub;
+    document.querySelectorAll('.merged-sub-btn').forEach((b) => {
+        b.classList.toggle('is-active', b.dataset.mergedSub === activeMergedSub);
+    });
+    document.getElementById('mergedSearchPanel').classList.toggle('hidden', activeMergedSub !== 'search');
+    if (activeMergedSub !== 'search') { mergedSearchPrs = null; }
+    if (activeMergedSub === 'search') {
+        populateMergedSearchRepos();
+        const fromEl = document.getElementById('mergedSearchFrom');
+        if (!fromEl.value) {
+            fromEl.value = getLocalDateKey(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+        }
+    }
+    if (latestPrData) { updatePrNavCount(latestPrData); renderPrView(latestPrData); }
+});
+
+async function populateMergedSearchRepos() {
+    const config = loadConfig();
+    const teams = (config.teams || []).filter((t) => t.namespace);
+    if (!config.githubOrg || teams.length === 0) { return; }
+    const prTopic = teams[0].githubTopic || teams[0].namespace;
+    const select = document.getElementById('mergedSearchRepo');
+    try {
+        const repos = await window.kubeDashboard.fetchRepoList({ org: config.githubOrg, topic: prTopic });
+        select.innerHTML = '<option value="">All apps</option>';
+        repos.sort().forEach((nameWithOwner) => {
+            const name = nameWithOwner.split('/').pop();
+            const opt = document.createElement('option');
+            opt.value = nameWithOwner;
+            opt.textContent = name;
+            select.appendChild(opt);
+        });
+    } catch (e) {
+        console.error('[prs] fetchRepoList failed', e);
+    }
+}
+
+async function runMergedSearch() {
+    if (mergedSearchFetching) { return; }
+    if (!validateMergedSearchDates()) { return; }
+    const config = loadConfig();
+    const teams = (config.teams || []).filter((t) => t.namespace);
+    if (!config.githubOrg || teams.length === 0) { return; }
+    const prTopic = teams[0].githubTopic || teams[0].namespace;
+    const text = document.getElementById('mergedSearchText').value.trim();
+    const from = document.getElementById('mergedSearchFrom').value || null;
+    const to = document.getElementById('mergedSearchTo').value || null;
+    const repo = document.getElementById('mergedSearchRepo').value || null;
+    const limit = Math.max(1, Math.min(500, parseInt(document.getElementById('mergedSearchLimit').value, 10) || 50));
+    mergedSearchFetching = true;
+    mergedSearchPrs = null;
+    document.getElementById('prStatusPanel').textContent = 'Searching…';
+    if (latestPrData) { updatePrNavCount(latestPrData); renderPrView(latestPrData); }
+    try {
+        const result = await window.kubeDashboard.fetchMergedPrsForRange({
+            org: config.githubOrg,
+            topic: prTopic,
+            watchedRepos: [],
+            namespace: teams[0].namespace,
+            from: from || getLocalDateKey(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
+            to: to || undefined,
+            text: text || undefined,
+            repo: repo || undefined,
+            limit,
+        });
+        mergedSearchPrs = result.mergedRangePullRequests || [];
+        document.getElementById('prStatusPanel').textContent = '';
+    } catch (e) {
+        console.error('[prs] merged search failed', e);
+        mergedSearchPrs = [];
+        document.getElementById('prStatusPanel').textContent = `Search failed: ${e.message || e}`;
+    } finally {
+        mergedSearchFetching = false;
+        if (document.getElementById('prStatusPanel').textContent === 'Searching…') {
+            document.getElementById('prStatusPanel').textContent = '';
+        }
+    }
+    if (latestPrData) { updatePrNavCount(latestPrData); renderPrView(latestPrData); }
+}
+
+function validateMergedSearchDates() {
+    const fromEl = document.getElementById('mergedSearchFrom');
+    const toEl = document.getElementById('mergedSearchTo');
+    const from = fromEl.value;
+    const to = toEl.value;
+    if (from) { toEl.min = from; }
+    if (to) { fromEl.max = to; }
+    const invalid = from && to && from > to;
+    fromEl.classList.toggle('is-invalid', !!invalid);
+    toEl.classList.toggle('is-invalid', !!invalid);
+    return !invalid;
+}
+
+document.getElementById('mergedSearchFrom').addEventListener('change', validateMergedSearchDates);
+document.getElementById('mergedSearchTo').addEventListener('change', validateMergedSearchDates);
+document.getElementById('mergedSearchGo').addEventListener('click', runMergedSearch);
+document.getElementById('mergedSearchText').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { runMergedSearch(); }
 });
 
 document.getElementById('prFilterBar').addEventListener('click', (e) => {
@@ -364,14 +472,29 @@ document.getElementById('prList').addEventListener('click', (e) => {
     if (card) { window.kubeDashboard.openExternal(card.dataset.url); }
 });
 
+function mergePrResults(results) {
+    const dedup = (arr) => {
+        const seen = new Set();
+        return arr.filter((pr) => !seen.has(pr.url) && seen.add(pr.url));
+    };
+    return {
+        pullRequests: dedup(results.flatMap((r) => r.pullRequests || [])),
+        mergedPullRequests: dedup(results.flatMap((r) => r.mergedPullRequests || [])),
+        mergedYesterdayPullRequests: dedup(results.flatMap((r) => r.mergedYesterdayPullRequests || [])),
+        mergedDependabotPullRequests: dedup(results.flatMap((r) => r.mergedDependabotPullRequests || [])),
+        mergedYesterdayDependabotPullRequests: dedup(results.flatMap((r) => r.mergedYesterdayDependabotPullRequests || [])),
+        repositories: [...new Set(results.flatMap((r) => r.repositories || []))],
+    };
+}
+
 async function refreshPullRequests(force = false) {
     if (prRefreshInProgress) { return; }
     if (latestPrData && !force) { renderPrView(latestPrData); return; }
 
     const config = loadConfig();
-    const prTopic = config.githubTopic || config.namespace;
-    if (!config.githubOrg || !prTopic) {
-        document.getElementById('prList').innerHTML = '<p class="empty-state">Set GitHub org and namespace in Settings to load pull requests.</p>';
+    const teams = (config.teams || []).filter((t) => t.namespace);
+    if (!config.githubOrg || teams.length === 0) {
+        document.getElementById('prList').innerHTML = '<p class="empty-state">Set GitHub org and at least one team in Settings to load pull requests.</p>';
         document.getElementById('prStatusPanel').textContent = 'Not configured';
         return;
     }
@@ -380,12 +503,18 @@ async function refreshPullRequests(force = false) {
     document.getElementById('prStatusPanel').textContent = 'Loading…';
 
     try {
-        const data = await window.kubeDashboard.fetchPullRequests({
-            org: config.githubOrg,
-            topic: prTopic,
-            watchedRepos: config.githubWatchedRepos || [],
-            namespace: config.namespace,
-        });
+        const fetches = teams.map((team) =>
+            window.kubeDashboard.fetchPullRequests({
+                org: config.githubOrg,
+                topic: team.githubTopic || team.namespace,
+                watchedRepos: [],
+                namespace: team.namespace,
+            })
+        );
+        const settled = await Promise.allSettled(fetches);
+        const succeeded = settled.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+        if (succeeded.length === 0) { throw new Error(settled[0]?.reason?.message || 'All fetches failed'); }
+        const data = mergePrResults(succeeded);
         notifyNewPrs(data.pullRequests);
         latestPrData = data;
         renderPrView(data);
@@ -404,6 +533,28 @@ async function refreshPullRequests(force = false) {
     }
 }
 
+function countMergedForSub(data) {
+    const all = [
+        ...(data.mergedPullRequests || []),
+        ...(data.mergedDependabotPullRequests || []),
+        ...(data.mergedYesterdayPullRequests || []),
+        ...(data.mergedYesterdayDependabotPullRequests || []),
+    ];
+    if (activeMergedSub === 'today') {
+        const today = getLocalDateKey();
+        return all.filter((pr) => pr.mergedAt && getLocalDateKey(pr.mergedAt) === today).length;
+    }
+    if (activeMergedSub === 'yesterday') {
+        const d = new Date(); d.setDate(d.getDate() - 1);
+        const yesterday = getLocalDateKey(d);
+        return all.filter((pr) => pr.mergedAt && getLocalDateKey(pr.mergedAt) === yesterday).length;
+    }
+    if (activeMergedSub === 'search') {
+        return mergedSearchPrs ? mergedSearchPrs.length : 0;
+    }
+    return all.length;
+}
+
 function updatePrNavCount(data) {
     const count = document.getElementById('pullRequestsCount');
     count.textContent = data.pullRequests.length;
@@ -412,8 +563,7 @@ function updatePrNavCount(data) {
 
     const tabCounts = {
         tabCountOpen: data.pullRequests.length,
-        tabCountMerged: (data.mergedPullRequests?.length || 0) + (data.mergedDependabotPullRequests?.length || 0),
-        tabCountMergedYesterday: (data.mergedYesterdayPullRequests?.length || 0) + (data.mergedYesterdayDependabotPullRequests?.length || 0),
+        tabCountMerged: countMergedForSub(data),
         tabCountDependabot: data.dependabotPullRequests?.length || 0,
     };
     for (const [id, n] of Object.entries(tabCounts)) {
@@ -423,8 +573,27 @@ function updatePrNavCount(data) {
 }
 
 function getPrsForTab(data) {
-    if (activePrTab === 'merged') { return [...data.mergedPullRequests, ...data.mergedDependabotPullRequests]; }
-    if (activePrTab === 'merged-yesterday') { return [...(data.mergedYesterdayPullRequests || []), ...(data.mergedYesterdayDependabotPullRequests || [])]; }
+    if (activePrTab === 'merged') {
+        const all = [
+            ...(data.mergedPullRequests || []),
+            ...(data.mergedDependabotPullRequests || []),
+            ...(data.mergedYesterdayPullRequests || []),
+            ...(data.mergedYesterdayDependabotPullRequests || []),
+        ];
+        if (activeMergedSub === 'today') {
+            const today = getLocalDateKey();
+            return all.filter((pr) => pr.mergedAt && getLocalDateKey(pr.mergedAt) === today);
+        }
+        if (activeMergedSub === 'yesterday') {
+            const d = new Date(); d.setDate(d.getDate() - 1);
+            const yesterday = getLocalDateKey(d);
+            return all.filter((pr) => pr.mergedAt && getLocalDateKey(pr.mergedAt) === yesterday);
+        }
+        if (activeMergedSub === 'search') {
+            return mergedSearchPrs || [];
+        }
+        return all;
+    }
     if (activePrTab === 'dependabot') { return data.dependabotPullRequests; }
     return data.pullRequests;
 }
@@ -512,7 +681,7 @@ function getDeploymentStatusForPr(pr) {
 function renderPrView(data) {
     const list = document.getElementById('prList');
     const prs = getPrsForTab(data);
-    const isMergedTab = activePrTab === 'merged' || activePrTab === 'merged-yesterday';
+    const isMergedTab = activePrTab === 'merged';
     const isDependabotTab = activePrTab === 'dependabot';
 
     const filterBar = document.getElementById('prFilterBar');
@@ -547,8 +716,11 @@ function renderPrView(data) {
     const filtered = activePrFilter === 'all' ? prs : prs.filter(matchesPrFilter);
 
     if (filtered.length === 0) {
-        const msg = activePrTab === 'merged' ? 'No pull requests merged today.' :
-            activePrTab === 'merged-yesterday' ? 'No pull requests merged yesterday.' :
+        const mergedEmptyMsg = activeMergedSub === 'today' ? 'No pull requests merged today.' :
+            activeMergedSub === 'yesterday' ? 'No pull requests merged yesterday.' :
+            mergedSearchPrs === null ? 'Set filters and press Search.' :
+            'No pull requests found.';
+        const msg = isMergedTab ? mergedEmptyMsg :
             isDependabotTab ? 'No open Dependabot pull requests.' :
                 activePrFilter === 'all' ? 'No open pull requests.' : 'No pull requests match this filter.';
         list.innerHTML = `<p class="empty-state">${msg}</p>`;
@@ -664,12 +836,10 @@ function renderPrCard(pr, isMerged = false) {
             <button class="pr-action-btn pr-merge-btn">Merge</button>${closeBtn}`}
         </div>` : closeBtn ? `<div class="pr-actions-row pr-actions-row--regenerate" data-pr-number="${pr.number}" data-pr-repo="${escapeHtml(pr.repository)}">${closeBtn}</div>` : '';
 
-    const config = loadConfig();
-    const showAvatars = config.showPrAvatars ?? true;
     const login = pr.author?.login || 'unknown';
     const isBot = isDependabotPr(pr);
-    const cachedAvatar = showAvatars && !isBot ? avatarCache.get(login) : null;
-    const avatarHtml = showAvatars ? `
+    const cachedAvatar = !isBot ? avatarCache.get(login) : null;
+    const avatarHtml = `
         <div class="pr-avatar-col">
             ${isBot
                 ? `<div class="pr-avatar pr-avatar--bot">${BOT_AVATAR_SVG}</div>`
@@ -677,10 +847,10 @@ function renderPrCard(pr, isMerged = false) {
                     ? `<img class="pr-avatar" src="${escapeHtml(cachedAvatar)}" alt="${escapeHtml(login)}" />`
                     : `<div class="pr-avatar pr-avatar--placeholder" data-login="${escapeHtml(login)}"></div>`}
             <span class="pr-avatar-name" title="${escapeHtml(isBot ? 'dependabot' : login)}">${escapeHtml(isBot ? 'dependabot' : login)}</span>
-        </div>` : '';
+        </div>`;
 
     return `
-    <div class="pr-card deployment-card${showAvatars ? ' pr-card--with-avatar' : ''}" data-url="${escapeHtml(pr.url)}">
+    <div class="pr-card deployment-card pr-card--with-avatar" data-url="${escapeHtml(pr.url)}">
         ${avatarHtml}
         <div class="pr-card-body">
         <div class="deployment-card-top">

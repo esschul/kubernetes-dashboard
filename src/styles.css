@@ -887,6 +887,121 @@ h3 {
     color: var(--text);
 }
 
+.pr-tab-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.merged-subfilter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.merged-subfilter.hidden { display: none; }
+.merged-sub-btn {
+    padding: 5px 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--panel);
+    color: var(--muted);
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+.merged-sub-btn:hover { color: var(--text); }
+.merged-sub-btn.is-active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.merged-range-sep { color: var(--muted); font-size: 0.82rem; }
+
+.merged-search-panel {
+    margin-bottom: 14px;
+}
+.merged-search-panel.hidden { display: none; }
+
+.merged-search-bar {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    overflow: hidden;
+    padding: 0 4px;
+    max-width: 100%;
+}
+.merged-search-icon {
+    width: 15px;
+    height: 15px;
+    color: var(--muted);
+    flex-shrink: 0;
+    margin: 0 6px 0 8px;
+}
+.merged-search-text {
+    width: 200px;
+    padding: 7px 6px;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 0.85rem;
+    outline: none;
+    min-width: 0;
+}
+.merged-search-divider {
+    width: 1px;
+    height: 18px;
+    background: var(--line);
+    flex-shrink: 0;
+    margin: 0 4px;
+}
+.merged-search-bar input[type="date"] {
+    padding: 7px 6px;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 0.82rem;
+    outline: none;
+    width: 126px;
+    flex-shrink: 0;
+}
+.merged-search-bar select {
+    padding: 7px 6px;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 0.82rem;
+    outline: none;
+    max-width: 150px;
+    flex-shrink: 0;
+}
+.merged-search-limit {
+    width: 48px;
+    padding: 7px 6px;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 0.82rem;
+    text-align: right;
+    outline: none;
+    flex-shrink: 0;
+}
+.merged-search-go {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 7px;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+    flex-shrink: 0;
+    margin: 0 2px;
+}
+.merged-search-go svg { width: 14px; height: 14px; }
+.merged-search-go:hover { opacity: 0.85; }
+.merged-search-bar input[type="date"].is-invalid { color: #ef4444; }
+
 .filter-bar {
     display: flex;
     flex-wrap: wrap;
@@ -1854,6 +1969,115 @@ h3 {
 
 .settings-panel--right {
     grid-column: 2;
+}
+
+.settings-panel--full {
+    grid-column: 1 / -1;
+}
+
+/* ── Teams table & watched-deployments table ── */
+.teams-table,
+.dep-watch-table {
+    display: flex;
+    flex-direction: column;
+}
+
+.teams-header,
+.dep-watch-header {
+    display: grid;
+    gap: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.teams-header { grid-template-columns: 1fr 1fr 1fr 28px; }
+.dep-watch-header { grid-template-columns: 1fr 1fr 28px; }
+
+.settings-team-row,
+.settings-dep-row {
+    display: grid;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--line);
+}
+
+.settings-team-row { grid-template-columns: 1fr 1fr 1fr 28px; }
+.settings-dep-row  { grid-template-columns: 1fr 1fr 28px; }
+
+.settings-team-row select,
+.settings-team-row input,
+.settings-dep-row select,
+.settings-dep-row input {
+    width: 100%;
+    padding: 5px 8px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: var(--panel);
+    color: var(--fg);
+    font-family: inherit;
+    font-size: 0.85rem;
+    outline: none;
+}
+
+.settings-team-row input::placeholder,
+.settings-dep-row input::placeholder {
+    color: var(--muted);
+    font-style: italic;
+}
+
+.settings-row-remove-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: background 0.1s, color 0.1s;
+}
+
+.settings-row-remove-btn:hover {
+    background: rgba(220, 50, 50, 0.1);
+    color: #d03030;
+}
+
+.settings-add-row-btn {
+    align-self: flex-start;
+    margin-top: 8px;
+    padding: 4px 10px;
+    border: 1px dashed var(--line);
+    border-radius: 5px;
+    background: transparent;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: border-color 0.1s, color 0.1s;
+}
+
+.settings-add-row-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.form-help-inline {
+    font-size: 0.72rem;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--muted);
 }
 
 .settings-actions {

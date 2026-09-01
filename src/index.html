@@ -124,11 +124,36 @@
                     <h2>Pull Requests</h2>
                     <p class="status-panel" id="prStatusPanel">Loading…</p>
                 </div>
-                <div class="env-switcher" id="prTabSwitcher">
-                    <button class="env-btn is-active" data-pr-tab="open">Open <span class="tab-count" id="tabCountOpen"></span></button>
-                    <button class="env-btn" data-pr-tab="merged">Merged today <span class="tab-count" id="tabCountMerged"></span></button>
-                    <button class="env-btn" data-pr-tab="merged-yesterday">Merged yesterday <span class="tab-count" id="tabCountMergedYesterday"></span></button>
-                    <button class="env-btn" data-pr-tab="dependabot">Dependabot <span class="tab-count" id="tabCountDependabot"></span></button>
+                <div class="pr-tab-group">
+                    <div class="env-switcher" id="prTabSwitcher">
+                        <button class="env-btn is-active" data-pr-tab="open">Open <span class="tab-count" id="tabCountOpen"></span></button>
+                        <button class="env-btn" data-pr-tab="merged">Merged <span class="tab-count" id="tabCountMerged"></span></button>
+                        <button class="env-btn" data-pr-tab="dependabot">Dependabot <span class="tab-count" id="tabCountDependabot"></span></button>
+                    </div>
+                    <div class="merged-subfilter hidden" id="mergedSubfilter">
+                        <button class="merged-sub-btn is-active" data-merged-sub="today">Today</button>
+                        <button class="merged-sub-btn" data-merged-sub="yesterday">Yesterday</button>
+                        <button class="merged-sub-btn" data-merged-sub="search">Search</button>
+                    </div>
+                </div>
+            </div>
+            <div class="merged-search-panel hidden" id="mergedSearchPanel">
+                <div class="merged-search-bar">
+                    <svg class="merged-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <input class="merged-search-text" type="text" id="mergedSearchText" placeholder="Search by title…" />
+                    <span class="merged-search-divider"></span>
+                    <input type="date" id="mergedSearchFrom" title="From" />
+                    <span class="merged-range-sep">–</span>
+                    <input type="date" id="mergedSearchTo" title="To" />
+                    <span class="merged-search-divider"></span>
+                    <select id="mergedSearchRepo">
+                        <option value="">All apps</option>
+                    </select>
+                    <span class="merged-search-divider"></span>
+                    <input class="merged-search-limit" type="number" id="mergedSearchLimit" value="50" min="1" max="500" title="Max results" />
+                    <button class="merged-search-go" id="mergedSearchGo" title="Search">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
                 </div>
             </div>
             <div class="filter-bar" id="prFilterBar">
@@ -189,35 +214,29 @@
                                 <button type="button" id="reloadContextsBtn" class="settings-reload-btn" title="Reload contexts from kubectl">↺</button>
                             </span>
                         </label>
-                        <label>
-                            Namespace
-                            <select id="namespaceInput">
-                                <option value="">(select a namespace)</option>
-                            </select>
-                        </label>
+                        <div class="settings-section-heading">Watched deployments</div>
+                        <div class="dep-watch-table">
+                            <div class="dep-watch-header">
+                                <span>Namespace</span>
+                                <span>Deployment</span>
+                                <span></span>
+                            </div>
+                            <div id="watchedDepRows"></div>
+                        </div>
+                        <button type="button" id="addWatchedDepBtn" class="settings-add-row-btn">+ Add deployment</button>
                         <div class="settings-section-heading">Environment shortcuts</div>
                         <label>Prod <select id="envProdInput"><option value="">(none)</option></select></label>
                         <label>QA <select id="envQaInput"><option value="">(none)</option></select></label>
                         <label>Test <select id="envTestInput"><option value="">(none)</option></select></label>
+                    </div>
+
+                    <div class="settings-panel settings-panel--right panel">
                         <div class="settings-section-heading">GitHub</div>
                         <label>
                             Org
                             <input type="text" id="githubOrgInput" placeholder="e.g. my-org" />
                             <span class="form-help">Used to look up PRs for each deployment.</span>
                         </label>
-                        <label>
-                            Repo topic
-                            <input type="text" id="githubTopicInput" placeholder="defaults to namespace name" />
-                            <span class="form-help">Repos tagged with this topic appear in Pull Requests.</span>
-                        </label>
-                        <label>
-                            Watched repos
-                            <textarea id="githubWatchedReposInput" rows="3" placeholder="iac-connectivity&#10;shared-config"></textarea>
-                            <span class="form-help">One repo name per line (same org). Only PRs labelled with your namespace name are shown.</span>
-                        </label>
-                    </div>
-
-                    <div class="settings-panel settings-panel--right panel">
                         <div class="settings-section-heading">Azure DevOps</div>
                         <label>
                             Org URL
@@ -227,22 +246,12 @@
                             Project
                             <input type="text" id="azureProjectInput" placeholder="e.g. my-project" />
                         </label>
-                        <label>
-                            Pipeline team
-                            <input type="text" id="azureTeamInput" placeholder="e.g. checkout (leave blank to use namespace)" />
-                            <span class="form-help">Filters the Pipelines view to your team's folder. Falls back to namespace if blank.</span>
-                        </label>
                         <div class="settings-section-heading">Datadog</div>
                         <label>
                             Site URL
                             <input type="text" id="datadogSiteInput" placeholder="e.g. https://app.datadoghq.eu" />
                             <span class="form-help">Used to link deployments to Datadog logs.</span>
                         </label>
-                        <div class="settings-section-heading">Pull Requests</div>
-                        <div class="toggle-row">
-                            <span class="toggle-row-label">Show author avatars on PR cards</span>
-                            <input type="checkbox" id="showPrAvatarsInput" class="toggle-checkbox" />
-                        </div>
                         <div class="settings-section-heading">Notifications</div>
                         <div class="toggle-row">
                             <span class="toggle-row-label">Get notified when a new PR is opened</span>
@@ -252,6 +261,20 @@
                             <span class="toggle-row-label">Get notified when a pipeline fails</span>
                             <input type="checkbox" id="pipelineNotificationsEnabledInput" class="toggle-checkbox" />
                         </div>
+                    </div>
+
+                    <div class="settings-panel settings-panel--full panel">
+                        <div class="settings-section-heading">Teams</div>
+                        <div class="teams-table">
+                            <div class="teams-header">
+                                <span>Namespace</span>
+                                <span>GitHub topic <span class="form-help-inline">(defaults to namespace)</span></span>
+                                <span>Pipeline folder <span class="form-help-inline">(defaults to namespace)</span></span>
+                                <span></span>
+                            </div>
+                            <div id="teamsRows"></div>
+                        </div>
+                        <button type="button" id="addTeamBtn" class="settings-add-row-btn">+ Add team</button>
                     </div>
                 </div>
                 <div class="settings-actions">
@@ -299,13 +322,13 @@ az login</pre>
                         <thead><tr><th>Field</th><th>Description</th></tr></thead>
                         <tbody>
                             <tr><td><strong>kubectl context</strong></td><td>Which cluster to connect to. Defaults to your current context.</td></tr>
-                            <tr><td><strong>Namespace</strong></td><td>Your team's Kubernetes namespace. Used to scope deployments and as a default GitHub topic.</td></tr>
+                            <tr><td><strong>Teams → Namespace</strong></td><td>Your team's Kubernetes namespace. Used to scope deployments and as the default GitHub topic and pipeline folder.</td></tr>
+                            <tr><td><strong>Teams → GitHub topic</strong></td><td>Override the GitHub topic tag for this team. Defaults to the namespace name.</td></tr>
+                            <tr><td><strong>Teams → Pipeline folder</strong></td><td>Override the Azure DevOps pipeline folder for this team. Defaults to the namespace name.</td></tr>
+                            <tr><td><strong>Watched deployments</strong></td><td>Specific deployments from other namespaces to show in the Deployments view.</td></tr>
                             <tr><td><strong>GitHub Org</strong></td><td>Your GitHub organisation name, e.g. <code>my-org</code>.</td></tr>
-                            <tr><td><strong>Repo topic</strong></td><td>GitHub topic tag shared by your team's repos. Defaults to the namespace name if left blank.</td></tr>
-                            <tr><td><strong>Watched repos</strong></td><td>Shared repos outside your topic (e.g. infra repos). One name per line. Only PRs labelled with your namespace are shown.</td></tr>
                             <tr><td><strong>Azure DevOps Org URL</strong></td><td>Your Azure DevOps organisation URL, e.g. <code>https://dev.azure.com/my-org</code>.</td></tr>
                             <tr><td><strong>Azure DevOps Project</strong></td><td>The project name inside your Azure organisation.</td></tr>
-                            <tr><td><strong>Pipeline team</strong></td><td>The Azure DevOps folder your team's pipelines live in (e.g. <code>checkout</code>). Falls back to your namespace if left blank. If a pipeline doesn't show up, go to Azure DevOps → Pipelines → ⋯ → Move and place it in your team's folder.</td></tr>
                             <tr><td><strong>Datadog Site URL</strong></td><td>Your Datadog site, e.g. <code>https://app.datadoghq.eu</code>. Used to generate log links on deployment cards.</td></tr>
                             <tr><td><strong>Environment shortcuts</strong></td><td>Map Prod / QA / Test to specific kubectl contexts for quick switching.</td></tr>
                         </tbody>
@@ -314,12 +337,7 @@ az login</pre>
 
                 <div class="help-section panel">
                     <div class="settings-section-heading">GitHub repo topics</div>
-                    <p class="help-text">The Pull Requests view fetches PRs from all repos in your GitHub org that are tagged with your team's topic. To tag a repo, go to the repo on GitHub → About (gear icon) → Topics → add your topic name.</p>
-                </div>
-
-                <div class="help-section panel">
-                    <div class="settings-section-heading">Watched repos &amp; labels</div>
-                    <p class="help-text">For shared repos (e.g. an IaC or platform repo used by multiple teams), add the repo name under <strong>Watched repos</strong> in Settings. The app will only show PRs from those repos that have a GitHub label matching your namespace name. Ask the repo owner to add the label to relevant PRs.</p>
+                    <p class="help-text">The Pull Requests view fetches PRs from all repos in your GitHub org tagged with each team's topic. To tag a repo, go to the repo on GitHub → About (gear icon) → Topics → add your topic name. If you're on multiple teams, add yourself to all of them and PRs from all teams will be merged into one list.</p>
                 </div>
 
             </div>

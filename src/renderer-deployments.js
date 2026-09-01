@@ -27,7 +27,7 @@ function renderDeploymentList(deployments) {
 
     if (filtered.length === 0) {
         const msg = deployments.length === 0
-            ? 'No deployments found. Check your context and namespace in Settings.'
+            ? 'No deployments found. Check your context and team namespaces in Settings.'
             : 'No deployments match the current filter.';
         list.innerHTML = `<p class="empty-state">${msg}</p>`;
         return;
