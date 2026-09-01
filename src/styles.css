@@ -568,6 +568,22 @@ h3 {
     padding-right: 6px;
 }
 
+.team-group-heading {
+    grid-column: 1 / -1;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 6px 0 2px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: -4px;
+}
+
+.team-group-heading:first-child {
+    padding-top: 0;
+}
+
 .deployment-list.is-grid {
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     padding: 8px;

@@ -35,7 +35,25 @@ function renderDeploymentList(deployments) {
 
     const gen = ++renderGeneration;
     const isGrid = list.classList.contains('is-grid');
-    list.innerHTML = filtered.map(isGrid ? renderGridCard : renderDeploymentCard).join('');
+    const config = loadConfig();
+    const teamNamespaces = (config.teams || []).map((t) => t.namespace).filter(Boolean);
+    const multiTeam = teamNamespaces.length > 1;
+
+    if (multiTeam) {
+        // Group by namespace, preserving team order then alphabetical for extras
+        const order = [...teamNamespaces, ...[...new Set(filtered.map((d) => d.namespace).filter((ns) => !teamNamespaces.includes(ns)))].sort()];
+        const groups = new Map(order.map((ns) => [ns, []]));
+        filtered.forEach((dep) => { const ns = dep.namespace || ''; (groups.get(ns) || groups.set(ns, []).get(ns)).push(dep); });
+        const parts = [];
+        for (const [ns, deps] of groups) {
+            if (!deps.length) { continue; }
+            parts.push(`<div class="team-group-heading">${escapeHtml(ns)}</div>`);
+            parts.push(...deps.map(isGrid ? renderGridCard : renderDeploymentCard));
+        }
+        list.innerHTML = parts.join('');
+    } else {
+        list.innerHTML = filtered.map(isGrid ? renderGridCard : renderDeploymentCard).join('');
+    }
 
     let delay = 0;
     for (const dep of filtered) {

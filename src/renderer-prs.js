@@ -732,14 +732,28 @@ function renderPrView(data) {
         return;
     }
 
-    const sorted = [...filtered].sort((a, b) => {
-        const ta = isMergedTab ? String(a.mergedAt) : String(a.updatedAt);
-        const tb = isMergedTab ? String(b.mergedAt) : String(b.updatedAt);
-        return tb.localeCompare(ta);
-    });
-    list.innerHTML = sorted.map((pr) => renderPrCard(pr, isMergedTab)).join('');
-
+    const sortKey = (pr) => isMergedTab ? String(pr.mergedAt) : String(pr.updatedAt);
     const config = loadConfig();
+    const teamNamespaces = (config.teams || []).map((t) => t.namespace).filter(Boolean);
+    const multiTeam = teamNamespaces.length > 1;
+
+    if (multiTeam) {
+        const order = [...teamNamespaces, ...[...new Set(filtered.map((p) => p._teamNamespace).filter((ns) => ns && !teamNamespaces.includes(ns)))].sort()];
+        const groups = new Map(order.map((ns) => [ns, []]));
+        filtered.forEach((pr) => { const ns = pr._teamNamespace || ''; (groups.get(ns) || groups.set(ns, []).get(ns)).push(pr); });
+        const parts = [];
+        for (const [ns, groupPrs] of groups) {
+            if (!groupPrs.length) { continue; }
+            const sortedGroup = [...groupPrs].sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
+            parts.push(`<div class="team-group-heading">${escapeHtml(ns)}</div>`);
+            parts.push(...sortedGroup.map((pr) => renderPrCard(pr, isMergedTab)));
+        }
+        list.innerHTML = parts.join('');
+    } else {
+        const sorted = [...filtered].sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
+        list.innerHTML = sorted.map((pr) => renderPrCard(pr, isMergedTab)).join('');
+    }
+
     if (config.showPrAvatars) {
         const placeholders = list.querySelectorAll('.pr-avatar--placeholder[data-login]');
         for (const el of placeholders) {

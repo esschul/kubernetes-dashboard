@@ -100,8 +100,11 @@ function renderPipelineList(runs) {
     const list = document.getElementById('pipelineList');
 
     const pConfig = loadConfig();
-    const activeTeam = pConfig.azureTeam || null;
-    let filtered = activeTeam ? runs.filter((r) => r.team === activeTeam) : runs;
+    const teams = (pConfig.teams || []).filter((t) => t.namespace);
+    const teamFolders = teams.map((t) => t.azureTeam || t.namespace).filter(Boolean);
+    const multiTeam = teamFolders.length > 1;
+
+    let filtered = teamFolders.length > 0 ? runs.filter((r) => teamFolders.includes(r.team)) : runs;
 
     const _seen = new Set();
     const latestPerPipeline = filtered.filter((r) => {
@@ -132,12 +135,26 @@ function renderPipelineList(runs) {
         return;
     }
 
-    const grouped = new Map(toShow.map((r) => [r.name, r]));
-
     pipelineRenderGeneration++;
     const gen = pipelineRenderGeneration;
 
-    list.innerHTML = [...grouped.values()].map(renderPipelineGroup).join('');
+    if (multiTeam) {
+        const parts = [];
+        for (const folder of teamFolders) {
+            const groupRuns = toShow.filter((r) => r.team === folder);
+            if (!groupRuns.length) { continue; }
+            const ns = teams.find((t) => (t.azureTeam || t.namespace) === folder)?.namespace || folder;
+            parts.push(`<div class="team-group-heading">${escapeHtml(ns)}</div>`);
+            parts.push(...groupRuns.map(renderPipelineGroup));
+        }
+        list.innerHTML = parts.join('');
+    } else {
+        const grouped = new Map(toShow.map((r) => [r.name, r]));
+        list.innerHTML = [...grouped.values()].map(renderPipelineGroup).join('');
+    }
+
+    // keep reference for the post-render stagger loop below
+    const grouped = new Map(toShow.map((r) => [r.name, r]));
 
     const pipelineConfig = loadConfig();
     let stagger = 0;
