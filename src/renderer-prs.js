@@ -482,6 +482,7 @@ function mergePrResults(results) {
     const tag = (arr, ns) => arr.map((pr) => ({ ...pr, _teamNamespace: ns }));
     return {
         pullRequests: dedup(results.flatMap((r) => tag(r.data.pullRequests || [], r.namespace))),
+        dependabotPullRequests: dedup(results.flatMap((r) => tag(r.data.dependabotPullRequests || [], r.namespace))),
         mergedPullRequests: dedup(results.flatMap((r) => tag(r.data.mergedPullRequests || [], r.namespace))),
         mergedYesterdayPullRequests: dedup(results.flatMap((r) => tag(r.data.mergedYesterdayPullRequests || [], r.namespace))),
         mergedDependabotPullRequests: dedup(results.flatMap((r) => tag(r.data.mergedDependabotPullRequests || [], r.namespace))),
