@@ -761,16 +761,29 @@ async function refresh() {
     setStatus('Refreshing…');
 
     try {
-        const deployments = await window.kubeDashboard.fetchDeployments(config);
-        quickLogsDeploymentCache.set(quickLogsCacheKey(config.context, config.namespace), deployments);
+        // Fetch all team namespaces in parallel
+        const teamNamespaces = [...new Set((config.teams || []).map((t) => t.namespace).filter(Boolean))];
+        const teamResults = await Promise.allSettled(
+            teamNamespaces.map((ns) => window.kubeDashboard.fetchDeployments({ ...config, namespace: ns }))
+        );
+        const teamDeployments = teamResults
+            .filter((r) => r.status === 'fulfilled')
+            .flatMap((r) => r.value);
+        teamNamespaces.forEach((ns, i) => {
+            if (teamResults[i].status === 'fulfilled') {
+                quickLogsDeploymentCache.set(quickLogsCacheKey(config.context, ns), teamResults[i].value);
+            }
+        });
 
-        // Fetch watched deployments from other namespaces in parallel
+        // Fetch watched deployments from namespaces not already covered by a team
         const watched = config.watchedDeployments || [];
-        const extraNamespaces = [...new Set(watched.map((d) => d.namespace).filter((ns) => ns && ns !== config.namespace))];
+        const watchedOnlyNamespaces = [...new Set(
+            watched.map((d) => d.namespace).filter((ns) => ns && !teamNamespaces.includes(ns))
+        )];
         let watchedDeps = [];
-        if (extraNamespaces.length > 0) {
+        if (watchedOnlyNamespaces.length > 0) {
             const results = await Promise.allSettled(
-                extraNamespaces.map((ns) => window.kubeDashboard.fetchDeployments({ ...config, namespace: ns }))
+                watchedOnlyNamespaces.map((ns) => window.kubeDashboard.fetchDeployments({ ...config, namespace: ns }))
             );
             watchedDeps = results
                 .filter((r) => r.status === 'fulfilled')
@@ -778,7 +791,7 @@ async function refresh() {
                 .filter((dep) => watched.some((w) => w.namespace === dep.namespace && w.deployment === dep.name));
         }
 
-        const allDeployments = [...deployments, ...watchedDeps];
+        const allDeployments = [...teamDeployments, ...watchedDeps];
         latestDeployments = allDeployments;
         renderDeploymentList(allDeployments);
         updateCounts(allDeployments);
