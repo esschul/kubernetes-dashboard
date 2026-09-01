@@ -769,7 +769,7 @@ function renderPrView(data) {
         }
     }
     if (config.azureOrg && config.azureProject && window._lastPipelineRuns) {
-        for (const pr of sorted) {
+        for (const pr of filtered) {
             if (pr.checkStatus === 'failure') { injectPrPipelineErrors(pr, config); }
         }
     }
