@@ -325,6 +325,10 @@ h3 {
     line-height: 1.5;
 }
 
+.form-help--warn:not(:empty) {
+    color: #c07000;
+}
+
 .updated-label {
     font-size: 0.72rem;
     color: var(--muted);

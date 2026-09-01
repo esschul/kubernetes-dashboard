@@ -655,13 +655,32 @@ function clearAllLists() {
 
 async function loadNamespacesForSelectedContext() {
     const context = document.getElementById('contextInput').value;
-    const namespaces = await window.kubeDashboard.fetchNamespaces({ context });
-    cachedNamespaceList = namespaces;
-    // Re-render team and watched-dep rows with updated namespace options (preserving current values)
-    const savedTeams = readTeamsRows();
-    const savedDeps = readWatchedDepRows();
-    renderTeamsRows(savedTeams, namespaces);
-    renderWatchedDepRows(savedDeps, namespaces);
+    const hint = document.getElementById('nsLoadHint');
+    // Seed with any namespaces already configured so dropdowns are never blank
+    const savedConfig = loadConfig();
+    const alreadyKnown = [
+        ...(savedConfig.teams || []).map((t) => t.namespace),
+        ...(savedConfig.watchedDeployments || []).map((d) => d.namespace),
+    ].filter(Boolean);
+    try {
+        const namespaces = await window.kubeDashboard.fetchNamespaces({ context });
+        cachedNamespaceList = namespaces;
+        if (hint) { hint.textContent = ''; }
+        const savedTeams = readTeamsRows();
+        const savedDeps = readWatchedDepRows();
+        renderTeamsRows(savedTeams, namespaces);
+        renderWatchedDepRows(savedDeps, namespaces);
+    } catch {
+        // Could not reach the cluster — keep existing rows but ensure saved values appear
+        const fallback = [...new Set([...cachedNamespaceList, ...alreadyKnown])];
+        if (fallback.length) {
+            const savedTeams = readTeamsRows().length ? readTeamsRows() : (savedConfig.teams || []);
+            const savedDeps = readWatchedDepRows().length ? readWatchedDepRows() : (savedConfig.watchedDeployments || []);
+            renderTeamsRows(savedTeams, fallback);
+            renderWatchedDepRows(savedDeps, fallback);
+        }
+        if (hint) { hint.textContent = 'Could not load namespaces — are you on VPN?'; }
+    }
 }
 
 
