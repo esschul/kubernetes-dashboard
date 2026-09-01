@@ -874,7 +874,7 @@ function renderPrCard(pr, isMerged = false) {
         <div class="pr-card-body">
         <div class="deployment-card-top">
             <div class="deployment-name-row">
-                <span class="eyebrow-inline">${pr._teamNamespace ? `<span class="pr-team-ns">${escapeHtml(pr._teamNamespace)}</span> · ` : ''}${escapeHtml(pr.repository)}</span>
+                <span class="eyebrow-inline">${escapeHtml(pr.repository)}</span>
                 <h3>${escapeHtml(pr.title)}</h3>
             </div>
             <div class="deployment-pill-row">

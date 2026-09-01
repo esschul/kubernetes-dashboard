@@ -357,12 +357,10 @@ function renderDeploymentCard(dep) {
     const failuresHtml = dep.failures.length > 0 && dep.status !== 'healthy' ? renderFailures(dep.failures) : '';
     const datadogUrl = getDatadogLogsUrl(dep.name);
 
-    const multiTeam = (loadConfig().teams || []).filter((t) => t.namespace).length > 1;
     return `
     <div class="deployment-card" data-name="${escapeHtml(dep.namespace + '/' + dep.name)}" data-dep-name="${escapeHtml(dep.name)}" data-sha="${escapeHtml(dep.gitSha || '')}">
         <div class="deployment-card-top">
             <div class="deployment-name-row">
-                ${multiTeam && dep.namespace ? `<span class="eyebrow-inline">${escapeHtml(dep.namespace)}</span>` : ''}
                 <h3>${escapeHtml(dep.name)}</h3>
                 ${isLocalBuild ? `<span class="local-build-badge" title="${escapeHtml(dep.image || '')}">local build</span>` : ''}
             </div>
