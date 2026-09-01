@@ -477,13 +477,14 @@ function mergePrResults(results) {
         const seen = new Set();
         return arr.filter((pr) => !seen.has(pr.url) && seen.add(pr.url));
     };
+    const tag = (arr, ns) => arr.map((pr) => ({ ...pr, _teamNamespace: ns }));
     return {
-        pullRequests: dedup(results.flatMap((r) => r.pullRequests || [])),
-        mergedPullRequests: dedup(results.flatMap((r) => r.mergedPullRequests || [])),
-        mergedYesterdayPullRequests: dedup(results.flatMap((r) => r.mergedYesterdayPullRequests || [])),
-        mergedDependabotPullRequests: dedup(results.flatMap((r) => r.mergedDependabotPullRequests || [])),
-        mergedYesterdayDependabotPullRequests: dedup(results.flatMap((r) => r.mergedYesterdayDependabotPullRequests || [])),
-        repositories: [...new Set(results.flatMap((r) => r.repositories || []))],
+        pullRequests: dedup(results.flatMap((r) => tag(r.data.pullRequests || [], r.namespace))),
+        mergedPullRequests: dedup(results.flatMap((r) => tag(r.data.mergedPullRequests || [], r.namespace))),
+        mergedYesterdayPullRequests: dedup(results.flatMap((r) => tag(r.data.mergedYesterdayPullRequests || [], r.namespace))),
+        mergedDependabotPullRequests: dedup(results.flatMap((r) => tag(r.data.mergedDependabotPullRequests || [], r.namespace))),
+        mergedYesterdayDependabotPullRequests: dedup(results.flatMap((r) => tag(r.data.mergedYesterdayDependabotPullRequests || [], r.namespace))),
+        repositories: [...new Set(results.flatMap((r) => r.data.repositories || []))],
     };
 }
 
@@ -509,12 +510,13 @@ async function refreshPullRequests(force = false) {
                 topic: team.githubTopic || team.namespace,
                 watchedRepos: [],
                 namespace: team.namespace,
-            })
+            }).then((data) => ({ data, namespace: team.namespace }))
         );
         const settled = await Promise.allSettled(fetches);
         const succeeded = settled.filter((r) => r.status === 'fulfilled').map((r) => r.value);
         if (succeeded.length === 0) { throw new Error(settled[0]?.reason?.message || 'All fetches failed'); }
-        const data = mergePrResults(succeeded);
+        const multiTeam = teams.length > 1;
+        const data = mergePrResults(succeeded, multiTeam);
         notifyNewPrs(data.pullRequests);
         latestPrData = data;
         renderPrView(data);
@@ -855,7 +857,7 @@ function renderPrCard(pr, isMerged = false) {
         <div class="pr-card-body">
         <div class="deployment-card-top">
             <div class="deployment-name-row">
-                <span class="eyebrow-inline">${escapeHtml(pr.repository)}</span>
+                <span class="eyebrow-inline">${pr._teamNamespace ? `<span class="pr-team-ns">${escapeHtml(pr._teamNamespace)}</span> · ` : ''}${escapeHtml(pr.repository)}</span>
                 <h3>${escapeHtml(pr.title)}</h3>
             </div>
             <div class="deployment-pill-row">

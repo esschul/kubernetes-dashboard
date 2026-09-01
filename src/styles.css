@@ -1240,6 +1240,10 @@ h3 {
     flex-shrink: 0;
 }
 
+.pr-team-ns {
+    color: var(--muted);
+}
+
 .deployment-card h3 {
     margin: 0;
     font-size: 0.97rem;
