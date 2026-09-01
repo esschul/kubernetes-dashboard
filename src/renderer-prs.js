@@ -144,12 +144,14 @@ async function populateMergedSearchRepos() {
     const config = loadConfig();
     const teams = (config.teams || []).filter((t) => t.namespace);
     if (!config.githubOrg || teams.length === 0) { return; }
-    const prTopic = teams[0].githubTopic || teams[0].namespace;
     const select = document.getElementById('mergedSearchRepo');
     try {
-        const repos = await window.kubeDashboard.fetchRepoList({ org: config.githubOrg, topic: prTopic });
+        const results = await Promise.allSettled(
+            teams.map((team) => window.kubeDashboard.fetchRepoList({ org: config.githubOrg, topic: team.githubTopic || team.namespace }))
+        );
+        const repos = [...new Set(results.filter((r) => r.status === 'fulfilled').flatMap((r) => r.value))].sort();
         select.innerHTML = '<option value="">All apps</option>';
-        repos.sort().forEach((nameWithOwner) => {
+        repos.forEach((nameWithOwner) => {
             const name = nameWithOwner.split('/').pop();
             const opt = document.createElement('option');
             opt.value = nameWithOwner;
