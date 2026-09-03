@@ -412,6 +412,7 @@ document.getElementById('prList').addEventListener('click', (e) => {
         window.kubeDashboard.mergePr({ repoFullName, prNumber, method }).then((res) => {
             if (res.ok) {
                 row.innerHTML = '<span class="pr-action-done">Merged ✓</span>';
+                setTimeout(() => { window.kubeDashboard.clearPrCache?.(); refreshPullRequests(true); }, 2000);
             } else {
                 mergeBtn.disabled = false;
                 mergeBtn.textContent = 'Merge';

@@ -478,9 +478,10 @@ async function fetchPullRequests({ org, topic, watchedRepos = [], namespace }, o
 function clearPrListCache() {
     prListCache.clear();
     checkRunsCache.clear();
+    repoListCache.clear(); // bust pushedAt timestamps so delta cache detects new merges/pushes
     // perRepoPrCache intentionally NOT cleared — delta cache survives manual refresh
     // so only repos with new pushes are re-fetched. Clear it only on hard reset.
-    console.log('[gh] prListCache + checkRunsCache cleared (manual refresh), delta cache preserved');
+    console.log('[gh] prListCache + checkRunsCache + repoListCache cleared (manual refresh), delta cache preserved');
 }
 
 function clearAllCaches() {
