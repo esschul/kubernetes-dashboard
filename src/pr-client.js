@@ -133,7 +133,8 @@ async function fetchCheckStatus(nameWithOwner, sha, recentlyUpdated) {
         const result = { ...interpretCheckRuns(runs), fetchedAt: Date.now() };
         checkRunsCache.set(cacheKey, result);
         return result;
-    } catch {
+    } catch (err) {
+        console.log(`[gh] checkRuns ERROR for ${cacheKey}: ${err?.message || err}`);
         // On error, return previous cached status if we have one — don't wipe known state
         if (cached) { return { checkStatus: cached.checkStatus, checkStatusLabel: cached.checkStatusLabel }; }
         return { checkStatus: 'none', checkStatusLabel: 'No checks' };
@@ -438,7 +439,8 @@ async function fetchPullRequests({ org, topic, watchedRepos = [], namespace }, o
         if ((Date.now() - new Date(pr.updatedAt).getTime()) >= CHECK_RUNS_MAX_AGE_MS) { return false; }
         const cached = checkRunsCache.get(`${pr.repository}/${pr.headRefOid}`);
         const isPending = cached?.checkStatus === 'pending';
-        return staleRepos.has(pr.repository) || isPending;
+        const isUnfetched = !cached;
+        return staleRepos.has(pr.repository) || isPending || isUnfetched;
     });
     const skipped = all.filter((pr) => pr.headRefOid).length - prsWithSha.length;
     console.log(`[gh] enriching ${prsWithSha.length} PRs with check status via REST (background, skipping ${skipped} from unchanged repos)`);
@@ -463,6 +465,7 @@ async function fetchPullRequests({ org, topic, watchedRepos = [], namespace }, o
         if (pr.checkStatus === status.checkStatus && pr.checkStatusLabel === status.checkStatusLabel) { return; }
         pr.checkStatus = status.checkStatus;
         pr.checkStatusLabel = status.checkStatusLabel;
+        console.log(`[gh] partial:checks emit — ${pr.url} → ${pr.checkStatus} (${pr.checkStatusLabel})`);
         onPartialResults?.({ type: 'checks', pr: { url: pr.url, checkStatus: pr.checkStatus, checkStatusLabel: pr.checkStatusLabel } });
     })).then(() => {
         console.log(`[gh] check enrichment done — ${_callCount - before} gh calls total this fetch`);

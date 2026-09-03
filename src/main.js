@@ -1,6 +1,16 @@
 const { app, BrowserWindow, ipcMain, shell, Menu, dialog, clipboard, Notification: ElectronNotification } = require('electron');
 if (!app.isPackaged) { require('electron-reload')(__dirname); }
 
+// Redirect console.log to a file so changes can be verified without DevTools
+const fs = require('node:fs');
+const _logFile = fs.createWriteStream(`${require('node:os').homedir()}/Library/Logs/kubernetes-dashboard.log`, { flags: 'a' });
+const _origLog = console.log.bind(console);
+console.log = (...args) => {
+    const line = args.map((a) => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+    _origLog(...args);
+    _logFile.write(`[${new Date().toISOString()}] ${line}\n`);
+};
+
 // Packaged Electron apps launch with a minimal PATH that lacks homebrew and
 // other user-installed tools. Extend it so kubectl, gh, az and their auth
 // plugins (kubelogin, etc.) can all be found as child processes.
@@ -169,7 +179,8 @@ app.whenReady().then(() => {
 
     ipcMain.handle('prs:fetch', async (_event, config) => {
         try {
-            const send = (channel, payload) => { try { _event.sender.send(channel, payload); } catch {} };
+            const wc = _event.sender; // capture webContents reference before async gap
+            const send = (channel, payload) => { try { if (!wc.isDestroyed()) { wc.send(channel, payload); } } catch {} };
             const onProgress = (pct) => send('pr:progress', pct);
             const onPartialResults = (partial) => send('pr:partial', partial);
             const result = await fetchPullRequests(config, onProgress, onPartialResults);
@@ -312,6 +323,7 @@ app.whenReady().then(() => {
     });
 
     ipcMain.handle('app:buildDate', () => buildDate);
+    ipcMain.on('renderer:log', (_event, msg) => console.log(`[renderer] ${msg}`));
 
     ipcMain.handle('external:open', (_event, url) => {
         // Only allow safe URLs

@@ -527,7 +527,7 @@ async function refreshPullRequests(force = false) {
     let mergedFromPartial = null; // set when merged partial arrives during this fetch
 
     const offPartial = window.kubeDashboard.onPrPartial?.((partial) => {
-        if (!prRefreshInProgress && partial.type !== 'merged') { return; }
+        if (!prRefreshInProgress && partial.type !== 'merged' && partial.type !== 'checks') { return; }
         if (partial.type === 'open') {
             // Preserve known check status — partial PRs arrive with checkStatus:'none' until enriched
             const knownChecks = new Map((latestPrData?.pullRequests || []).map((pr) => [pr.url, { checkStatus: pr.checkStatus, checkStatusLabel: pr.checkStatusLabel }]));
@@ -564,7 +564,8 @@ async function refreshPullRequests(force = false) {
         } else if (partial.type === 'checks' && partial.pr) {
             // Patch just the check-pill on the matching card — no full re-render needed
             const { url, checkStatus, checkStatusLabel } = partial.pr;
-            const card = document.querySelector(`[data-url="${CSS.escape(url)}"]`);
+            const card = document.querySelector(`.pr-card[data-url="${CSS.escape(url)}"]`);
+            window.kubeDashboard.log(`checks partial received — card ${card ? 'FOUND' : 'NOT FOUND'} for ${url} → ${checkStatus}`);
             if (card) {
                 const pill = card.querySelector('.check-pill');
                 if (pill) {
@@ -576,9 +577,10 @@ async function refreshPullRequests(force = false) {
                 const newHtml = card.dataset.prHtml?.replace(/check-pill [^"]*">[^<]*</, `check-pill ${({ success: 'is-success', failure: 'is-failure', pending: 'is-pending', none: 'is-none' }[checkStatus] || 'is-none')}">${checkStatusLabel || 'No checks'}<`);
                 if (newHtml) { card.dataset.prHtml = newHtml; }
             }
-            // Update latestPrData so future re-renders have the right status
-            if (latestPrData?.pullRequests) {
-                const pr = latestPrData.pullRequests.find((p) => p.url === url);
+            // Update latestPrData so future re-renders have the right status (both human and dependabot)
+            if (latestPrData) {
+                const pr = (latestPrData.pullRequests || []).find((p) => p.url === url)
+                    || (latestPrData.dependabotPullRequests || []).find((p) => p.url === url);
                 if (pr) { pr.checkStatus = checkStatus; pr.checkStatusLabel = checkStatusLabel; }
             }
         }
@@ -1006,7 +1008,7 @@ function renderPrCard(pr, isMerged = false) {
 
     const prKey = `${pr.repository}/${pr.number}`;
     const isApproved = approvedPrKeys.has(prKey) || pr.reviewDecision === 'APPROVED';
-    const showActions = !isMerged && isDependabotPr(pr) && pr.checkStatus === 'success';
+    const showActions = !isMerged && isDependabotPr(pr) && (pr.checkStatus === 'success' || pr.checkStatus === 'none');
     const closeBtn = !isMerged && isDependabotPr(pr) ? `<button class="pr-action-btn pr-action-btn--muted pr-regenerate-btn" title="Close PR so dependabot recreates it with the latest version">Close</button>` : '';
     const actionsHtml = showActions ? `
         <div class="pr-actions-row" data-pr-number="${pr.number}" data-pr-repo="${escapeHtml(pr.repository)}">

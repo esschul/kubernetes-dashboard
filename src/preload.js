@@ -71,6 +71,7 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
         ipcRenderer.on('pr:partial', listener);
         return () => ipcRenderer.removeListener('pr:partial', listener);
     },
+    log: (msg) => ipcRenderer.send('renderer:log', msg),
     onUpdateAvailable: (cb) => ipcRenderer.on('update-available', (_e, version) => cb(version)),
     onUpdateReady: (cb) => ipcRenderer.on('update-ready', (_e, version) => cb(version)),
     installUpdate: () => ipcRenderer.send('update-install'),
