@@ -478,10 +478,14 @@ async function fetchPullRequests({ org, topic, watchedRepos = [], namespace }, o
 function clearPrListCache() {
     prListCache.clear();
     checkRunsCache.clear();
-    repoListCache.clear(); // bust pushedAt timestamps so delta cache detects new merges/pushes
-    // perRepoPrCache intentionally NOT cleared — delta cache survives manual refresh
-    // so only repos with new pushes are re-fetched. Clear it only on hard reset.
-    console.log('[gh] prListCache + checkRunsCache + repoListCache cleared (manual refresh), delta cache preserved');
+    repoListCache.clear();
+    perRepoPrCache.clear();
+    console.log('[gh] all PR caches cleared (manual refresh)');
+}
+
+function evictRepoDeltaCache(nameWithOwner) {
+    perRepoPrCache.delete(nameWithOwner);
+    console.log(`[gh] delta cache evicted for ${nameWithOwner}`);
 }
 
 function clearAllCaches() {
@@ -517,4 +521,4 @@ async function fetchMergedPrsForRange({ org, topic, watchedRepos = [], namespace
     return { mergedRangePullRequests: prs.slice(0, limit) };
 }
 
-module.exports = { fetchPullRequests, clearPrListCache, clearAllCaches, fetchCommitMessage, fetchMergedPrsForRange, fetchRepoList };
+module.exports = { fetchPullRequests, clearPrListCache, clearAllCaches, evictRepoDeltaCache, fetchCommitMessage, fetchMergedPrsForRange, fetchRepoList };

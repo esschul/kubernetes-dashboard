@@ -36,7 +36,7 @@ try { buildDate = require('./build-info.json').date; } catch { /* not available 
 const { fetchDeployments, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs, cancelSearch } = require('./kubectl-client');
 const { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr, closePr } = require('./github-client');
 const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, rerunFailedJobs } = require('./azure-client');
-const { fetchPullRequests, clearPrListCache, clearAllCaches, fetchCommitMessage, fetchMergedPrsForRange, fetchRepoList } = require('./pr-client');
+const { fetchPullRequests, clearPrListCache, clearAllCaches, evictRepoDeltaCache, fetchCommitMessage, fetchMergedPrsForRange, fetchRepoList } = require('./pr-client');
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -211,6 +211,7 @@ app.whenReady().then(() => {
     ipcMain.handle('pr:merge', async (_event, config) => {
         try {
             await mergePr(config);
+            evictRepoDeltaCache(config.repoFullName); // remove stale openNodes so merged PR doesn't reappear
             return { ok: true };
         } catch (err) {
             return { ok: false, error: err.message };
