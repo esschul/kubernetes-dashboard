@@ -26,7 +26,7 @@ try { buildDate = require('./build-info.json').date; } catch { /* not available 
 const { fetchDeployments, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs, cancelSearch } = require('./kubectl-client');
 const { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr, closePr } = require('./github-client');
 const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, rerunFailedJobs } = require('./azure-client');
-const { fetchPullRequests, clearPrListCache, fetchCommitMessage } = require('./pr-client');
+const { fetchPullRequests, clearPrListCache, clearAllCaches, fetchCommitMessage, fetchMergedPrsForRange, fetchRepoList } = require('./pr-client');
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -169,7 +169,10 @@ app.whenReady().then(() => {
 
     ipcMain.handle('prs:fetch', async (_event, config) => {
         try {
-            const result = await fetchPullRequests(config);
+            const send = (channel, payload) => { try { _event.sender.send(channel, payload); } catch {} };
+            const onProgress = (pct) => send('pr:progress', pct);
+            const onPartialResults = (partial) => send('pr:partial', partial);
+            const result = await fetchPullRequests(config, onProgress, onPartialResults);
             return { ok: true, result };
         } catch (err) {
             return { ok: false, error: { message: err.message } };
@@ -215,6 +218,13 @@ app.whenReady().then(() => {
     ipcMain.handle('prs:clearCache', () => {
         clearPrListCache();
         return { ok: true };
+    });
+    ipcMain.handle('prs:fetchMergedRange', async (_event, config) => {
+        return fetchMergedPrsForRange(config);
+    });
+    ipcMain.handle('repos:list', async (_event, config) => {
+        const repos = await fetchRepoList(config.org, config.topic);
+        return repos.map((r) => r.nameWithOwner);
     });
     ipcMain.handle('pr:fetchCommit', async (_event, nameWithOwner, sha) => {
         return fetchCommitMessage(nameWithOwner, sha);

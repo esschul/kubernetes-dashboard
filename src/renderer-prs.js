@@ -2,6 +2,7 @@
 /* exported latestPrData, prRefreshInProgress, isDependabotPr, fetchAvatar, refreshPullRequests, renderPrView */
 
 let prRefreshInProgress = false;
+let qaDeploymentsByBranch = new Map(); // branch → deployment object
 let activePrTab = 'open';
 let activePrFilter = 'all';
 let activeMergedSub = 'today';
@@ -12,11 +13,9 @@ const seenPrKeys = new Set();
 const approvedPrKeys = new Set();
 const avatarCache = new Map();
 
-const DEPENDABOT_LOGIN = 'app/dependabot';
+// isDependabotPr and getLocalDateKey are defined in renderer-utils.js
 
 const BOT_AVATAR_SVG = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="pr-avatar-bot-icon"><rect x="3" y="8" width="18" height="13" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M9 8V6a3 3 0 0 1 6 0v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="9" cy="14" r="1.5" fill="currentColor"/><circle cx="15" cy="14" r="1.5" fill="currentColor"/><path d="M8 18h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M12 3v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
-
-function isDependabotPr(pr) { return pr.author?.login === DEPENDABOT_LOGIN; }
 
 const MANIFEST_FILES = [
     // npm
@@ -65,25 +64,13 @@ function analyzeDependabotPr(pr) {
     return warnings;
 }
 
-function getLocalDateKey(value) {
-    const date = value ? new Date(value) : new Date();
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-}
 
 async function fetchAvatar(login) {
     if (avatarCache.has(login)) { return avatarCache.get(login); }
-    try {
-        const data = await window.kubeDashboard.fetchGithubUser(login);
-        const url = data?.avatar_url || null;
-        avatarCache.set(login, url);
-        return url;
-    } catch {
-        avatarCache.set(login, null);
-        return null;
-    }
+    // Use GitHub's public avatar URL — no API call needed, no rate limit
+    const url = `https://github.com/${encodeURIComponent(login)}.png?size=64`;
+    avatarCache.set(login, url);
+    return url;
 }
 
 function notifyNewPrs(pullRequests) {
@@ -491,6 +478,29 @@ function mergePrResults(results) {
     };
 }
 
+async function refreshQaDeployments(config) {
+    const qaContext = config.envContexts?.qa;
+    if (!qaContext) { return; }
+    const teamNamespaces = (config.teams || []).map((t) => t.namespace).filter(Boolean);
+    if (!teamNamespaces.length) { return; }
+    const results = await Promise.allSettled(
+        teamNamespaces.map((ns) => window.kubeDashboard.fetchDeployments({ ...config, context: qaContext, namespace: ns }))
+    );
+    const deps = results.filter((r) => r.status === 'fulfilled').flatMap((r) => r.value);
+    const byBranch = new Map();
+    for (const dep of deps) {
+        const branch = dep.rollouts?.[0]?.branch;
+        if (branch) {
+            // Key on repo+branch to avoid false matches when the same branch name exists in multiple repos
+            if (dep.imageRepoName) { byBranch.set(`${dep.imageRepoName}/${branch}`, dep); }
+            // Also store by branch alone as fallback for deployments without imageRepoName
+            if (!dep.imageRepoName) { byBranch.set(branch, dep); }
+        }
+    }
+    qaDeploymentsByBranch = byBranch;
+    if (latestPrData) { renderPrView(latestPrData); }
+}
+
 async function refreshPullRequests(force = false) {
     if (prRefreshInProgress) { return; }
     if (latestPrData && !force) { renderPrView(latestPrData); return; }
@@ -504,7 +514,75 @@ async function refreshPullRequests(force = false) {
     }
 
     prRefreshInProgress = true;
+    // Clear stale data when team config changes so old PRs don't bleed into new team's partial renders
+    const refreshKey = teams.map((t) => `${config.githubOrg}/${t.githubTopic || t.namespace}`).join(',');
+    if (latestPrData?._refreshKey && latestPrData._refreshKey !== refreshKey) { latestPrData = null; }
+    const loadingBar = document.getElementById('prLoadingBar');
+    if (loadingBar) { loadingBar.style.width = '2%'; loadingBar.classList.add('is-active'); }
     document.getElementById('prStatusPanel').textContent = 'Loading…';
+
+    const offProgress = window.kubeDashboard.onPrProgress?.((pct) => {
+        if (prRefreshInProgress && loadingBar) { loadingBar.style.width = `${pct}%`; }
+    });
+    let mergedFromPartial = null; // set when merged partial arrives during this fetch
+
+    const offPartial = window.kubeDashboard.onPrPartial?.((partial) => {
+        if (!prRefreshInProgress && partial.type !== 'merged') { return; }
+        if (partial.type === 'open') {
+            // Preserve known check status — partial PRs arrive with checkStatus:'none' until enriched
+            const knownChecks = new Map((latestPrData?.pullRequests || []).map((pr) => [pr.url, { checkStatus: pr.checkStatus, checkStatusLabel: pr.checkStatusLabel }]));
+            const withChecks = (prs) => prs.map((pr) => {
+                const known = knownChecks.get(pr.url);
+                return known && pr.checkStatus === 'none' ? { ...pr, ...known } : pr;
+            });
+            // Merge freshly fetched open PRs with old data for repos not yet fetched
+            const fetchedRepos = new Set(partial.repositories || []);
+            const view = {
+                ...latestPrData,
+                pullRequests: [
+                    ...withChecks(partial.pullRequests || []),
+                    ...(latestPrData?.pullRequests || []).filter((pr) => !fetchedRepos.has(pr.repository)),
+                ],
+                dependabotPullRequests: latestPrData?.dependabotPullRequests || [],
+                mergedPullRequests: latestPrData?.mergedPullRequests || [],
+                mergedYesterdayPullRequests: latestPrData?.mergedYesterdayPullRequests || [],
+                repositories: partial.repositories || [],
+                partial: true,
+            };
+            renderPrView(view);
+        } else if (partial.type === 'dependabot') {
+            const view = { ...latestPrData, dependabotPullRequests: partial.dependabotPullRequests || [], partial: true };
+            renderPrView(view);
+            updatePrNavCount(view);
+        } else if (partial.type === 'merged') {
+            mergedFromPartial = { mergedPullRequests: partial.mergedPullRequests || [], mergedYesterdayPullRequests: partial.mergedYesterdayPullRequests || [] };
+            latestPrData = { ...latestPrData, ...mergedFromPartial, partial: true };
+            renderPrView(latestPrData);
+            updatePrNavCount(latestPrData);
+            // Merged arrived — safe to unregister now if fetch is already done
+            if (!prRefreshInProgress) { offPartial?.(); }
+        } else if (partial.type === 'checks' && partial.pr) {
+            // Patch just the check-pill on the matching card — no full re-render needed
+            const { url, checkStatus, checkStatusLabel } = partial.pr;
+            const card = document.querySelector(`[data-url="${CSS.escape(url)}"]`);
+            if (card) {
+                const pill = card.querySelector('.check-pill');
+                if (pill) {
+                    const cls = { success: 'is-success', failure: 'is-failure', pending: 'is-pending', none: 'is-none' }[checkStatus] || 'is-none';
+                    pill.className = `check-pill ${cls}`;
+                    pill.textContent = checkStatusLabel || 'No checks';
+                }
+                // Also update the stored html so reconciler doesn't revert it
+                const newHtml = card.dataset.prHtml?.replace(/check-pill [^"]*">[^<]*</, `check-pill ${({ success: 'is-success', failure: 'is-failure', pending: 'is-pending', none: 'is-none' }[checkStatus] || 'is-none')}">${checkStatusLabel || 'No checks'}<`);
+                if (newHtml) { card.dataset.prHtml = newHtml; }
+            }
+            // Update latestPrData so future re-renders have the right status
+            if (latestPrData?.pullRequests) {
+                const pr = latestPrData.pullRequests.find((p) => p.url === url);
+                if (pr) { pr.checkStatus = checkStatus; pr.checkStatusLabel = checkStatusLabel; }
+            }
+        }
+    });
 
     try {
         const fetches = teams.map((team) =>
@@ -521,20 +599,36 @@ async function refreshPullRequests(force = false) {
         const multiTeam = teams.length > 1;
         const data = mergePrResults(succeeded, multiTeam);
         notifyNewPrs(data.pullRequests);
-        latestPrData = data;
-        renderPrView(data);
+        // If merged partial arrived while we were fetching, use it — the background merged phase
+        // has newer data than what fetchPullRequests returns (which has empty merged for stale repos)
+        latestPrData = {
+            ...data,
+            // Use merged partial if it arrived, else keep previous merged until background fetch completes
+            mergedPullRequests: (mergedFromPartial || latestPrData)?.mergedPullRequests ?? data.mergedPullRequests,
+            mergedYesterdayPullRequests: (mergedFromPartial || latestPrData)?.mergedYesterdayPullRequests ?? data.mergedYesterdayPullRequests,
+            _refreshKey: refreshKey,
+        };
+        renderPrView(latestPrData);
         if (document.getElementById('feedView') && !document.getElementById('feedView').classList.contains('hidden')) {
             feedEvents = buildFeedEvents();
             renderFeed(document.getElementById('feedSearch')?.value);
         }
-        document.getElementById('prStatusPanel').textContent = `${data.repositories.length} repo${data.repositories.length !== 1 ? 's' : ''}`;
         setLastUpdated();
-        updatePrNavCount(data);
+        updatePrNavCount(latestPrData);
+        refreshQaDeployments(config).catch(() => {});
     } catch (err) {
         document.getElementById('prList').innerHTML = `<div class="error-panel"><strong>Failed to load pull requests</strong><pre>${escapeHtml(err?.message || String(err))}</pre></div>`;
         document.getElementById('prStatusPanel').textContent = 'Refresh failed';
     } finally {
         prRefreshInProgress = false;
+        offProgress?.();
+        // Keep offPartial alive until merged partial arrives (background fetch may still be running).
+        // It unregisters itself when merged partial comes in, or we clean up here if it already has.
+        if (mergedFromPartial !== null) { offPartial?.(); }
+        if (loadingBar) {
+            loadingBar.style.width = '100%';
+            setTimeout(() => { loadingBar.classList.remove('is-active'); loadingBar.style.width = '0%'; }, 300);
+        }
     }
 }
 
@@ -683,11 +777,73 @@ function getDeploymentStatusForPr(pr) {
     return { label: `Deployed · ${statusLabel}`, cls };
 }
 
+// In-place DOM reconciler for the PR list. Avoids replacing unchanged cards (prevents blink).
+// orderedItems: Array<{ key: string, html: string } | { heading: string }>
+function reconcilePrList(list, orderedItems) {
+    const tmp = document.createElement('div');
+    const desiredNodes = orderedItems.map((item) => {
+        if (item.heading !== undefined) {
+            const el = document.createElement('div');
+            el.className = 'team-group-heading';
+            el.textContent = item.heading;
+            el.dataset.headingKey = item.heading;
+            return el;
+        }
+        tmp.innerHTML = item.html;
+        const el = tmp.firstElementChild;
+        el.dataset.prKey = item.key;
+        el.dataset.prHtml = item.html; // store for equality check
+        return el;
+    });
+
+    // Build map of existing nodes by key
+    const existing = new Map();
+    for (const child of list.children) {
+        const k = child.dataset.prKey || ('h:' + child.dataset.headingKey);
+        if (k) { existing.set(k, child); }
+    }
+
+    // Reconcile: insert/update nodes in order, then remove leftovers
+    let refNode = list.firstChild;
+    for (const desired of desiredNodes) {
+        const k = desired.dataset.prKey || ('h:' + desired.dataset.headingKey);
+        const live = existing.get(k);
+        if (live) {
+            // Update in-place only if content changed
+            if (desired.dataset.prHtml && live.dataset.prHtml !== desired.dataset.prHtml) {
+                live.dataset.prHtml = desired.dataset.prHtml;
+                // Patch only the changed children to avoid destroying avatar <img> nodes
+                patchPrCard(live, desired);
+            }
+            if (live !== refNode) { list.insertBefore(live, refNode); }
+            else { refNode = live.nextSibling; }
+            existing.delete(k);
+        } else {
+            list.insertBefore(desired, refNode || null);
+        }
+    }
+    // Remove nodes no longer in the list
+    for (const old of existing.values()) { old.remove(); }
+}
+
+// Patch changed sub-elements of a PR card without touching the avatar column (preserves loaded img).
+function patchPrCard(live, desired) {
+    const liveBody = live.querySelector('.pr-card-body');
+    const desiredBody = desired.querySelector('.pr-card-body');
+    if (liveBody && desiredBody && liveBody.innerHTML !== desiredBody.innerHTML) {
+        liveBody.innerHTML = desiredBody.innerHTML;
+    }
+}
+
 function renderPrView(data) {
     const list = document.getElementById('prList');
     const prs = getPrsForTab(data);
     const isMergedTab = activePrTab === 'merged';
     const isDependabotTab = activePrTab === 'dependabot';
+
+    const openCount = data.pullRequests?.length ?? 0;
+    const statusEl = document.getElementById('prStatusPanel');
+    if (statusEl) { statusEl.textContent = `${openCount} open PR${openCount !== 1 ? 's' : ''}`; }
 
     const filterBar = document.getElementById('prFilterBar');
     filterBar.style.display = '';
@@ -726,7 +882,7 @@ function renderPrView(data) {
             mergedSearchPrs === null ? 'Set filters and press Search.' :
             'No pull requests found.';
         const msg = isMergedTab ? mergedEmptyMsg :
-            isDependabotTab ? 'No open Dependabot pull requests.' :
+            isDependabotTab ? 'Ingen åpne Dependabot-PRer 🎉' :
                 activePrFilter === 'all' ? 'No open pull requests.' : 'No pull requests match this filter.';
         list.innerHTML = `<p class="empty-state">${msg}</p>`;
         return;
@@ -737,24 +893,27 @@ function renderPrView(data) {
     const teamNamespaces = (config.teams || []).map((t) => t.namespace).filter(Boolean);
     const multiTeam = teamNamespaces.length > 1;
 
+    // Build ordered list of HTML strings tagged with a key (repo/number) for diffing
+    const orderedItems = []; // { key: string, html: string } | { heading: string }
     if (multiTeam) {
         const order = [...teamNamespaces, ...[...new Set(filtered.map((p) => p._teamNamespace).filter((ns) => ns && !teamNamespaces.includes(ns)))].sort()];
         const groups = new Map(order.map((ns) => [ns, []]));
         filtered.forEach((pr) => { const ns = pr._teamNamespace || ''; (groups.get(ns) || groups.set(ns, []).get(ns)).push(pr); });
-        const parts = [];
         for (const [ns, groupPrs] of groups) {
             if (!groupPrs.length) { continue; }
             const sortedGroup = [...groupPrs].sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
-            parts.push(`<div class="team-group-heading">${escapeHtml(ns)}</div>`);
-            parts.push(...sortedGroup.map((pr) => renderPrCard(pr, isMergedTab)));
+            orderedItems.push({ heading: ns });
+            for (const pr of sortedGroup) { orderedItems.push({ key: `${pr.repository}/${pr.number}`, html: renderPrCard(pr, isMergedTab) }); }
         }
-        list.innerHTML = parts.join('');
     } else {
         const sorted = [...filtered].sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
-        list.innerHTML = sorted.map((pr) => renderPrCard(pr, isMergedTab)).join('');
+        for (const pr of sorted) { orderedItems.push({ key: `${pr.repository}/${pr.number}`, html: renderPrCard(pr, isMergedTab) }); }
     }
 
-    if (config.showPrAvatars) {
+    // In-place reconcile: update changed cards, keep unchanged DOM nodes intact (avoids blink)
+    reconcilePrList(list, orderedItems);
+
+    {
         const placeholders = list.querySelectorAll('.pr-avatar--placeholder[data-login]');
         for (const el of placeholders) {
             const login = el.dataset.login;
@@ -764,6 +923,7 @@ function renderPrView(data) {
                 img.className = 'pr-avatar';
                 img.src = url;
                 img.alt = login;
+                img.onerror = () => { img.style.display = 'none'; };
                 el.replaceWith(img);
             });
         }
@@ -836,6 +996,10 @@ function renderPrCard(pr, isMerged = false) {
 
     const pipelineStatus = getPipelineStatusForPr(pr);
     const deploymentStatus = isMerged ? getDeploymentStatusForPr(pr) : null;
+    const repoShortName = pr.repository?.split('/')?.[1] || pr.repository;
+    const qaDeployment = !isMerged && pr.headRefName
+        ? (qaDeploymentsByBranch.get(`${repoShortName}/${pr.headRefName}`) || qaDeploymentsByBranch.get(pr.headRefName))
+        : null;
     const pipelineLink = pipelineStatus?.url
         ? `<span class="datadog-link pr-pipeline-link" data-url="${escapeHtml(pipelineStatus.url)}">Pipeline ↗</span>`
         : '';
@@ -863,7 +1027,7 @@ function renderPrCard(pr, isMerged = false) {
             ${isBot
                 ? `<div class="pr-avatar pr-avatar--bot">${BOT_AVATAR_SVG}</div>`
                 : cachedAvatar
-                    ? `<img class="pr-avatar" src="${escapeHtml(cachedAvatar)}" alt="${escapeHtml(login)}" />`
+                    ? `<img class="pr-avatar" src="${escapeHtml(cachedAvatar)}" alt="${escapeHtml(login)}" onerror="this.style.display='none'" />`
                     : `<div class="pr-avatar pr-avatar--placeholder" data-login="${escapeHtml(login)}"></div>`}
             <span class="pr-avatar-name" title="${escapeHtml(isBot ? 'dependabot' : login)}">${escapeHtml(isBot ? 'dependabot' : login)}</span>
         </div>`;
@@ -889,10 +1053,11 @@ function renderPrCard(pr, isMerged = false) {
             ${pr.headRefOid ? `<span class="branch-pill pr-comments-pill" data-pr-key="${escapeHtml(pr.repository + '/' + pr.number)}" style="cursor:pointer">${pr.commentActivityCount > 0 ? `${pr.commentActivityCount} comment${pr.commentActivityCount !== 1 ? 's' : ''}` : 'Description'}</span>` : ''}
             ${isDependabotPr(pr) ? analyzeDependabotPr(pr).map((w) => `<span class="dep-warn-pill dep-warn-pill--${w.level}">${escapeHtml(w.label)}</span>`).join('') : ''}
         </div>
-        ${(pipelineStatus && isMerged) || deploymentStatus ? `
+        ${(pipelineStatus && isMerged) || deploymentStatus || qaDeployment ? `
         <div class="pr-infra-row">
             ${pipelineStatus && isMerged ? `<span class="pr-infra-item"><span class="pr-infra-label">Pipeline</span><span class="status-pill ${pipelineStatus.cls}">${escapeHtml(pipelineStatus.label.replace('Pipeline ', ''))}</span></span>` : ''}
             ${deploymentStatus ? `<span class="pr-infra-item"><span class="pr-infra-label">Deployment</span><span class="status-pill ${deploymentStatus.cls}">${escapeHtml(deploymentStatus.label.replace('Deployed · ', ''))}</span></span>` : ''}
+            ${qaDeployment ? `<span class="status-pill pr-qa-link">Deployed in QA</span>` : ''}
         </div>` : ''}
         ${actionsHtml}
         </div>

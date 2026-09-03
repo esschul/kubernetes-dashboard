@@ -52,6 +52,8 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
         return response.result;
     },
     clearPrCache: () => ipcRenderer.invoke('prs:clearCache'),
+    fetchMergedPrsForRange: (config) => ipcRenderer.invoke('prs:fetchMergedRange', config),
+    fetchRepoList: (config) => ipcRenderer.invoke('repos:list', config),
     fetchCommitMessage: (nameWithOwner, sha) => ipcRenderer.invoke('pr:fetchCommit', nameWithOwner, sha),
     fetchGithubUser: async (login) => {
         const res = await ipcRenderer.invoke('gh:user', login);
@@ -59,6 +61,16 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
         return res.result;
     },
     getBuildDate: () => ipcRenderer.invoke('app:buildDate'),
+    onPrProgress: (cb) => {
+        const listener = (_e, pct) => cb(pct);
+        ipcRenderer.on('pr:progress', listener);
+        return () => ipcRenderer.removeListener('pr:progress', listener);
+    },
+    onPrPartial: (cb) => {
+        const listener = (_e, partial) => cb(partial);
+        ipcRenderer.on('pr:partial', listener);
+        return () => ipcRenderer.removeListener('pr:partial', listener);
+    },
     onUpdateAvailable: (cb) => ipcRenderer.on('update-available', (_e, version) => cb(version)),
     onUpdateReady: (cb) => ipcRenderer.on('update-ready', (_e, version) => cb(version)),
     installUpdate: () => ipcRenderer.send('update-install'),

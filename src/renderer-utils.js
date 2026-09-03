@@ -1,5 +1,16 @@
 'use strict';
-/* exported escapeHtml, getStatusLabel, getImageTag, formatRelativeTime, getAgePillClass, formatDuration, isFailingStatus, getPipelineBranchType, getPipelineStatusClass, getPipelineStatusLabel, parseLogLine, logLineMatchesFilter */
+/* exported escapeHtml, getStatusLabel, getImageTag, formatRelativeTime, getAgePillClass, formatDuration, isFailingStatus, getPipelineBranchType, getPipelineStatusClass, getPipelineStatusLabel, parseLogLine, logLineMatchesFilter, getLocalDateKey, isDependabotPr */
+
+const DEPENDABOT_LOGINS = new Set(['app/dependabot', 'dependabot[bot]', 'dependabot']);
+function isDependabotPr(pr) { return DEPENDABOT_LOGINS.has(pr.author?.login); }
+
+function getLocalDateKey(value) {
+    const d = value ? new Date(value) : new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
 
 function escapeHtml(str) {
     if (!str) { return ''; }
@@ -130,5 +141,7 @@ if (typeof module !== 'undefined') {
         getPipelineStatusLabel,
         parseLogLine,
         logLineMatchesFilter,
+        isDependabotPr,
+        getLocalDateKey,
     };
 }

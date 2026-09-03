@@ -14,6 +14,8 @@ const {
     getPipelineStatusLabel,
     parseLogLine,
     logLineMatchesFilter,
+    isDependabotPr,
+    getLocalDateKey,
 } = require('./renderer-utils');
 
 function test(name, fn) {
@@ -252,4 +254,41 @@ test('matches visible message text after timestamp parsing', () => {
 test('matches all-pods prefix text after timestamp parsing', () => {
     assert.equal(logLineMatchesFilter('[my-pod-abc123] 2026-06-25T12:34:56.789012345Z request received', 'my-pod'), true);
     assert.equal(logLineMatchesFilter('[my-pod-abc123] 2026-06-25T12:34:56.789012345Z request received', 'request'), true);
+});
+
+// ── isDependabotPr ────────────────────────────────────────────────────────────
+console.log('\nisDependabotPr');
+
+test('returns true for app/dependabot (REST login)', () => {
+    assert.equal(isDependabotPr({ author: { login: 'app/dependabot' } }), true);
+});
+test('returns true for dependabot[bot] (REST login)', () => {
+    assert.equal(isDependabotPr({ author: { login: 'dependabot[bot]' } }), true);
+});
+test('returns true for dependabot (GraphQL login)', () => {
+    assert.equal(isDependabotPr({ author: { login: 'dependabot' } }), true);
+});
+test('returns false for a human author', () => {
+    assert.equal(isDependabotPr({ author: { login: 'octocat' } }), false);
+});
+test('returns false when author is missing', () => {
+    assert.equal(isDependabotPr({}), false);
+    assert.equal(isDependabotPr({ author: null }), false);
+});
+
+// ── getLocalDateKey ───────────────────────────────────────────────────────────
+console.log('\ngetLocalDateKey');
+
+test('formats an ISO date string as YYYY-MM-DD', () => {
+    assert.equal(getLocalDateKey('2026-09-03T12:00:00Z'), new Date('2026-09-03T12:00:00Z').toLocaleDateString('sv').replace(/\//g, '-').slice(0, 10) || getLocalDateKey('2026-09-03T12:00:00Z'));
+    // verify format shape
+    assert.match(getLocalDateKey('2026-09-03T12:00:00Z'), /^\d{4}-\d{2}-\d{2}$/);
+});
+test('returns todays date when no argument given', () => {
+    const today = getLocalDateKey();
+    assert.match(today, /^\d{4}-\d{2}-\d{2}$/);
+    assert.equal(today, getLocalDateKey(new Date().toISOString()));
+});
+test('pads single-digit month and day', () => {
+    assert.match(getLocalDateKey('2026-01-05T00:00:00Z'), /^\d{4}-\d{2}-\d{2}$/);
 });

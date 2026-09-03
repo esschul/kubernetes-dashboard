@@ -1,0 +1,42 @@
+{
+  "r0": {
+    "prs": {
+      "nodes": [
+        {
+          "number": 40,
+          "title": "Merge feature X",
+          "url": "https://github.com/acme/repo-a/pull/40",
+          "isDraft": false,
+          "createdAt": "2026-09-01T08:00:00Z",
+          "updatedAt": "2026-09-03T10:00:00Z",
+          "mergedAt": "2026-09-03T10:00:00Z",
+          "reviewDecision": "APPROVED",
+          "author": { "login": "espen" }
+        },
+        {
+          "number": 39,
+          "title": "Fix yesterday thing",
+          "url": "https://github.com/acme/repo-a/pull/39",
+          "isDraft": false,
+          "createdAt": "2026-09-01T08:00:00Z",
+          "updatedAt": "2026-09-02T10:00:00Z",
+          "mergedAt": "2026-09-02T10:00:00Z",
+          "reviewDecision": "APPROVED",
+          "author": { "login": "ramesh" }
+        },
+        {
+          "number": 38,
+          "title": "Old fix",
+          "url": "https://github.com/acme/repo-a/pull/38",
+          "isDraft": false,
+          "createdAt": "2026-08-30T08:00:00Z",
+          "updatedAt": "2026-08-30T10:00:00Z",
+          "mergedAt": "2026-08-30T10:00:00Z",
+          "reviewDecision": "APPROVED",
+          "author": { "login": "ramesh" }
+        }
+      ]
+    }
+  },
+  "r1": { "prs": { "nodes": [] } }
+}

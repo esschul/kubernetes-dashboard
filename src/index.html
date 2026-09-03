@@ -124,36 +124,10 @@
                     <h2>Pull Requests</h2>
                     <p class="status-panel" id="prStatusPanel">Loading…</p>
                 </div>
-                <div class="pr-tab-group">
-                    <div class="env-switcher" id="prTabSwitcher">
-                        <button class="env-btn is-active" data-pr-tab="open">Open <span class="tab-count" id="tabCountOpen"></span></button>
-                        <button class="env-btn" data-pr-tab="merged">Merged <span class="tab-count" id="tabCountMerged"></span></button>
-                        <button class="env-btn" data-pr-tab="dependabot">Dependabot <span class="tab-count" id="tabCountDependabot"></span></button>
-                    </div>
-                    <div class="merged-subfilter hidden" id="mergedSubfilter">
-                        <button class="merged-sub-btn is-active" data-merged-sub="today">Today</button>
-                        <button class="merged-sub-btn" data-merged-sub="yesterday">Yesterday</button>
-                        <button class="merged-sub-btn" data-merged-sub="search">Search</button>
-                    </div>
-                </div>
-            </div>
-            <div class="merged-search-panel hidden" id="mergedSearchPanel">
-                <div class="merged-search-bar">
-                    <svg class="merged-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                    <input class="merged-search-text" type="text" id="mergedSearchText" placeholder="Search by title…" />
-                    <span class="merged-search-divider"></span>
-                    <input type="date" id="mergedSearchFrom" title="From" />
-                    <span class="merged-range-sep">–</span>
-                    <input type="date" id="mergedSearchTo" title="To" />
-                    <span class="merged-search-divider"></span>
-                    <select id="mergedSearchRepo">
-                        <option value="">All apps</option>
-                    </select>
-                    <span class="merged-search-divider"></span>
-                    <input class="merged-search-limit" type="number" id="mergedSearchLimit" value="50" min="1" max="500" title="Max results" />
-                    <button class="merged-search-go" id="mergedSearchGo" title="Search">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                    </button>
+                <div class="env-switcher" id="prTabSwitcher">
+                    <button class="env-btn is-active" data-pr-tab="open">Open <span class="tab-count" id="tabCountOpen"></span></button>
+                    <button class="env-btn" data-pr-tab="merged">Merged <span class="tab-count" id="tabCountMerged"></span></button>
+                    <button class="env-btn" data-pr-tab="dependabot">Dependabot <span class="tab-count" id="tabCountDependabot"></span></button>
                 </div>
             </div>
             <div class="filter-bar" id="prFilterBar">
@@ -167,19 +141,44 @@
                 <button class="filter-chip filter-chip--collapsible" data-pr-filter="checks-passing">Checks passing <span></span></button>
                 <button class="filter-chip filter-chip--collapsible" data-pr-filter="checks-failing">Checks failing <span></span></button>
                 <button class="pr-filter-expand" id="prFilterExpand" title="Show all filters">+</button>
+                <div class="merged-subfilter hidden" id="mergedSubfilter">
+                    <button class="merged-sub-btn is-active" data-merged-sub="today">Today</button>
+                    <button class="merged-sub-btn" data-merged-sub="yesterday">Yesterday</button>
+                    <button class="merged-sub-btn" data-merged-sub="search">Search</button>
+                </div>
             </div>
+            <div class="merged-search-panel hidden" id="mergedSearchPanel">
+                <svg class="merged-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input class="merged-search-text" type="text" id="mergedSearchText" placeholder="Search by title…" />
+                <span class="merged-search-divider"></span>
+                <input type="date" id="mergedSearchFrom" title="From" />
+                <span class="merged-range-sep">–</span>
+                <input type="date" id="mergedSearchTo" title="To" />
+                <span class="merged-search-divider"></span>
+                <select id="mergedSearchRepo">
+                    <option value="">All apps</option>
+                </select>
+                <span class="merged-search-divider"></span>
+                <input class="merged-search-limit" type="number" id="mergedSearchLimit" value="50" min="1" max="500" title="Max results" />
+                <button class="merged-search-go" id="mergedSearchGo" title="Search">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+            </div>
+            <div class="pr-loading-bar" id="prLoadingBar"></div>
             <div class="pr-list" id="prList"></div>
         </div>
 
         <!-- Feed view -->
         <div class="view hidden" id="feedView">
-            <div style="display:flex;align-items:baseline;gap:10px;">
-                <h2>Feed</h2>
-                <button class="theme-button" id="feedRefreshBtn" title="Refresh feed" style="flex-shrink:0;">
+            <div class="topbar">
+                <div>
+                    <h2>Feed</h2>
+                    <p class="status-panel" id="feedStatusPanel">Loading…</p>
+                </div>
+                <button class="theme-button" id="feedRefreshBtn" title="Refresh feed">
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
                 </button>
             </div>
-            <p class="status-panel" id="feedStatusPanel">Loading…</p>
             <div class="filter-bar feed-filter-bar">
                 <div class="feed-type-chips">
                     <button class="filter-chip is-active" data-feed-type="pr">PRs</button>
@@ -213,7 +212,7 @@
                                 </select>
                                 <button type="button" id="reloadContextsBtn" class="settings-reload-btn" title="Reload contexts from kubectl">↺</button>
                             </span>
-                            <span class="form-help form-help--warn" id="nsLoadHint"></span>
+                            <div class="warn-panel" id="nsLoadHint" style="display:none"></div>
                         </label>
                         <div class="settings-section-heading">Watched deployments</div>
                         <div class="dep-watch-table">

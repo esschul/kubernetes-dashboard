@@ -37,18 +37,29 @@ function renderDeploymentList(deployments) {
     const isGrid = list.classList.contains('is-grid');
     const config = loadConfig();
     const teamNamespaces = (config.teams || []).map((t) => t.namespace).filter(Boolean);
-    const multiTeam = teamNamespaces.length > 1;
+    const extraNamespaces = [...new Set(filtered.map((d) => d.namespace).filter((ns) => !teamNamespaces.includes(ns)))].sort();
+    const hasExtras = extraNamespaces.length > 0;
+    const multiTeam = teamNamespaces.length > 1 || hasExtras;
 
     if (multiTeam) {
-        // Group by namespace, preserving team order then alphabetical for extras
-        const order = [...teamNamespaces, ...[...new Set(filtered.map((d) => d.namespace).filter((ns) => !teamNamespaces.includes(ns)))].sort()];
-        const groups = new Map(order.map((ns) => [ns, []]));
-        filtered.forEach((dep) => { const ns = dep.namespace || ''; (groups.get(ns) || groups.set(ns, []).get(ns)).push(dep); });
+        // Group by namespace: team namespaces first (in config order), then "Other deployments"
         const parts = [];
-        for (const [ns, deps] of groups) {
-            if (!deps.length) { continue; }
-            parts.push(`<div class="team-group-heading">${escapeHtml(ns)}</div>`);
+        const teamOrder = teamNamespaces.length > 1 ? teamNamespaces : [];
+        const renderGroup = (ns, label) => {
+            const deps = filtered.filter((d) => d.namespace === ns);
+            if (!deps.length) { return; }
+            parts.push(`<div class="team-group-heading">${escapeHtml(label || ns)}</div>`);
             parts.push(...deps.map(isGrid ? renderGridCard : renderDeploymentCard));
+        };
+        if (teamOrder.length) {
+            teamOrder.forEach((ns) => renderGroup(ns, ns));
+        } else if (teamNamespaces.length === 1) {
+            // Single team namespace — render without heading, extras get "Other deployments"
+            const mainDeps = filtered.filter((d) => d.namespace === teamNamespaces[0]);
+            parts.push(...mainDeps.map(isGrid ? renderGridCard : renderDeploymentCard));
+        }
+        if (hasExtras) {
+            extraNamespaces.forEach((ns) => renderGroup(ns, 'Other deployments'));
         }
         list.innerHTML = parts.join('');
     } else {
@@ -307,11 +318,28 @@ function renderGridCard(dep) {
     </div>` : '';
     const podsBtn = podCount > 0 ? `<button class="grid-action-btn grid-pods-btn${isProgressing ? ' grid-pods-btn--rolling' : ''}" data-dep-name="${escapeHtml(dep.name)}">Pods <span class="grid-pods-count">${podCount}</span>${isProgressing ? '<span class="grid-pods-pulse"></span>' : ''}</button>` : '';
 
+    const prForBranch = getPrForBranch(localBranch);
+    const prBeingTestedBadge = prForBranch
+        ? `<span class="pr-being-tested-badge">PR being tested</span>`
+        : '';
+
     let prSection;
     if (isLocalBuild) {
         prSection = `<div class="grid-pr-section">
             <span class="grid-pr-intro">Local build${localBy ? ` by <strong>${escapeHtml(localBy)}</strong>` : ''}</span>
-            ${localBranch ? `<span class="grid-pr-title">${escapeHtml(localBranch)}</span>` : ''}
+            ${localBranch ? (() => {
+                const branchUrl = prForBranch
+                    ? prForBranch.url
+                    : (() => {
+                        const cfg = loadConfig();
+                        return dep.imageRepoName && cfg.githubOrg
+                            ? `https://github.com/${cfg.githubOrg}/${dep.imageRepoName}/tree/${localBranch}`
+                            : null;
+                    })();
+                return branchUrl
+                    ? `<span class="grid-pr-title" data-url="${escapeHtml(branchUrl)}">${escapeHtml(localBranch)}</span>`
+                    : `<span class="grid-pr-title">${escapeHtml(localBranch)}</span>`;
+            })() : ''}
         </div>`;
     } else {
         prSection = `<div class="grid-pr-section pr-row pr-row--loading">
@@ -324,6 +352,7 @@ function renderGridCard(dep) {
 
     return `
     <div class="deployment-card deployment-card--grid${isProgressing ? ' is-rolling-out' : ''}" data-name="${escapeHtml(dep.namespace + '/' + dep.name)}" data-dep-name="${escapeHtml(dep.name)}" data-sha="${escapeHtml(dep.gitSha || '')}">
+        ${prBeingTestedBadge}
         <div class="grid-card-front">
             <div class="grid-card-age" title="${escapeHtml(deployedAbsolute)}">Last updated <strong>${escapeHtml(deployedLabel)}</strong></div>
             <div class="grid-card-eyebrow">${escapeHtml(dep.namespace || '')}</div>
@@ -346,6 +375,11 @@ function renderGridCard(dep) {
     </div>`;
 }
 
+function getPrForBranch(branch) {
+    if (!branch || typeof latestPrData === 'undefined' || !latestPrData) { return null; }
+    return (latestPrData.pullRequests || []).find((pr) => pr.headRefName === branch) || null;
+}
+
 function renderDeploymentCard(dep) {
     const statusClass = dep.status.replace(/[^a-z-]/g, '');
     const statusLabel = getStatusLabel(dep.status);
@@ -356,13 +390,18 @@ function renderDeploymentCard(dep) {
     const isLocalBuild = imageTag && imageTag.startsWith('local-build');
     const failuresHtml = dep.failures.length > 0 && dep.status !== 'healthy' ? renderFailures(dep.failures) : '';
     const datadogUrl = getDatadogLogsUrl(dep.name);
+    const latestRollout = dep.rollouts?.[0];
+    const localBranch = latestRollout?.branch || '';
+    const localBy = latestRollout?.deployedBy || '';
+    const prForBranch = getPrForBranch(localBranch);
 
     return `
     <div class="deployment-card" data-name="${escapeHtml(dep.namespace + '/' + dep.name)}" data-dep-name="${escapeHtml(dep.name)}" data-sha="${escapeHtml(dep.gitSha || '')}">
         <div class="deployment-card-top">
             <div class="deployment-name-row">
                 <h3>${escapeHtml(dep.name)}</h3>
-                ${isLocalBuild ? `<span class="local-build-badge" title="${escapeHtml(dep.image || '')}">local build</span>` : ''}
+                ${isLocalBuild ? `<span class="local-build-badge" title="${escapeHtml(dep.image || '')}">local build${localBy ? ` by ${escapeHtml(localBy)}` : ''}</span>${localBranch ? `<span class="rollout-local-branch">${escapeHtml(localBranch)}</span>` : ''}` : ''}
+                ${prForBranch ? `<span class="status-pill pr-qa-link">PR being tested</span>` : ''}
             </div>
             <div class="deployment-pill-row">
                 <span class="trello-placeholder"></span>

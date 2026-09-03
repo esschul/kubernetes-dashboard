@@ -699,11 +699,9 @@ async function loadNamespacesForSelectedContext() {
     try {
         const namespaces = await window.kubeDashboard.fetchNamespaces({ context });
         cachedNamespaceList = namespaces;
-        if (hint) { hint.textContent = ''; }
-        const savedTeams = readTeamsRows();
-        const savedDeps = readWatchedDepRows();
-        renderTeamsRows(savedTeams, namespaces);
-        renderWatchedDepRows(savedDeps, namespaces);
+        if (hint) { hint.textContent = ''; hint.style.display = 'none'; }
+        renderTeamsRows(savedConfig.teams || [], namespaces);
+        renderWatchedDepRows(savedConfig.watchedDeployments || [], namespaces);
     } catch {
         // Could not reach the cluster — keep existing rows but ensure saved values appear
         const fallback = [...new Set([...cachedNamespaceList, ...alreadyKnown])];
@@ -713,7 +711,7 @@ async function loadNamespacesForSelectedContext() {
             renderTeamsRows(savedTeams, fallback);
             renderWatchedDepRows(savedDeps, fallback);
         }
-        if (hint) { hint.textContent = 'Could not load namespaces — are you on VPN?'; }
+        if (hint) { hint.textContent = 'Could not load namespaces — are you on VPN?'; hint.style.display = ''; }
     }
 }
 
@@ -808,6 +806,15 @@ async function refresh() {
                 quickLogsDeploymentCache.set(quickLogsCacheKey(config.context, ns), teamResults[i].value);
             }
         });
+
+        // If every namespace fetch failed, likely a VPN/connectivity issue
+        if (teamNamespaces.length > 0 && teamResults.every((r) => r.status === 'rejected')) {
+            const list = document.getElementById('deploymentList');
+            list.innerHTML = '<div class="warn-panel">Could not reach the cluster — are you on VPN?</div>';
+            setStatus('Refresh failed');
+            setLastUpdated();
+            return;
+        }
 
         // Fetch watched deployments from namespaces not already covered by a team
         const watched = config.watchedDeployments || [];
@@ -1010,7 +1017,7 @@ function openIssuesModal(dep) {
     modal.showModal();
 }
 
-function openHistoryModal(depName, historyEl) {
+function openHistoryModal(depName, depNamespace, historyEl) {
     const modal = document.getElementById('historyModal');
     const body = document.getElementById('historyModalBody');
     const title = document.getElementById('historyModalTitle');
@@ -1018,6 +1025,7 @@ function openHistoryModal(depName, historyEl) {
     title.textContent = depName;
     body.innerHTML = historyEl.innerHTML;
     body.dataset.depName = depName;
+    body.dataset.depNamespace = depNamespace || '';
     modal.showModal();
     body.querySelectorAll('.rollout-row[data-sha][data-repo]').forEach(async (row) => {
         const titleEl = row.querySelector('span.rollout-pr-title');
@@ -1047,7 +1055,8 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
     if (logsBtn) {
         e.stopPropagation();
         const depName = logsBtn.dataset.depName;
-        const dep = latestDeployments.find((d) => d.name === depName);
+        const depNs = logsBtn.closest('.deployment-card')?.dataset.name?.split('/')[0] || '';
+        const dep = latestDeployments.find((d) => d.name === depName && (!depNs || d.namespace === depNs));
         const pods = dep?.pods?.map((p) => p.name).filter(Boolean) || [];
         const podObjects = dep?.pods || [];
         const config = loadConfig();
@@ -1059,7 +1068,7 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
             imageTag: latestRollout?.imageTag || null,
             gitSha: dep?.gitSha || null,
         };
-        openLogsModal({ depName, pods, podObjects, context: config.context, namespace: config.namespace, selector, deployMeta, initialMode: 'live' });
+        openLogsModal({ depName, pods, podObjects, context: config.context, namespace: dep?.namespace || config.namespace, selector, deployMeta, initialMode: 'live' });
         return;
     }
 
@@ -1068,7 +1077,8 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
     if (restartBtn) {
         e.stopPropagation();
         const depName = restartBtn.dataset.depName;
-        const dep = latestDeployments.find((d) => d.name === depName);
+        const depNs = restartBtn.closest('.deployment-card')?.dataset.name?.split('/')[0] || '';
+        const dep = latestDeployments.find((d) => d.name === depName && (!depNs || d.namespace === depNs));
         const config = loadConfig();
         openRestartModal({ depName, namespace: dep?.namespace || config.namespace, context: config.context });
         return;
@@ -1081,13 +1091,15 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
         const row = rollbackBtn.closest('.rollout-row');
         const card = rollbackBtn.closest('.deployment-card');
         const depName = card?.dataset.depName || document.getElementById('historyModalBody')?.dataset.depName;
+        const depNs = card?.dataset.name?.split('/')[0] || '';
         const revision = rollbackBtn.dataset.revision;
         const prTitleEl = row?.querySelector('.rollout-pr-title, .rollout-info');
         const prTitle = prTitleEl?.textContent?.trim();
         const tagEl = row?.querySelector('.rollout-tag');
         const tag = tagEl?.textContent?.trim();
         const config = loadConfig();
-        openRollbackModal({ depName, namespace: config.namespace, context: config.context, revision, prTitle, tag });
+        const depForRollback = latestDeployments.find((d) => d.name === depName && (!depNs || d.namespace === depNs));
+        openRollbackModal({ depName, namespace: depForRollback?.namespace || config.namespace, context: config.context, revision, prTitle, tag });
         return;
     }
 
@@ -1128,8 +1140,9 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
         const btn = e.target.closest('.grid-history-btn, .rollout-history-btn');
         const card = btn.closest('.deployment-card');
         const depName = card?.dataset.depName || '';
+        const depNs = card?.dataset.name?.split('/')[0] || '';
         const history = card?.querySelector('.rollout-history');
-        openHistoryModal(depName, history);
+        openHistoryModal(depName, depNs, history);
         return;
     }
 
@@ -1236,13 +1249,16 @@ document.getElementById('historyModal')?.addEventListener('click', (e) => {
     const rollbackBtn = e.target.closest('.rollout-rollback-btn');
     if (rollbackBtn) {
         const row = rollbackBtn.closest('.rollout-row');
-        const depName = document.getElementById('historyModalBody')?.dataset.depName;
+        const histBody = document.getElementById('historyModalBody');
+        const depName = histBody?.dataset.depName;
+        const depNsFromModal = histBody?.dataset.depNamespace || '';
         const revision = rollbackBtn.dataset.revision;
         const prTitleEl = row?.querySelector('.rollout-pr-title');
         const prTitle = prTitleEl?.textContent?.trim();
         const config = loadConfig();
+        const depForRollback = latestDeployments.find((d) => d.name === depName && (!depNsFromModal || d.namespace === depNsFromModal));
         document.getElementById('historyModal').close();
-        openRollbackModal({ depName, namespace: config.namespace, context: config.context, revision, prTitle });
+        openRollbackModal({ depName, namespace: depForRollback?.namespace || depNsFromModal || config.namespace, context: config.context, revision, prTitle });
     }
 });
 

@@ -1,0 +1,44 @@
+{
+  "r0": {
+    "prs": {
+      "nodes": [
+        {
+          "number": 42,
+          "title": "Add retry logic",
+          "url": "https://github.com/acme/repo-a/pull/42",
+          "isDraft": false,
+          "createdAt": "2026-06-20T09:00:00Z",
+          "updatedAt": "2026-06-25T14:30:00Z",
+          "reviewDecision": "REVIEW_REQUIRED",
+          "headRefOid": "abc123def456abc123def456abc123def456abcd",
+          "headRefName": "feat/retry-logic",
+          "author": { "login": "espen" },
+          "comments": { "nodes": [{ "createdAt": "2026-06-21T10:00:00Z", "updatedAt": "2026-06-21T10:00:00Z" }] },
+          "latestReviews": { "nodes": [{ "body": "LGTM", "submittedAt": "2026-06-22T11:00:00Z", "updatedAt": null, "createdAt": "2026-06-22T11:00:00Z" }] },
+          "files": { "nodes": [{ "path": "src/index.js" }] }
+        }
+      ]
+    }
+  },
+  "r1": {
+    "prs": {
+      "nodes": [
+        {
+          "number": 7,
+          "title": "Fix null pointer",
+          "url": "https://github.com/acme/repo-b/pull/7",
+          "isDraft": false,
+          "createdAt": "2026-06-24T08:00:00Z",
+          "updatedAt": "2026-06-24T09:00:00Z",
+          "reviewDecision": null,
+          "headRefOid": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+          "headRefName": "fix/null-ptr",
+          "author": { "login": "ramesh" },
+          "comments": { "nodes": [] },
+          "latestReviews": { "nodes": [] },
+          "files": { "nodes": [] }
+        }
+      ]
+    }
+  }
+}

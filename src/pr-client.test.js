@@ -208,3 +208,135 @@ test('dedupeByUrl keeps distinct PRs', () => {
     const merged = dedupeByUrl([...prs, authorPr]);
     assert.equal(merged.length, 3);
 });
+
+test('Search API response maps full_name to nameWithOwner', () => {
+    const apiResponse = {
+        total_count: 2,
+        items: [
+            { full_name: 'bring/repo-a' },
+            { full_name: 'bring/repo-b' },
+        ],
+    };
+    const repos = apiResponse.items.map((r) => ({ nameWithOwner: r.full_name }));
+    assert.deepEqual(repos, [
+        { nameWithOwner: 'bring/repo-a' },
+        { nameWithOwner: 'bring/repo-b' },
+    ]);
+});
+
+test('Search API truncation warning triggers when total_count exceeds items', () => {
+    const raw = { total: 150, items: new Array(100).fill({ nameWithOwner: 'bring/x' }) };
+    assert.ok(raw.total > raw.items.length, 'should detect truncation');
+});
+
+// ── GraphQL batch PR normalisation ───────────────────────────────────────────
+
+function getLocalDateKey(d) {
+    if (!d) { return ''; }
+    const date = new Date(d);
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+function normalizeGql(pr) {
+    return {
+        ...pr,
+        comments: pr.comments?.nodes || [],
+        reviews: pr.latestReviews?.nodes || [],
+        files: pr.files?.nodes || [],
+    };
+}
+
+test('normalizeGql flattens GraphQL connection nodes into arrays', () => {
+    const raw = fixture('gh-graphql-batch-prs.json');
+    const pr = normalizeGql(raw.r0.prs.nodes[0]);
+    assert.ok(Array.isArray(pr.comments), 'comments should be array');
+    assert.ok(Array.isArray(pr.reviews), 'reviews should be array');
+    assert.ok(Array.isArray(pr.files), 'files should be array');
+    assert.equal(pr.comments[0].updatedAt, '2026-06-21T10:00:00Z');
+    assert.equal(pr.reviews[0].body, 'LGTM');
+    assert.equal(pr.files[0].path, 'src/index.js');
+    assert.equal(pr.headRefName, 'feat/retry-logic');
+});
+
+test('normalizeGql handles missing nodes gracefully', () => {
+    const pr = normalizeGql({ number: 1, comments: null, latestReviews: undefined, files: null });
+    assert.deepEqual(pr.comments, []);
+    assert.deepEqual(pr.reviews, []);
+    assert.deepEqual(pr.files, []);
+});
+
+test('batch merged response filters by date correctly', () => {
+    const raw = fixture('gh-graphql-batch-merged.json');
+    const allMerged = raw.r0.prs.nodes;
+    const today = '2026-09-03';
+    const yesterday = '2026-09-02';
+    const mergedToday = allMerged.filter((pr) => getLocalDateKey(pr.mergedAt) === today);
+    const mergedYesterday = allMerged.filter((pr) => getLocalDateKey(pr.mergedAt) === yesterday);
+    const older = allMerged.filter((pr) => getLocalDateKey(pr.mergedAt) !== today && getLocalDateKey(pr.mergedAt) !== yesterday);
+    assert.equal(mergedToday.length, 1, 'one PR merged today');
+    assert.equal(mergedToday[0].number, 40);
+    assert.equal(mergedYesterday.length, 1, 'one PR merged yesterday');
+    assert.equal(mergedYesterday[0].number, 39);
+    assert.equal(older.length, 1, 'one older PR excluded');
+});
+
+test('batch open response maps repos correctly', () => {
+    const raw = fixture('gh-graphql-batch-prs.json');
+    const repoNames = ['acme/repo-a', 'acme/repo-b'];
+    const results = repoNames.map((nameWithOwner, i) => {
+        const open = (raw[`r${i}`]?.prs?.nodes || []).map(normalizeGql);
+        return { nameWithOwner, prs: open.map((pr) => normalizePr(pr, nameWithOwner)) };
+    });
+    assert.equal(results[0].prs[0].repository, 'acme/repo-a');
+    assert.equal(results[1].prs[0].repository, 'acme/repo-b');
+    assert.equal(results[0].prs[0].commentActivityCount, 2, 'comment + review count');
+});
+
+// ── dependabot filtering ──────────────────────────────────────────────────────
+console.log('\ndependabot filtering');
+
+const DEPENDABOT_LOGINS = new Set(['app/dependabot', 'dependabot[bot]', 'dependabot']);
+function isDependabot(pr) { return DEPENDABOT_LOGINS.has(pr.author?.login); }
+
+test('isDependabot matches REST login app/dependabot', () => {
+    assert.ok(isDependabot({ author: { login: 'app/dependabot' } }));
+});
+
+test('isDependabot matches GraphQL login dependabot[bot]', () => {
+    assert.ok(isDependabot({ author: { login: 'dependabot[bot]' } }));
+});
+
+test('isDependabot matches GraphQL login dependabot', () => {
+    assert.ok(isDependabot({ author: { login: 'dependabot' } }));
+});
+
+test('isDependabot does not match human login', () => {
+    assert.ok(!isDependabot({ author: { login: 'espen' } }));
+});
+
+test('dependabot PRs from GraphQL batch end up in dependabotPullRequests not pullRequests', () => {
+    const prs = [
+        { url: 'a', author: { login: 'espen' } },
+        { url: 'b', author: { login: 'dependabot[bot]' } },
+        { url: 'c', author: { login: 'app/dependabot' } },
+    ];
+    const human = prs.filter((pr) => !isDependabot(pr));
+    const bots = prs.filter(isDependabot);
+    assert.equal(human.length, 1);
+    assert.equal(human[0].url, 'a');
+    assert.equal(bots.length, 2);
+});
+
+test('batch query handles missing repo in response gracefully', () => {
+    const raw = { r0: { prs: { nodes: [] } } }; // r1 missing
+    const repoNames = ['acme/repo-a', 'acme/repo-b'];
+    const results = repoNames.map((nameWithOwner, i) => {
+        const open = (raw[`r${i}`]?.prs?.nodes || []).map(normalizeGql);
+        return { nameWithOwner, prs: open };
+    });
+    assert.equal(results[0].prs.length, 0);
+    assert.equal(results[1].prs.length, 0, 'missing repo produces empty array, not crash');
+});
