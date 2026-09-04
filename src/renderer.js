@@ -741,6 +741,7 @@ document.getElementById('saveSettings').addEventListener('click', () => {
     saveConfig(config);
     updateSaveButtonState();
     updateContextLabel(config);
+    updatePipelinesNavVisibility(config);
     renderEnvSwitcher(config);
     if (!config.namespace) {
         setStatus('Set at least one team in Settings before refreshing deployments.');
@@ -752,6 +753,16 @@ document.getElementById('saveSettings').addEventListener('click', () => {
     switchView('deployments');
     refreshAll();
 });
+
+function updatePipelinesNavVisibility(config) {
+    const hasPipelines = !!(config.azureOrg && config.azureProject);
+    const btn = document.querySelector('.nav-item[data-view="pipelines"]');
+    if (btn) { btn.style.display = hasPipelines ? '' : 'none'; }
+    if (!hasPipelines) {
+        const feedPipelineChip = document.querySelector('[data-feed-type="pipeline"]');
+        if (feedPipelineChip) { feedPipelineChip.style.display = 'none'; }
+    }
+}
 
 function updateContextLabel(config) {
     const label = document.getElementById('contextLabel');
@@ -1109,19 +1120,8 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
         e.stopPropagation();
         const btn = e.target.closest('.grid-pods-btn');
         const depName = btn.dataset.depName;
-        const card = btn.closest('.deployment-card');
-        const front = card?.querySelector('.grid-card-front');
-        const back = card?.querySelector('.grid-card-pod-back');
-        if (front && back) { front.classList.add('hidden'); back.classList.remove('hidden'); }
-        return;
-    }
-
-    if (e.target.closest('.grid-pod-back-close')) {
-        e.stopPropagation();
-        const card = e.target.closest('.deployment-card');
-        const front = card?.querySelector('.grid-card-front');
-        const back = card?.querySelector('.grid-card-pod-back');
-        if (front && back) { back.classList.add('hidden'); front.classList.remove('hidden'); }
+        const dep = latestDeployments.find((d) => d.name === depName);
+        if (dep) { openPodModal(dep); }
         return;
     }
 
@@ -1164,6 +1164,7 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
 // --- Init ---
 const initialConfig = loadConfig();
 updateContextLabel(initialConfig);
+updatePipelinesNavVisibility(initialConfig);
 renderEnvSwitcher(initialConfig);
 populateSettingsForm();
 
@@ -1208,7 +1209,23 @@ if (initialConfig.githubOrg && initialPrTopic) { refreshPullRequests(true); }
 loadClusterSettingsIfEmpty();
 
 // Auto-refresh every 2 minutes
-setInterval(refreshAll, 2 * 60 * 1000);
+let _deploymentPollTimer = null;
+async function schedulePoll() {
+    const config = loadConfig();
+    const namespaces = [...new Set([
+        ...(config.teams || []).map((t) => t.namespace),
+        ...(config.watchedDeployments || []).map((d) => d.namespace),
+    ].filter(Boolean))];
+
+    if (namespaces.length) {
+        const checks = await Promise.all(namespaces.map((ns) => window.kubeDashboard.deploymentsChanged({ ...config, namespace: ns }).catch(() => true)));
+        if (checks.some(Boolean)) { await refresh(); }
+    }
+
+    const isProgressing = latestDeployments.some((d) => d.status === 'progressing');
+    _deploymentPollTimer = setTimeout(schedulePoll, isProgressing ? 10_000 : 30_000);
+}
+_deploymentPollTimer = setTimeout(schedulePoll, 30_000);
 
 // --- Settings export/import ---
 // --- Rollback modal ---
@@ -1270,6 +1287,170 @@ document.getElementById('rollbackModal')?.addEventListener('click', (e) => {
 
 // ── Restart modal ─────────────────────────────────────────────────────────
 let restartPending = null;
+
+function renderEventTable(events) {
+    if (!events.length) { return '<p class="pod-modal-empty">No events</p>'; }
+    const rows = events.map((ev) => {
+        const age = ev.lastTimestamp ? formatRelativeTime(ev.lastTimestamp) : '—';
+        const typeClass = ev.type === 'Warning' ? 'ev-type--warning' : 'ev-type--normal';
+        const countBadge = ev.count > 1 ? ` <span class="ev-count">×${ev.count}</span>` : '';
+        return `<tr>
+            <td><span class="ev-type ${typeClass}">${ev.type}</span></td>
+            <td class="ev-reason">${ev.reason}${countBadge}</td>
+            <td class="ev-age">${age}</td>
+            <td class="ev-message">${ev.message || ''}</td>
+        </tr>`;
+    }).join('');
+    return `<table class="ev-table">
+        <thead><tr><th>Type</th><th>Reason</th><th>Age</th><th>Message</th></tr></thead>
+        <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function renderPodTab(dep, pod, podIndex) {
+    const statusClass = getPodStatusClass(pod.status);
+    const isOk = statusClass === 'is-running';
+    const age = pod.startTime ? formatRelativeTime(pod.startTime) : '—';
+    const readyLabel = `${pod.readyContainers ?? (pod.ready ? 1 : 0)}/${pod.totalContainers ?? 1}`;
+    const crashMsg = pod.crashReason?.message ? `<div class="pod-modal-crash-msg">${pod.crashReason.message.slice(0, 300)}</div>` : '';
+
+    const infoRows = [
+        ['Status', `<span class="${isOk ? 'pod-modal-status--ok' : 'pod-modal-status--bad'}">${pod.status}</span>`],
+        ['Ready', readyLabel],
+        pod.image ? ['Image tag', pod.image] : null,
+        pod.nodeName ? ['Node', pod.nodeName] : null,
+        ['Age', age],
+        pod.restarts > 0 ? ['Restarts', `<span class="${pod.restarts >= 5 ? 'pod-modal-restarts--warn' : ''}">${pod.restarts}${pod.crashReason?.reason ? ` · ${pod.crashReason.reason}` : ''}</span>`] : null,
+    ].filter(Boolean);
+
+    const infoHtml = `<table class="dep-info-table"><tbody>
+        ${infoRows.map(([k, v]) => `<tr><td class="dep-info-key">${k}</td><td class="dep-info-val">${v}</td></tr>`).join('')}
+    </tbody></table>${crashMsg}
+    <div style="margin: 10px 0 14px;">
+        <button class="pod-modal-logs-btn" data-dep-name="${dep.name}" data-pod-name="${pod.name}">View Logs</button>
+    </div>`;
+
+    const podEvents = (dep.events || []).filter((ev) => ev.podName === pod.name);
+    const evTitle = '<div class="dep-info-section-title">Events</div>';
+    return infoHtml + evTitle + renderEventTable(podEvents);
+}
+
+function renderDeploymentTab(dep) {
+    const latestRollout = dep.rollouts?.[0];
+    const infoRows = [
+        ['Namespace', dep.namespace],
+        ['Image', dep.image || '—'],
+        ['Replicas', `${dep.ready ?? 0} / ${dep.desired ?? 1} ready`],
+        ['Status', dep.status],
+        latestRollout?.imageTag ? ['Image tag', latestRollout.imageTag.slice(0, 12)] : null,
+        latestRollout?.branch ? ['Branch', latestRollout.branch] : null,
+        latestRollout?.deployedBy ? ['Deployed by', latestRollout.deployedBy] : null,
+        latestRollout?.releaseCommit ? ['Commit', latestRollout.releaseCommit.slice(0, 12)] : null,
+        dep.gitSha && dep.gitSha !== latestRollout?.imageTag ? ['Version tag', dep.gitSha.slice(0, 12)] : null,
+    ].filter(Boolean);
+
+    const mainRows = infoRows.map(([k, v]) => `<tr><td class="dep-info-key">${k}</td><td class="dep-info-val">${v}</td></tr>`).join('');
+
+    const rollouts = (dep.rollouts || []).slice(0, 5);
+    const hasBranch = rollouts.some((r) => r.branch);
+    const hasBy = rollouts.some((r) => r.deployedBy);
+    const rolloutRows = rollouts.map((r) => `<tr>
+        <td class="dep-info-val">${r.deployedAt ? formatRelativeTime(r.deployedAt) : '—'}</td>
+        <td class="dep-info-val">${r.imageTag ? r.imageTag.slice(0, 12) : '—'}</td>
+        ${hasBranch ? `<td class="dep-info-val">${r.branch || '—'}</td>` : ''}
+        ${hasBy ? `<td class="dep-info-val">${r.deployedBy || '—'}</td>` : ''}
+    </tr>`).join('');
+
+    const historyHtml = rolloutRows ? `<div class="dep-info-section-title">Rollout history</div>
+        <table class="ev-table"><thead><tr><th>Age</th><th>Tag</th>${hasBranch ? '<th>Branch</th>' : ''}${hasBy ? '<th>By</th>' : ''}</tr></thead>
+        <tbody>${rolloutRows}</tbody></table>` : '';
+
+    const depEvents = (dep.events || []).filter((ev) => !ev.podName);
+    const evHtml = '<div class="dep-info-section-title">Events</div>' + renderEventTable(depEvents);
+
+    return `<table class="dep-info-table"><tbody>${mainRows}</tbody></table>${historyHtml}${evHtml}`;
+}
+
+function openPodModal(dep, activeTab = 'deployment') {
+    document.getElementById('podModalTitle').textContent = dep.name;
+    document.getElementById('podModalSubtitle').textContent = `${dep.pods.length} pod${dep.pods.length !== 1 ? 's' : ''} · ${dep.namespace}`;
+
+    const tabs = [
+        { id: 'deployment', label: 'Deployment' },
+        ...dep.pods.map((pod, i) => {
+            const sc = getPodStatusClass(pod.status);
+            return { id: `pod-${i}`, label: `Pod ${i + 1}${sc !== 'is-running' ? ' ⚠' : ''}` };
+        }),
+    ];
+
+    let liveEvents = dep.events || [];
+
+    const buildContentMap = (events) => ({
+        deployment: renderDeploymentTab({ ...dep, events }),
+        ...Object.fromEntries(dep.pods.map((pod, i) => [`pod-${i}`, renderPodTab({ ...dep, events }, pod, i)])),
+    });
+
+    const renderBody = (tabId, contentMap) => {
+        const tabsHtml = `<div class="pod-modal-tabs">${tabs.map((t) =>
+            `<button class="pod-modal-tab${t.id === tabId ? ' active' : ''}" data-tab="${t.id}">${t.label}</button>`
+        ).join('')}</div>`;
+        return tabsHtml + `<div class="pod-modal-tab-content">${contentMap[tabId]}</div>`;
+    };
+
+    let currentTab = activeTab;
+    const body = document.getElementById('podModalBody');
+
+    const redraw = (tabId) => {
+        currentTab = tabId;
+        body.innerHTML = renderBody(tabId, buildContentMap(liveEvents));
+    };
+
+    body.innerHTML = renderBody(activeTab, buildContentMap(liveEvents));
+    body.addEventListener('click', (e) => {
+        const tab = e.target.closest('.pod-modal-tab');
+        if (tab) { redraw(tab.dataset.tab); }
+    });
+
+    document.getElementById('podModal').showModal();
+
+    // Fetch fresh events in background and re-render
+    const config = loadConfig();
+    const podNames = dep.pods.map((p) => p.name);
+    window.kubeDashboard.fetchDeploymentEvents({
+        context: config.context, namespace: dep.namespace, kubectlPath: config.kubectlPath,
+        deploymentName: dep.name, podNames,
+    }).then((events) => {
+        if (!document.getElementById('podModal').open) { return; }
+        liveEvents = events;
+        redraw(currentTab);
+    }).catch(() => {});
+}
+
+document.getElementById('podModal')?.addEventListener('click', (e) => {
+    if (e.target === document.getElementById('podModal')) { document.getElementById('podModal').close(); }
+});
+document.getElementById('podModalCloseBtn')?.addEventListener('click', () => document.getElementById('podModal').close());
+document.getElementById('podModal')?.addEventListener('click', (e) => {
+    const logsBtn = e.target.closest('.pod-modal-logs-btn');
+    if (logsBtn) {
+        const depName = logsBtn.dataset.depName;
+        const dep = latestDeployments.find((d) => d.name === depName);
+        if (dep) {
+            document.getElementById('podModal').close();
+            const config = loadConfig();
+            const matchLabels = dep.selector || {};
+            const selector = Object.entries(matchLabels).map(([k, v]) => `${k}=${v}`).join(',') || null;
+            const pods = (dep.pods || []).map((p) => p.name);
+            const podObjects = dep.pods || [];
+            const latestRollout = dep.rolloutHistory?.[0];
+            const deployMeta = { branch: latestRollout?.branch || null, imageTag: latestRollout?.imageTag || null, gitSha: dep.gitSha || null };
+            const logsModal = document.getElementById('logsModal');
+            const onLogsClose = () => { openPodModal(dep); logsModal.removeEventListener('close', onLogsClose); };
+            logsModal.addEventListener('close', onLogsClose);
+            openLogsModal({ depName: dep.name, pods, podObjects, context: config.context, namespace: dep.namespace || config.namespace, selector, deployMeta, initialMode: 'live' });
+        }
+    }
+});
 
 function openRestartModal({ depName, namespace, context }) {
     restartPending = { depName, namespace, context };

@@ -26,6 +26,26 @@ async function runKubectl(args, options = {}) {
     }
 }
 
+const deploymentChangeHashes = new Map();
+
+async function hasDeploymentChanges({ context, namespace, kubectlPath }) {
+    const ctxArgs = context ? ['--context', context] : [];
+    try {
+        const out = await runKubectl(
+            [...ctxArgs, 'get', 'deployments,pods', '--namespace', namespace,
+                '-o', 'jsonpath={range .items[*]}{.metadata.resourceVersion}{" "}{end}'],
+            { kubectlPath }
+        );
+        const hash = out.trim();
+        const key = `${context}/${namespace}`;
+        if (hash === deploymentChangeHashes.get(key)) { return false; }
+        deploymentChangeHashes.set(key, hash);
+        return true;
+    } catch {
+        return true;
+    }
+}
+
 async function fetchDeployments({ context, namespace, kubectlPath }) {
     if (!namespace) { throw new Error('Namespace is required. Please set a namespace in Settings.'); }
     const nsArgs = ['--namespace', namespace];
@@ -59,8 +79,8 @@ function normalizeDeployments(deployments, pods, events, replicaSets) {
         const deployedAt = getDeployedAt(dep, replicaSets);
         const depPods = podsByOwner[`${namespace}/${name}`] || [];
         const depEvents = [
-            ...(eventsByName[`${namespace}/${name}`] || []),
-            ...depPods.flatMap((p) => eventsByName[`${namespace}/${p.name}`] || []),
+            ...(eventsByName[`${namespace}/${name}`] || []).map((ev) => ({ ...ev, podName: null })),
+            ...depPods.flatMap((p) => (eventsByName[`${namespace}/${p.name}`] || []).map((ev) => ({ ...ev, podName: p.name }))),
         ];
 
         const status = getDeploymentStatus(dep, depPods);
@@ -108,6 +128,10 @@ function normalizeDeployments(deployments, pods, events, replicaSets) {
             })
             .sort((a, b) => new Date(b.deployedAt) - new Date(a.deployedAt));
 
+        const normalizedEvents = depEvents
+            .sort((a, b) => new Date(b.lastTimestamp) - new Date(a.lastTimestamp))
+            .map((ev) => ({ type: ev.type, reason: ev.reason, message: ev.message, count: ev.count, lastTimestamp: ev.lastTimestamp, podName: ev.podName || null }));
+
         return {
             name,
             namespace,
@@ -117,6 +141,7 @@ function normalizeDeployments(deployments, pods, events, replicaSets) {
             status,
             podSummary,
             pods: depPods.map((p) => normalizePod(p)),
+            events: normalizedEvents,
             failures,
             desired: dep.spec.replicas ?? 1,
             ready: dep.status.readyReplicas ?? 0,
@@ -189,9 +214,11 @@ function groupPodsByOwner(pods, replicaSets) {
         result[key].push({
             name: pod.metadata.name,
             namespace: ns,
+            nodeName: pod.spec?.nodeName || null,
             phase: pod.status.phase,
             conditions: pod.status.conditions || [],
             containerStatuses: pod.status.containerStatuses || [],
+            initContainerStatuses: pod.status.initContainerStatuses || [],
             startTime: pod.status.startTime,
             labels: pod.metadata.labels || {},
         });
@@ -200,9 +227,11 @@ function groupPodsByOwner(pods, replicaSets) {
 }
 
 function normalizePod(pod) {
-    const cs = pod.containerStatuses[0] || {};
-    const restarts = cs.restartCount || 0;
-    const ready = cs.ready || false;
+    const allCs = pod.containerStatuses || [];
+    const cs = allCs[0] || {};
+    const restarts = allCs.reduce((sum, c) => sum + (c.restartCount || 0), 0);
+    const readyContainers = allCs.filter((c) => c.ready).length;
+    const totalContainers = allCs.length || 1;
 
     let podStatus = pod.phase || 'Unknown';
     if (cs.state?.waiting?.reason) { podStatus = cs.state.waiting.reason; }
@@ -213,12 +242,20 @@ function normalizePod(pod) {
         ? { reason: lastTerminated.reason || null, exitCode: lastTerminated.exitCode ?? null, message: lastTerminated.message || null }
         : null;
 
+    // Extract image tag from first container (strip registry prefix for brevity)
+    const imageRaw = cs.image || '';
+    const imageTag = imageRaw.includes(':') ? imageRaw.split(':').pop() : imageRaw;
+
     return {
         name: pod.name,
+        nodeName: pod.nodeName || null,
         status: podStatus,
-        ready,
+        ready: cs.ready || false,
+        readyContainers,
+        totalContainers,
         restarts,
         startTime: pod.startTime || null,
+        image: imageTag || null,
         crashReason,
     };
 }
@@ -518,4 +555,27 @@ async function searchLogs({ context, namespace, podName, selector, sinceTime, un
     });
 }
 
-module.exports = { fetchDeployments, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs, cancelSearch, getLogLineTimestamp };
+async function fetchDeploymentEvents({ context, namespace, kubectlPath, deploymentName, podNames }) {
+    const ctxArgs = context ? ['--context', context] : [];
+    const nsArgs = ['--namespace', namespace];
+    const names = [{ name: deploymentName, podName: null }, ...(podNames || []).map((n) => ({ name: n, podName: n }))];
+    const results = await Promise.allSettled(
+        names.map(({ name }) =>
+            runKubectl([...ctxArgs, 'get', 'events', ...nsArgs, `--field-selector=involvedObject.name=${name}`, '-o', 'json'], { kubectlPath })
+        )
+    );
+    return results.flatMap((r, i) => {
+        if (r.status !== 'fulfilled') { return []; }
+        const items = JSON.parse(r.value).items || [];
+        return items.map((ev) => ({
+            type: ev.type,
+            reason: ev.reason,
+            message: ev.message,
+            count: ev.count || 1,
+            lastTimestamp: ev.lastTimestamp || ev.metadata.creationTimestamp,
+            podName: names[i].podName,
+        }));
+    }).sort((a, b) => new Date(b.lastTimestamp) - new Date(a.lastTimestamp));
+}
+
+module.exports = { fetchDeployments, hasDeploymentChanges, fetchDeploymentEvents, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs, cancelSearch, getLogLineTimestamp };

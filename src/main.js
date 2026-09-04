@@ -53,7 +53,7 @@ const { autoUpdater } = require('electron-updater');
 
 let buildDate = null;
 try { buildDate = require('./build-info.json').date; } catch { /* not available in dev */ }
-const { fetchDeployments, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs, cancelSearch } = require('./kubectl-client');
+const { fetchDeployments, hasDeploymentChanges, fetchDeploymentEvents, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs, cancelSearch } = require('./kubectl-client');
 const { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr, closePr } = require('./github-client');
 const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, rerunFailedJobs } = require('./azure-client');
 const { fetchPullRequests, clearPrListCache, clearAllCaches, evictRepoDeltaCache, fetchCommitMessage, fetchMergedPrsForRange, fetchRepoList } = require('./pr-client');
@@ -83,6 +83,18 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+    ipcMain.handle('deployments:changed', async (_event, config) => {
+        return hasDeploymentChanges(config);
+    });
+
+    ipcMain.handle('deployments:events', async (_event, config) => {
+        try {
+            return { ok: true, result: await fetchDeploymentEvents(config) };
+        } catch (err) {
+            return { ok: false, error: err.message };
+        }
+    });
+
     ipcMain.handle('deployments:fetch', async (_event, config) => {
         try {
             const result = await fetchDeployments(config);

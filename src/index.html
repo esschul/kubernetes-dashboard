@@ -155,6 +155,8 @@
                 <span class="merged-range-sep">–</span>
                 <input type="date" id="mergedSearchTo" title="To" />
                 <span class="merged-search-divider"></span>
+                <input class="merged-search-text merged-search-author" type="text" id="mergedSearchAuthor" placeholder="Author…" />
+                <span class="merged-search-divider"></span>
                 <select id="mergedSearchRepo">
                     <option value="">All apps</option>
                 </select>
@@ -292,7 +294,7 @@
 
                 <div class="help-section panel">
                     <div class="settings-section-heading">Required tools</div>
-                    <p class="help-text">This app shells out to three CLI tools. All must be installed and authenticated before the app can fetch data.</p>
+                    <p class="help-text">This app shells out to three CLI tools. <code>kubectl</code> and <code>gh</code> are required. <code>az</code> is only needed for the Pipelines view.</p>
                     <div class="help-steps">
                         <div class="help-step">
                             <div class="help-step-title"><code>kubectl</code> — Kubernetes CLI</div>
@@ -374,6 +376,16 @@ az login</pre>
     </main>
 </div>
 
+<dialog id="podModal">
+    <div class="pod-modal-header">
+        <div>
+            <h3 class="modal-title" id="podModalTitle">Pods</h3>
+            <p class="pod-modal-subtitle" id="podModalSubtitle"></p>
+        </div>
+        <button class="modal-btn modal-btn--cancel" id="podModalCloseBtn">Close</button>
+    </div>
+    <div id="podModalBody" class="pod-modal-body"></div>
+</dialog>
 <dialog id="restartModal">
     <h3 class="modal-title" id="restartModalTitle">Restart deployment?</h3>
     <p class="modal-desc" id="restartModalDesc"></p>

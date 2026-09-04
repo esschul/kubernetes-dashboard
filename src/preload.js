@@ -8,6 +8,12 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
         }
         return response.result;
     },
+    deploymentsChanged: (config) => ipcRenderer.invoke('deployments:changed', config),
+    fetchDeploymentEvents: async (config) => {
+        const r = await ipcRenderer.invoke('deployments:events', config);
+        if (!r.ok) { throw new Error(r.error); }
+        return r.result;
+    },
     fetchPrForSha: async (sha, repoName, org) => {
         const response = await ipcRenderer.invoke('pr:fetchForSha', sha, repoName, org);
         if (!response.ok) { throw response.error; }

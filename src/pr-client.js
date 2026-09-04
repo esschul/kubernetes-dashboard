@@ -501,7 +501,7 @@ async function fetchCommitMessage(nameWithOwner, sha) {
     return data;
 }
 
-async function fetchMergedPrsForRange({ org, topic, watchedRepos = [], namespace, from, to, text, repo, limit = 50 }) {
+async function fetchMergedPrsForRange({ org, topic, watchedRepos = [], namespace, from, to, text, author, repo, limit = 50 }) {
     if (!org || !topic) { throw new Error('GitHub org and topic are required.'); }
     const dateRange = to ? `${from}..${to}` : `>=${from}`;
     const repositories = await fetchRepoList(org, topic);
@@ -513,6 +513,7 @@ async function fetchMergedPrsForRange({ org, topic, watchedRepos = [], namespace
     const results = await Promise.allSettled(allRepos.map(async (nameWithOwner) => {
         const searchQuery = [text ? `${text} in:title` : null, `merged:${dateRange}`].filter(Boolean).join(' ');
         const args = ['pr', 'list', '--repo', nameWithOwner, '--state', 'merged', '--search', searchQuery, '--limit', String(perRepo), '--json', MERGED_PR_FIELDS];
+        if (author) { args.push('--author', author); }
         const prs = await runGh(args);
         return prs.map((pr) => normalizePr(pr, nameWithOwner));
     }));
