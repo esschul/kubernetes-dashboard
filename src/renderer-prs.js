@@ -346,6 +346,12 @@ async function showPrCommentsModal(prKey) {
 }
 
 document.getElementById('prList').addEventListener('click', (e) => {
+    const searchLink = e.target.closest('.search-pr-link[data-url]');
+    if (searchLink) {
+        e.preventDefault();
+        window.kubeDashboard.openExternal(searchLink.dataset.url);
+        return;
+    }
     const commentsPill = e.target.closest('.pr-comments-pill');
     if (commentsPill) {
         e.stopPropagation();
@@ -821,7 +827,7 @@ function renderSearchTable(list, prs) {
             <thead><tr><th>Repo</th><th>Title</th><th>Author</th><th>Merged</th></tr></thead>
             <tbody>${rows.map((r) => `<tr>
                 <td class="search-td-repo">${escapeHtml(r.repo)}</td>
-                <td class="search-td-title"><a href="${escapeHtml(r.url)}" class="search-pr-link" target="_blank">${escapeHtml(r.title)}</a></td>
+                <td class="search-td-title"><a href="#" class="search-pr-link" data-url="${escapeHtml(r.url)}">${escapeHtml(r.title)}</a></td>
                 <td class="search-td-author">${escapeHtml(r.author)}</td>
                 <td class="search-td-date">${escapeHtml(r.mergedAt)}</td>
             </tr>`).join('')}</tbody>
