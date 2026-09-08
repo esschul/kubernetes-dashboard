@@ -1227,6 +1227,15 @@ async function schedulePoll() {
 }
 _deploymentPollTimer = setTimeout(schedulePoll, 30_000);
 
+// --- PR polling ---
+function schedulePrPoll() {
+    const cfg = loadConfig();
+    const topic = cfg.teams?.[0]?.githubTopic || cfg.teams?.[0]?.namespace;
+    if (cfg.githubOrg && topic) { refreshPullRequests(true); }
+    setTimeout(schedulePrPoll, 120_000);
+}
+setTimeout(schedulePrPoll, 120_000);
+
 // --- Settings export/import ---
 // --- Rollback modal ---
 let rollbackPending = null;
