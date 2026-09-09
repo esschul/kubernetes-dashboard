@@ -703,8 +703,15 @@ function getPrsForTab(data) {
         }
         return all;
     }
-    if (activePrTab === 'dependabot') { return data.dependabotPullRequests; }
-    return data.pullRequests;
+    // Build a set of merged PR URLs so stale cache entries don't bleed into open/dependabot tabs
+    const mergedUrls = new Set([
+        ...(data.mergedPullRequests || []).map((p) => p.url),
+        ...(data.mergedDependabotPullRequests || []).map((p) => p.url),
+        ...(data.mergedYesterdayPullRequests || []).map((p) => p.url),
+        ...(data.mergedYesterdayDependabotPullRequests || []).map((p) => p.url),
+    ]);
+    if (activePrTab === 'dependabot') { return (data.dependabotPullRequests || []).filter((p) => !mergedUrls.has(p.url)); }
+    return (data.pullRequests || []).filter((p) => !mergedUrls.has(p.url));
 }
 
 function matchesPrFilter(pr) {
