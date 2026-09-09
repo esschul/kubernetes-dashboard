@@ -340,3 +340,99 @@ test('batch query handles missing repo in response gracefully', () => {
     assert.equal(results[0].prs.length, 0);
     assert.equal(results[1].prs.length, 0, 'missing repo produces empty array, not crash');
 });
+
+// ── Check-status cache applied to skipped PRs (regression: auto-refresh reset to 'No checks') ──
+console.log('\ncheck-status cache — skipped PR enrichment');
+
+function applyCheckRunsCacheToSkipped(prs, checkRunsCache) {
+    for (const pr of prs) {
+        if (!pr.headRefOid || pr.checkStatus !== 'none') { continue; }
+        const cached = checkRunsCache.get(`${pr.repository}/${pr.headRefOid}`);
+        if (cached) { pr.checkStatus = cached.checkStatus; pr.checkStatusLabel = cached.checkStatusLabel; }
+    }
+}
+
+test('cached check status is applied to PRs skipped from enrichment', () => {
+    const pr = normalizePr({ number: 1, url: 'https://github.com/acme/repo/pull/1', headRefOid: 'abc123', updatedAt: new Date().toISOString() }, 'acme/repo');
+    assert.equal(pr.checkStatus, 'none');
+
+    const cache = new Map([['acme/repo/abc123', { checkStatus: 'success', checkStatusLabel: 'Checks passing' }]]);
+    applyCheckRunsCacheToSkipped([pr], cache);
+
+    assert.equal(pr.checkStatus, 'success');
+    assert.equal(pr.checkStatusLabel, 'Checks passing');
+});
+
+test('PRs with no headRefOid are left untouched', () => {
+    const pr = normalizePr({ number: 2, url: 'https://github.com/acme/repo/pull/2', headRefOid: '', updatedAt: new Date().toISOString() }, 'acme/repo');
+    const cache = new Map([['acme/repo/', { checkStatus: 'success', checkStatusLabel: 'Checks passing' }]]);
+    applyCheckRunsCacheToSkipped([pr], cache);
+    assert.equal(pr.checkStatus, 'none', 'no headRefOid — should not be patched');
+});
+
+test('PRs already enriched (non-none status) are not overwritten', () => {
+    const pr = { ...normalizePr({ number: 3, url: 'u', headRefOid: 'def456', updatedAt: new Date().toISOString() }, 'acme/repo'), checkStatus: 'failure', checkStatusLabel: 'Checks failing' };
+    const cache = new Map([['acme/repo/def456', { checkStatus: 'success', checkStatusLabel: 'Checks passing' }]]);
+    applyCheckRunsCacheToSkipped([pr], cache);
+    assert.equal(pr.checkStatus, 'failure', 'already-enriched status must not be overwritten');
+});
+
+test('PRs not in cache remain none', () => {
+    const pr = normalizePr({ number: 4, url: 'u', headRefOid: 'fff000', updatedAt: new Date().toISOString() }, 'acme/repo');
+    applyCheckRunsCacheToSkipped([pr], new Map());
+    assert.equal(pr.checkStatus, 'none', 'no cache entry — status stays none');
+});
+
+// ── Merged PRs filtered from open/dependabot tabs (regression: stale cache bleed) ──────────────
+console.log('\nmerged-PR bleed — open/dependabot tab filter');
+
+function filterOpenTab(pullRequests, data) {
+    const mergedUrls = new Set([
+        ...(data.mergedPullRequests || []).map((p) => p.url),
+        ...(data.mergedDependabotPullRequests || []).map((p) => p.url),
+        ...(data.mergedYesterdayPullRequests || []).map((p) => p.url),
+        ...(data.mergedYesterdayDependabotPullRequests || []).map((p) => p.url),
+    ]);
+    return (pullRequests || []).filter((p) => !mergedUrls.has(p.url));
+}
+
+test('merged PR URL is excluded from open tab', () => {
+    const openPrs = [
+        { url: 'https://github.com/acme/repo/pull/10' },
+        { url: 'https://github.com/acme/repo/pull/11' }, // also in merged (stale cache)
+    ];
+    const data = { mergedDependabotPullRequests: [{ url: 'https://github.com/acme/repo/pull/11' }] };
+    const result = filterOpenTab(openPrs, data);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].url, 'https://github.com/acme/repo/pull/10');
+});
+
+test('mergedYesterdayDependabotPullRequests also excluded', () => {
+    const openPrs = [{ url: 'https://github.com/acme/repo/pull/5' }];
+    const data = { mergedYesterdayDependabotPullRequests: [{ url: 'https://github.com/acme/repo/pull/5' }] };
+    const result = filterOpenTab(openPrs, data);
+    assert.equal(result.length, 0);
+});
+
+test('open PRs not in any merged list pass through', () => {
+    const openPrs = [
+        { url: 'https://github.com/acme/repo/pull/20' },
+        { url: 'https://github.com/acme/repo/pull/21' },
+    ];
+    const data = { mergedPullRequests: [{ url: 'https://github.com/acme/repo/pull/99' }] };
+    const result = filterOpenTab(openPrs, data);
+    assert.equal(result.length, 2);
+});
+
+test('all merged arrays checked — human merged also excluded', () => {
+    const openPrs = [{ url: 'https://github.com/acme/repo/pull/30' }];
+    const data = { mergedPullRequests: [{ url: 'https://github.com/acme/repo/pull/30' }] };
+    const result = filterOpenTab(openPrs, data);
+    assert.equal(result.length, 0);
+});
+
+test('undefined merged arrays do not crash', () => {
+    const openPrs = [{ url: 'https://github.com/acme/repo/pull/1' }];
+    const result = filterOpenTab(openPrs, {});
+    assert.equal(result.length, 1, 'no merged arrays in data — all open PRs pass through');
+});
