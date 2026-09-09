@@ -445,6 +445,14 @@ async function fetchPullRequests({ org, topic, watchedRepos = [], namespace }, o
     const skipped = all.filter((pr) => pr.headRefOid).length - prsWithSha.length;
     console.log(`[gh] enriching ${prsWithSha.length} PRs with check status via REST (background, skipping ${skipped} from unchanged repos)`);
 
+    // Apply cached check status for PRs we're skipping — normalizePr initialises all PRs to 'none'
+    // so without this, skipped-but-cached PRs would regress to "No checks" on every auto-refresh.
+    for (const pr of all) {
+        if (!pr.headRefOid || pr.checkStatus !== 'none') { continue; }
+        const cached = checkRunsCache.get(`${pr.repository}/${pr.headRefOid}`);
+        if (cached) { pr.checkStatus = cached.checkStatus; pr.checkStatusLabel = cached.checkStatusLabel; }
+    }
+
     const result = {
         pullRequests: all.filter((pr) => !isDependabot(pr)),
         mergedPullRequests: allMerged.filter((pr) => !isDependabot(pr)),
