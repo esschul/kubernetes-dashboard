@@ -32,6 +32,9 @@ const EXTRA_PATHS = [
         '/usr/local/bin', '/usr/local/sbin',           // Homebrew (Intel) / manual installs
     ] : []),
     ...(process.platform === 'linux' ? [
+        '/home/linuxbrew/.linuxbrew/bin',              // Homebrew on Linux (system install)
+        '/home/linuxbrew/.linuxbrew/sbin',
+        `${home}/.linuxbrew/bin`,                      // Homebrew on Linux (per-user install)
         '/snap/bin',                                   // Snap packages
         '/var/lib/flatpak/exports/bin',                // System-wide Flatpak exports
         `${home}/bin`,                                  // Traditional user bin dir
