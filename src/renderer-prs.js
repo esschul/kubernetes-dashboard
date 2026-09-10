@@ -778,11 +778,13 @@ function updatePrNavCount(data) {
 
 function getPrsForTab(data) {
     if (activePrTab === 'merged') {
+        const seen = new Set();
+        const dedup = (arr) => (arr || []).filter((p) => { if (seen.has(p.url)) { return false; } seen.add(p.url); return true; });
         const all = [
-            ...(data.mergedPullRequests || []),
-            ...(data.mergedDependabotPullRequests || []),
-            ...(data.mergedYesterdayPullRequests || []),
-            ...(data.mergedYesterdayDependabotPullRequests || []),
+            ...dedup(data.mergedPullRequests),
+            ...dedup(data.mergedDependabotPullRequests),
+            ...dedup(data.mergedYesterdayPullRequests),
+            ...dedup(data.mergedYesterdayDependabotPullRequests),
         ];
         if (activeMergedSub === 'today') {
             const today = getLocalDateKey();
