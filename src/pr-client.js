@@ -374,12 +374,6 @@ async function batchFetchPrs(repositories, today, yesterday, onProgress, onParti
         const cachedDep = fromCache.flatMap((r) => r.openNodes.filter(isDependabot).map((pr) => normalizePr(pr, r.nameWithOwner)));
         const dependabotPrs = dedupeByUrl([...freshDep, ...cachedDep]).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
         onPartialResults({ type: 'dependabot', dependabotPullRequests: dependabotPrs });
-        // Annotate smoketests in background — fire-and-forget partial emits per repo
-        const uniqueRepos = [...new Set(dependabotPrs.map((p) => p.repository))];
-        Promise.allSettled(uniqueRepos.map(async (repo) => {
-            const has = await fetchHasSmoketests(repo);
-            if (has) { onPartialResults({ type: 'smoketests', repository: repo }); }
-        }));
     }
 
     // Build final result list in original repo order
@@ -480,9 +474,13 @@ async function fetchPullRequests({ org, topic, watchedRepos = [], namespace }, o
         if (cached) { pr.checkStatus = cached.checkStatus; pr.checkStatusLabel = cached.checkStatusLabel; }
     }
 
+    // Fetch smoketest status for all dependabot repos (cached after first run — subsequent calls instant)
+    const depRepos = [...new Set(all.filter(isDependabot).map((pr) => pr.repository))];
+    await Promise.allSettled(depRepos.map((repo) => fetchHasSmoketests(repo)));
+
     const annotateWithSmoketests = (prs) => prs.map((pr) => {
-        const cached = repoSmoketestCache.get(pr.repository);
-        return cached ? { ...pr, hasSmoketests: true } : pr;
+        const has = repoSmoketestCache.get(pr.repository);
+        return has ? { ...pr, hasSmoketests: true } : pr;
     });
     const result = {
         pullRequests: all.filter((pr) => !isDependabot(pr)),
