@@ -12,7 +12,6 @@ const COMMON_BIN_DIRS = [
     '/usr/local/bin',
     '/usr/bin',
     '/bin',
-    `${home}/.krew/bin`,   // kubectl krew plugins (e.g. kubelogin for AKS)
 ];
 
 function resolveCommand(command, envVarName) {
