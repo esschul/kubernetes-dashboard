@@ -320,3 +320,194 @@ test('heading nodes are removed when switching away', () => {
     reconcilePrList(list, [{ key: 'repo/2', html: cardHtml('repo/2', 'PR 2') }], document);
     assert.equal(list.children.length, 1, 'heading must be removed with its group');
 });
+
+// ── Group-by-repo logic ───────────────────────────────────────────────────────
+console.log('\ngroup-by-repo — ordering and grouping');
+
+function buildGroupedItems(filtered, sortKey) {
+    const orderedItems = [];
+    const repoNames = [...new Set(filtered.map((p) => p.repository))].sort();
+    const groups = new Map(repoNames.map((r) => [r, []]));
+    filtered.forEach((pr) => { groups.get(pr.repository)?.push(pr); });
+    for (const [repo, groupPrs] of groups) {
+        if (!groupPrs.length) { continue; }
+        const sortedGroup = [...groupPrs].sort((a, b) => String(sortKey(b)).localeCompare(String(sortKey(a))));
+        const shortName = repo.split('/')[1] || repo;
+        orderedItems.push({ heading: shortName });
+        sortedGroup.forEach((pr) => orderedItems.push({ key: `${pr.repository}/${pr.number}` }));
+    }
+    return orderedItems;
+}
+
+test('repos are grouped alphabetically', () => {
+    const prs = [
+        { repository: 'acme/z-service', number: 1, updatedAt: '2026-01-01' },
+        { repository: 'acme/a-service', number: 2, updatedAt: '2026-01-01' },
+        { repository: 'acme/m-service', number: 3, updatedAt: '2026-01-01' },
+    ];
+    const items = buildGroupedItems(prs, (pr) => pr.updatedAt);
+    const headings = items.filter((i) => i.heading).map((i) => i.heading);
+    assert.deepEqual(headings, ['a-service', 'm-service', 'z-service']);
+});
+
+test('PRs within a group are sorted by updatedAt descending', () => {
+    const prs = [
+        { repository: 'acme/repo', number: 1, updatedAt: '2026-01-01T10:00:00Z' },
+        { repository: 'acme/repo', number: 2, updatedAt: '2026-01-03T10:00:00Z' },
+        { repository: 'acme/repo', number: 3, updatedAt: '2026-01-02T10:00:00Z' },
+    ];
+    const items = buildGroupedItems(prs, (pr) => pr.updatedAt);
+    const keys = items.filter((i) => i.key).map((i) => i.key);
+    assert.deepEqual(keys, ['acme/repo/2', 'acme/repo/3', 'acme/repo/1']);
+});
+
+test('each repo gets exactly one heading', () => {
+    const prs = [
+        { repository: 'acme/svc', number: 1, updatedAt: '2026-01-01' },
+        { repository: 'acme/svc', number: 2, updatedAt: '2026-01-02' },
+        { repository: 'acme/other', number: 3, updatedAt: '2026-01-01' },
+    ];
+    const items = buildGroupedItems(prs, (pr) => pr.updatedAt);
+    assert.equal(items.filter((i) => i.heading === 'svc').length, 1);
+    assert.equal(items.filter((i) => i.heading === 'other').length, 1);
+    assert.equal(items.filter((i) => i.key).length, 3);
+});
+
+test('repo short name uses segment after slash', () => {
+    const prs = [{ repository: 'org/my-cool-service', number: 1, updatedAt: '2026-01-01' }];
+    const items = buildGroupedItems(prs, (pr) => pr.updatedAt);
+    assert.equal(items[0].heading, 'my-cool-service');
+});
+
+test('repo with no slash uses full name as heading', () => {
+    const prs = [{ repository: 'standalone', number: 1, updatedAt: '2026-01-01' }];
+    const items = buildGroupedItems(prs, (pr) => pr.updatedAt);
+    assert.equal(items[0].heading, 'standalone');
+});
+
+// ── Bulk actions — DOM ────────────────────────────────────────────────────────
+console.log('\nbulk actions — selection state and bar updates');
+
+function makeBulkDom(doc) {
+    doc.body.innerHTML = `
+        <div id="prList"></div>
+        <div id="prBulkBar" class="hidden">
+            <label><input type="checkbox" id="prBulkSelectAll"><span id="prBulkCount"></span></label>
+            <button id="prBulkApprove">Approve</button>
+            <button id="prBulkClose">Close</button>
+            <button id="prBulkMerge" disabled>Merge approved</button>
+        </div>`;
+    return doc;
+}
+
+function addCheckboxCard(list, doc, { key, repo, number, approved = false, checked = false }) {
+    const card = doc.createElement('div');
+    card.className = 'pr-card';
+    const label = doc.createElement('label');
+    label.className = 'pr-select-col';
+    const cb = doc.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'pr-select-cb';
+    cb.dataset.prKey = key;
+    cb.dataset.prRepo = repo;
+    cb.dataset.prNumber = String(number);
+    cb.dataset.prApproved = approved ? '1' : '';
+    cb.checked = checked;
+    label.appendChild(cb);
+    card.appendChild(label);
+    list.appendChild(card);
+    return cb;
+}
+
+function updateBulkBar(selectedPrKeys, doc) {
+    const bar = doc.getElementById('prBulkBar');
+    const count = selectedPrKeys.size;
+    bar.classList.toggle('hidden', count === 0);
+    doc.getElementById('prBulkCount').textContent = `${count} selected`;
+    const selectAll = doc.getElementById('prBulkSelectAll');
+    const total = doc.querySelectorAll('#prList .pr-select-cb').length;
+    selectAll.indeterminate = count > 0 && count < total;
+    selectAll.checked = count > 0 && count === total;
+    const approvedCount = [...doc.querySelectorAll('#prList .pr-select-cb')]
+        .filter((cb) => selectedPrKeys.has(cb.dataset.prKey) && cb.dataset.prApproved === '1').length;
+    const mergeBtn = doc.getElementById('prBulkMerge');
+    mergeBtn.textContent = approvedCount > 0 ? `Merge approved (${approvedCount})` : 'Merge approved';
+    mergeBtn.disabled = approvedCount === 0;
+}
+
+test('bulk bar is hidden when nothing is selected', () => {
+    const { document } = new JSDOM('<!DOCTYPE html><body></body>').window;
+    makeBulkDom(document);
+    const sel = new Set();
+    addCheckboxCard(document.getElementById('prList'), document, { key: 'r/1', repo: 'r', number: 1 });
+    updateBulkBar(sel, document);
+    assert.ok(document.getElementById('prBulkBar').classList.contains('hidden'));
+});
+
+test('bulk bar is visible when a PR is selected', () => {
+    const { document } = new JSDOM('<!DOCTYPE html><body></body>').window;
+    makeBulkDom(document);
+    const sel = new Set(['r/1']);
+    addCheckboxCard(document.getElementById('prList'), document, { key: 'r/1', repo: 'r', number: 1, checked: true });
+    updateBulkBar(sel, document);
+    assert.ok(!document.getElementById('prBulkBar').classList.contains('hidden'));
+    assert.equal(document.getElementById('prBulkCount').textContent, '1 selected');
+});
+
+test('merge button disabled when no approved PRs selected', () => {
+    const { document } = new JSDOM('<!DOCTYPE html><body></body>').window;
+    makeBulkDom(document);
+    const sel = new Set(['r/1']);
+    addCheckboxCard(document.getElementById('prList'), document, { key: 'r/1', repo: 'r', number: 1, approved: false, checked: true });
+    updateBulkBar(sel, document);
+    assert.ok(document.getElementById('prBulkMerge').disabled);
+});
+
+test('merge button enabled and shows count for approved selected PRs', () => {
+    const { document } = new JSDOM('<!DOCTYPE html><body></body>').window;
+    makeBulkDom(document);
+    const list = document.getElementById('prList');
+    const sel = new Set(['r/1', 'r/2']);
+    addCheckboxCard(list, document, { key: 'r/1', repo: 'r', number: 1, approved: true, checked: true });
+    addCheckboxCard(list, document, { key: 'r/2', repo: 'r', number: 2, approved: false, checked: true });
+    updateBulkBar(sel, document);
+    const mergeBtn = document.getElementById('prBulkMerge');
+    assert.ok(!mergeBtn.disabled);
+    assert.equal(mergeBtn.textContent, 'Merge approved (1)');
+});
+
+test('select-all checkbox is indeterminate when partially selected', () => {
+    const { document } = new JSDOM('<!DOCTYPE html><body></body>').window;
+    makeBulkDom(document);
+    const list = document.getElementById('prList');
+    const sel = new Set(['r/1']);
+    addCheckboxCard(list, document, { key: 'r/1', repo: 'r', number: 1, checked: true });
+    addCheckboxCard(list, document, { key: 'r/2', repo: 'r', number: 2, checked: false });
+    updateBulkBar(sel, document);
+    assert.ok(document.getElementById('prBulkSelectAll').indeterminate);
+});
+
+test('select-all checkbox is checked when all are selected', () => {
+    const { document } = new JSDOM('<!DOCTYPE html><body></body>').window;
+    makeBulkDom(document);
+    const list = document.getElementById('prList');
+    const sel = new Set(['r/1', 'r/2']);
+    addCheckboxCard(list, document, { key: 'r/1', repo: 'r', number: 1, checked: true });
+    addCheckboxCard(list, document, { key: 'r/2', repo: 'r', number: 2, checked: true });
+    updateBulkBar(sel, document);
+    assert.ok(document.getElementById('prBulkSelectAll').checked);
+    assert.ok(!document.getElementById('prBulkSelectAll').indeterminate);
+});
+
+test('clearing selection hides the bulk bar', () => {
+    const { document } = new JSDOM('<!DOCTYPE html><body></body>').window;
+    makeBulkDom(document);
+    const list = document.getElementById('prList');
+    const sel = new Set(['r/1']);
+    addCheckboxCard(list, document, { key: 'r/1', repo: 'r', number: 1, checked: true });
+    updateBulkBar(sel, document);
+    assert.ok(!document.getElementById('prBulkBar').classList.contains('hidden'));
+    sel.clear();
+    updateBulkBar(sel, document);
+    assert.ok(document.getElementById('prBulkBar').classList.contains('hidden'));
+});
