@@ -147,9 +147,9 @@ async function fetchHasSmoketests(nameWithOwner) {
     const PIPELINE_PATHS = ['azure-pipelines.yml', 'azure-pipeline.yml'];
     for (const filePath of PIPELINE_PATHS) {
         try {
-            const data = await runGh(['api', `repos/${nameWithOwner}/contents/${filePath}`, '--jq', '.content'], { retry: false });
-            if (data) {
-                const content = Buffer.from(String(data).replace(/\s/g, ''), 'base64').toString('utf8');
+            const data = await runGh(['api', `repos/${nameWithOwner}/contents/${filePath}`], { retry: false });
+            if (data?.content) {
+                const content = Buffer.from(data.content.replace(/\s/g, ''), 'base64').toString('utf8');
                 const result = /preDeploy/i.test(content);
                 repoSmoketestCache.set(nameWithOwner, result);
                 return result;
