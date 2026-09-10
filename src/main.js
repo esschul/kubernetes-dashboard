@@ -493,7 +493,12 @@ app.whenReady().then(() => {
         if (BrowserWindow.getAllWindows().length === 0) { createWindow(); }
     });
 
-    if (app.isPackaged && process.arch !== 'x64') {
+    // Auto-update is only wired for build/platform combinations that actually publish an
+    // update feed: mac arm64 (existing behaviour — Intel mac opts out) and Linux when running
+    // from an AppImage, since electron-updater's Linux updater rewrites the file in place at
+    // process.env.APPIMAGE and throws if that isn't set (e.g. an extracted dir, `npm start`).
+    const updatesSupported = isMac ? process.arch === 'arm64' : (process.platform === 'linux' && !!process.env.APPIMAGE);
+    if (app.isPackaged && updatesSupported) {
         autoUpdater.checkForUpdates().catch((err) => console.error('[updater] checkForUpdates error:', err));
         setInterval(() => autoUpdater.checkForUpdates().catch((err) => console.error('[updater] checkForUpdates error:', err)), 30 * 60 * 1000);
 
