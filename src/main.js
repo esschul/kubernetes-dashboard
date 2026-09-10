@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, Menu, dialog, clipboard, Notification: ElectronNotification } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Menu, dialog, clipboard, nativeTheme, Notification: ElectronNotification } = require('electron');
 if (!app.isPackaged) { require('electron-reload')(__dirname); }
 
 // Redirect console.log to a file so changes can be verified without DevTools.
@@ -61,7 +61,10 @@ function createWindow() {
         height: 820,
         minWidth: 820,
         minHeight: 620,
-        backgroundColor: '#f6f7fb',
+        // Best-effort match for the app's own light/dark theme (stored in renderer
+        // localStorage, not readable here) — avoids a white flash on dark-mode systems.
+        backgroundColor: nativeTheme.shouldUseDarkColors ? '#111722' : '#f6f7fb',
+        icon: path.join(__dirname, '..', 'assets', 'icon.png'),
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
@@ -352,9 +355,17 @@ app.whenReady().then(() => {
 
     createWindow();
 
+    app.setAboutPanelOptions({
+        applicationName: 'Kubernetes Dashboard',
+        applicationVersion: app.getVersion(),
+    });
+
+    const isMac = process.platform === 'darwin';
     const fs = require('node:fs');
     const menu = Menu.buildFromTemplate([
-        {
+        // The app-name menu (About/Services/Hide/Quit) uses macOS-only roles, so it
+        // only makes sense there; Windows/Linux get About + Quit via the other menus.
+        ...(isMac ? [{
             label: app.name,
             submenu: [
                 { role: 'about' },
@@ -367,7 +378,7 @@ app.whenReady().then(() => {
                 { type: 'separator' },
                 { role: 'quit' },
             ],
-        },
+        }] : []),
         {
             label: 'File',
             submenu: [
@@ -426,6 +437,8 @@ app.whenReady().then(() => {
                         win.webContents.send('settings:import', config);
                     },
                 },
+                // macOS gets Quit from the app-name menu above; other platforms need it here.
+                ...(isMac ? [] : [{ type: 'separator' }, { role: 'quit' }]),
             ],
         },
         {
@@ -458,11 +471,21 @@ app.whenReady().then(() => {
             label: 'Window',
             submenu: [
                 { role: 'minimize' },
-                { role: 'zoom' },
-                { type: 'separator' },
-                { role: 'front' },
+                // 'zoom' and 'front' are macOS-only window-manager roles.
+                ...(isMac ? [{ role: 'zoom' }, { type: 'separator' }, { role: 'front' }] : [{ role: 'close' }]),
             ],
         },
+        // macOS surfaces About/Quit via the app-name menu; other platforms need a Help menu.
+        ...(isMac ? [] : [{
+            label: 'Help',
+            submenu: [
+                { role: 'about' },
+                {
+                    label: 'Kubernetes Dashboard on GitHub',
+                    click: () => shell.openExternal('https://github.com/esschul/kubernetes-dashboard'),
+                },
+            ],
+        }]),
     ]);
     Menu.setApplicationMenu(menu);
 
