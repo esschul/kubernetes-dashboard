@@ -123,8 +123,6 @@ button:disabled {
 }
 
 .app-shell.is-sidebar-collapsed .topbar {
-    flex-direction: column;
-    gap: 8px;
     margin-bottom: 8px;
 }
 
@@ -152,8 +150,15 @@ button:disabled {
     cursor: pointer;
 }
 
+.pr-topbar-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
 .pr-filter-right {
-    margin-left: auto;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -246,10 +251,13 @@ button:disabled {
     h1 {
         white-space: nowrap;
     }
+    .pr-topbar-right {
+        align-self: flex-end;
+    }
     .env-switcher {
         overflow-x: auto;
         flex-wrap: nowrap;
-        align-self: flex-start;
+        align-self: auto;
         scrollbar-width: none;
     }
     .env-switcher::-webkit-scrollbar { display: none; }
@@ -595,6 +603,8 @@ h3 {
 .dep-warn-pill--danger { background: var(--danger-bg); color: var(--danger-text); border: 1px solid currentColor; }
 .dep-warn-pill--warning { background: #fef3c7; color: #92400e; border: 1px solid currentColor; }
 :root[data-theme="dark"] .dep-warn-pill--warning { background: #2d1f0a; color: #fbbf24; }
+.dep-warn-pill--smoketests { background: #ede9fe; color: #5b21b6; border: 1px solid currentColor; }
+:root[data-theme="dark"] .dep-warn-pill--smoketests { background: #1e1040; color: #a78bfa; }
 .age-pill {
     padding: 4px 8px;
     border: 1px solid transparent;

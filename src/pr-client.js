@@ -19,6 +19,7 @@ const MERGED_PR_FIELDS = 'number,title,url,author,isDraft,createdAt,updatedAt,me
 const RECENT_PUSH_MS = 24 * 60 * 60 * 1000; // 24 hours — controls cache TTL aggressiveness
 const CHECK_RUNS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // skip check-runs for PRs older than 7 days
 const checkRunsCache = new Map(); // key: `${nameWithOwner}/${sha}` → { checkStatus, checkStatusLabel, fetchedAt }
+const repoSmoketestCache = new Map(); // key: nameWithOwner → boolean (has preDeploy step)
 
 let _callCount = 0;
 
@@ -139,6 +140,26 @@ async function fetchCheckStatus(nameWithOwner, sha, recentlyUpdated) {
         if (cached) { return { checkStatus: cached.checkStatus, checkStatusLabel: cached.checkStatusLabel }; }
         return { checkStatus: 'none', checkStatusLabel: 'No checks' };
     }
+}
+
+async function fetchHasSmoketests(nameWithOwner) {
+    if (repoSmoketestCache.has(nameWithOwner)) { return repoSmoketestCache.get(nameWithOwner); }
+    const PIPELINE_PATHS = ['azure-pipelines.yml', '.azure/azure-pipelines.yml', 'azure-pipelines.yaml', '.azure/azure-pipelines.yaml'];
+    for (const filePath of PIPELINE_PATHS) {
+        try {
+            const data = await runGh(['api', `repos/${nameWithOwner}/contents/${filePath}`, '--jq', '.content'], { retry: false });
+            if (data) {
+                const content = Buffer.from(String(data).replace(/\s/g, ''), 'base64').toString('utf8');
+                const result = /preDeploy/i.test(content);
+                repoSmoketestCache.set(nameWithOwner, result);
+                return result;
+            }
+        } catch {
+            // file not found at this path — try next
+        }
+    }
+    repoSmoketestCache.set(nameWithOwner, false);
+    return false;
 }
 
 function getLatestCommentActivity(pr) {
@@ -353,6 +374,12 @@ async function batchFetchPrs(repositories, today, yesterday, onProgress, onParti
         const cachedDep = fromCache.flatMap((r) => r.openNodes.filter(isDependabot).map((pr) => normalizePr(pr, r.nameWithOwner)));
         const dependabotPrs = dedupeByUrl([...freshDep, ...cachedDep]).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
         onPartialResults({ type: 'dependabot', dependabotPullRequests: dependabotPrs });
+        // Annotate smoketests in background — fire-and-forget partial emits per repo
+        const uniqueRepos = [...new Set(dependabotPrs.map((p) => p.repository))];
+        Promise.allSettled(uniqueRepos.map(async (repo) => {
+            const has = await fetchHasSmoketests(repo);
+            if (has) { onPartialResults({ type: 'smoketests', repository: repo }); }
+        }));
     }
 
     // Build final result list in original repo order
@@ -453,12 +480,16 @@ async function fetchPullRequests({ org, topic, watchedRepos = [], namespace }, o
         if (cached) { pr.checkStatus = cached.checkStatus; pr.checkStatusLabel = cached.checkStatusLabel; }
     }
 
+    const annotateWithSmoketests = (prs) => prs.map((pr) => {
+        const cached = repoSmoketestCache.get(pr.repository);
+        return cached ? { ...pr, hasSmoketests: true } : pr;
+    });
     const result = {
         pullRequests: all.filter((pr) => !isDependabot(pr)),
         mergedPullRequests: allMerged.filter((pr) => !isDependabot(pr)),
         mergedYesterdayPullRequests: allMergedYesterday.filter((pr) => !isDependabot(pr)),
-        dependabotPullRequests: all.filter(isDependabot)
-            .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))),
+        dependabotPullRequests: annotateWithSmoketests(all.filter(isDependabot)
+            .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))),
         mergedDependabotPullRequests: allMerged.filter(isDependabot),
         mergedYesterdayDependabotPullRequests: allMergedYesterday.filter(isDependabot),
         repositories: [...repoNames, ...watchedReposFull],
@@ -488,6 +519,7 @@ function clearPrListCache() {
     checkRunsCache.clear();
     repoListCache.clear();
     perRepoPrCache.clear();
+    repoSmoketestCache.clear();
     console.log('[gh] all PR caches cleared (manual refresh)');
 }
 

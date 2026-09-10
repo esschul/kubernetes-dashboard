@@ -631,7 +631,7 @@ async function refreshPullRequests(force = false) {
     let mergedFromPartial = null; // set when merged partial arrives during this fetch
 
     const offPartial = window.kubeDashboard.onPrPartial?.((partial) => {
-        if (!prRefreshInProgress && partial.type !== 'merged' && partial.type !== 'checks') { return; }
+        if (!prRefreshInProgress && partial.type !== 'merged' && partial.type !== 'checks' && partial.type !== 'smoketests') { return; }
         if (partial.type === 'open') {
             // Preserve known check status — partial PRs arrive with checkStatus:'none' until enriched
             const knownChecks = new Map((latestPrData?.pullRequests || []).map((pr) => [pr.url, { checkStatus: pr.checkStatus, checkStatusLabel: pr.checkStatusLabel }]));
@@ -686,6 +686,13 @@ async function refreshPullRequests(force = false) {
                 const pr = (latestPrData.pullRequests || []).find((p) => p.url === url)
                     || (latestPrData.dependabotPullRequests || []).find((p) => p.url === url);
                 if (pr) { pr.checkStatus = checkStatus; pr.checkStatusLabel = checkStatusLabel; }
+            }
+        } else if (partial.type === 'smoketests' && partial.repository) {
+            if (latestPrData?.dependabotPullRequests) {
+                for (const pr of latestPrData.dependabotPullRequests) {
+                    if (pr.repository === partial.repository) { pr.hasSmoketests = true; }
+                }
+                renderPrView(latestPrData);
             }
         }
     });
@@ -1234,6 +1241,7 @@ function renderPrCard(pr, isMerged = false, showCheckbox = false) {
             ${ageDetails ? `<span class="age-pill ${ageDetails.cssClass}">${escapeHtml(ageDetails.label)}</span>` : ''}
             ${pr.headRefOid ? `<span class="branch-pill pr-comments-pill" data-pr-key="${escapeHtml(pr.repository + '/' + pr.number)}" style="cursor:pointer">${pr.commentActivityCount > 0 ? `${pr.commentActivityCount} comment${pr.commentActivityCount !== 1 ? 's' : ''}` : 'Description'}</span>` : ''}
             ${isDependabotPr(pr) ? analyzeDependabotPr(pr).map((w) => `<span class="dep-warn-pill dep-warn-pill--${w.level}">${escapeHtml(w.label)}</span>`).join('') : ''}
+            ${pr.hasSmoketests ? `<span class="dep-warn-pill dep-warn-pill--smoketests">smoketests</span>` : ''}
         </div>
         ${(pipelineStatus && isMerged) || deploymentStatus || qaDeployment ? `
         <div class="pr-infra-row">
