@@ -94,6 +94,17 @@ function notifyNewPrs(pullRequests) {
     }
 }
 
+// Persistent smoketests listener — lives for the lifetime of the page, independent of fetch lifecycle
+window.kubeDashboard.onPrPartial?.((partial) => {
+    if (partial.type !== 'smoketests' || !partial.repository) { return; }
+    if (!latestPrData?.dependabotPullRequests) { return; }
+    let changed = false;
+    for (const pr of latestPrData.dependabotPullRequests) {
+        if (pr.repository === partial.repository && !pr.hasSmoketests) { pr.hasSmoketests = true; changed = true; }
+    }
+    if (changed && activePrTab === 'dependabot') { renderPrView(latestPrData); }
+});
+
 document.getElementById('prTabSwitcher').addEventListener('click', (e) => {
     const btn = e.target.closest('.env-btn[data-pr-tab]');
     if (!btn) { return; }
@@ -631,7 +642,7 @@ async function refreshPullRequests(force = false) {
     let mergedFromPartial = null; // set when merged partial arrives during this fetch
 
     const offPartial = window.kubeDashboard.onPrPartial?.((partial) => {
-        if (!prRefreshInProgress && partial.type !== 'merged' && partial.type !== 'checks' && partial.type !== 'smoketests') { return; }
+        if (!prRefreshInProgress && partial.type !== 'merged' && partial.type !== 'checks') { return; }
         if (partial.type === 'open') {
             // Preserve known check status — partial PRs arrive with checkStatus:'none' until enriched
             const knownChecks = new Map((latestPrData?.pullRequests || []).map((pr) => [pr.url, { checkStatus: pr.checkStatus, checkStatusLabel: pr.checkStatusLabel }]));
@@ -686,13 +697,6 @@ async function refreshPullRequests(force = false) {
                 const pr = (latestPrData.pullRequests || []).find((p) => p.url === url)
                     || (latestPrData.dependabotPullRequests || []).find((p) => p.url === url);
                 if (pr) { pr.checkStatus = checkStatus; pr.checkStatusLabel = checkStatusLabel; }
-            }
-        } else if (partial.type === 'smoketests' && partial.repository) {
-            if (latestPrData?.dependabotPullRequests) {
-                for (const pr of latestPrData.dependabotPullRequests) {
-                    if (pr.repository === partial.repository) { pr.hasSmoketests = true; }
-                }
-                renderPrView(latestPrData);
             }
         }
     });
