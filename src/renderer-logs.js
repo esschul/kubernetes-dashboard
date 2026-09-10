@@ -814,7 +814,7 @@ function bindLogEventListeners() {
     });
 
     document.getElementById('logsModal')?.addEventListener('keydown', (e) => {
-        if (e.key === 'f' && e.metaKey) {
+        if (e.key === 'f' && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
             const isLive = document.getElementById('logsTabLive')?.classList.contains('is-active');
             const input = document.getElementById(isLive ? 'logsLiveHighlightInput' : 'logsHighlightInput');

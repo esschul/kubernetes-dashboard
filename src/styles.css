@@ -83,7 +83,7 @@ body {
     overflow: hidden;
     background: var(--bg);
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Cantarell, Ubuntu, "Noto Sans", sans-serif;
 }
 
 button, input, select {
@@ -1194,7 +1194,7 @@ h3 {
 }
 
 .help-code {
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-family: ui-monospace, "SF Mono", Menlo, "DejaVu Sans Mono", "Liberation Mono", monospace;
     font-size: 0.82rem;
     background: var(--panel);
     border: 1px solid var(--line);
@@ -1203,6 +1203,19 @@ h3 {
     margin: 4px 0 0;
     white-space: pre;
     overflow-x: auto;
+}
+
+.help-code-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+    margin: 8px 0 0;
+}
+
+.help-code-label:first-of-type {
+    margin-top: 4px;
 }
 
 .help-table {
@@ -1234,7 +1247,7 @@ h3 {
 }
 
 .help-table code {
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-family: ui-monospace, "SF Mono", Menlo, "DejaVu Sans Mono", "Liberation Mono", monospace;
     font-size: 0.82rem;
     background: var(--panel-muted);
     padding: 1px 5px;
@@ -1415,7 +1428,7 @@ h3 {
 }
 
 .pr-meta code {
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-family: ui-monospace, "SF Mono", Menlo, "DejaVu Sans Mono", "Liberation Mono", monospace;
     font-size: 0.75rem;
 }
 
@@ -1439,7 +1452,7 @@ h3 {
 
 .pod-name {
     flex: 1;
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-family: ui-monospace, "SF Mono", Menlo, "DejaVu Sans Mono", "Liberation Mono", monospace;
     font-size: 0.8rem;
     color: var(--text);
     white-space: nowrap;
@@ -1658,7 +1671,7 @@ h3 {
 }
 
 .pipeline-error-line {
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-family: ui-monospace, "SF Mono", Menlo, "DejaVu Sans Mono", "Liberation Mono", monospace;
     font-size: 0.78rem;
     color: var(--danger-text, #b42318);
     white-space: pre-wrap;
@@ -1677,7 +1690,7 @@ h3 {
     color: var(--muted);
     font-size: 0.75rem;
     font-weight: 600;
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-family: ui-monospace, "SF Mono", Menlo, "DejaVu Sans Mono", "Liberation Mono", monospace;
     white-space: nowrap;
     max-width: 160px;
     overflow: hidden;
@@ -1698,7 +1711,7 @@ h3 {
     border-radius: 999px;
     font-size: 0.7rem;
     font-weight: 700;
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-family: ui-monospace, "SF Mono", Menlo, "DejaVu Sans Mono", "Liberation Mono", monospace;
     letter-spacing: 0.02em;
     text-transform: uppercase;
 }
@@ -3542,7 +3555,7 @@ input, select {
     flex: 1;
     overflow-y: auto;
     padding: 10px 0;
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-family: ui-monospace, "SF Mono", Menlo, "DejaVu Sans Mono", "Liberation Mono", monospace;
     font-size: 0.78rem;
     line-height: 1.6;
     color: #e6edf3;
@@ -3696,7 +3709,7 @@ details[open] .log-stack-summary::before { transform: rotate(90deg); }
     background: #0d1117;
     border: none;
     color: #58a6ff;
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-family: ui-monospace, "SF Mono", Menlo, "DejaVu Sans Mono", "Liberation Mono", monospace;
     font-size: 0.75rem;
     line-height: 1.6;
     padding: 10px 12px;
@@ -3802,7 +3815,7 @@ details[open] .log-stack-summary::before { transform: rotate(90deg); }
 }
 
 .logs-speedometer-value {
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-family: ui-monospace, "SF Mono", Menlo, "DejaVu Sans Mono", "Liberation Mono", monospace;
     font-size: 1.25rem;
     font-weight: 800;
     line-height: 1;

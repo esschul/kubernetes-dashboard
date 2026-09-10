@@ -1,14 +1,24 @@
-const { app, BrowserWindow, ipcMain, shell, Menu, dialog, clipboard, Notification: ElectronNotification } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Menu, dialog, clipboard, nativeTheme, Notification: ElectronNotification } = require('electron');
 if (!app.isPackaged) { require('electron-reload')(__dirname); }
 
-// Redirect console.log to a file so changes can be verified without DevTools
+// Redirect console.log to a file so changes can be verified without DevTools.
+// Logging to disk is best-effort: an unwritable log directory must never block startup.
 const fs = require('node:fs');
-const _logFile = fs.createWriteStream(`${require('node:os').homedir()}/Library/Logs/kubernetes-dashboard.log`, { flags: 'a' });
+const path = require('node:path');
 const _origLog = console.log.bind(console);
+let _logFile = null;
+try {
+    const logDir = app.getPath('logs');
+    fs.mkdirSync(logDir, { recursive: true });
+    _logFile = fs.createWriteStream(path.join(logDir, 'kubernetes-dashboard.log'), { flags: 'a' });
+    _logFile.on('error', (err) => _origLog('[log file] write error:', err));
+} catch (err) {
+    _origLog('[log file] could not open log file:', err);
+}
 console.log = (...args) => {
     const line = args.map((a) => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
     _origLog(...args);
-    _logFile.write(`[${new Date().toISOString()}] ${line}\n`);
+    if (_logFile) { _logFile.write(`[${new Date().toISOString()}] ${line}\n`); }
 };
 
 // Packaged Electron apps launch with a minimal PATH that lacks homebrew and
@@ -17,18 +27,28 @@ console.log = (...args) => {
 const os = require('node:os');
 const home = os.homedir();
 const EXTRA_PATHS = [
-    '/opt/homebrew/bin', '/opt/homebrew/sbin',   // Homebrew (Apple Silicon)
-    '/usr/local/bin', '/usr/local/sbin',           // Homebrew (Intel) / manual installs
+    ...(process.platform === 'darwin' ? [
+        '/opt/homebrew/bin', '/opt/homebrew/sbin',   // Homebrew (Apple Silicon)
+        '/usr/local/bin', '/usr/local/sbin',           // Homebrew (Intel) / manual installs
+    ] : []),
+    ...(process.platform === 'linux' ? [
+        '/home/linuxbrew/.linuxbrew/bin',              // Homebrew on Linux (system install)
+        '/home/linuxbrew/.linuxbrew/sbin',
+        `${home}/.linuxbrew/bin`,                      // Homebrew on Linux (per-user install)
+        '/snap/bin',                                   // Snap packages
+        '/var/lib/flatpak/exports/bin',                // System-wide Flatpak exports
+        `${home}/bin`,                                  // Traditional user bin dir
+    ] : []),
     `${home}/.pyenv/shims`,                        // pyenv shims (az installed via pip in pyenv)
     `${home}/.pyenv/bin`,                          // pyenv itself
     `${home}/.local/bin`,                          // pip --user installs
+    `${home}/.krew/bin`,                           // kubectl krew plugins (e.g. kubelogin for AKS)
 ];
 const currentPath = process.env.PATH || '';
-const missingPaths = EXTRA_PATHS.filter((p) => !currentPath.split(':').includes(p));
+const missingPaths = EXTRA_PATHS.filter((p) => !currentPath.split(path.delimiter).includes(p));
 if (missingPaths.length > 0) {
-    process.env.PATH = [...missingPaths, currentPath].join(':');
+    process.env.PATH = [...missingPaths, currentPath].join(path.delimiter);
 }
-const path = require('node:path');
 const { autoUpdater } = require('electron-updater');
 
 let buildDate = null;
@@ -44,7 +64,14 @@ function createWindow() {
         height: 820,
         minWidth: 820,
         minHeight: 620,
-        backgroundColor: '#f6f7fb',
+        // Without this, width/height include per-OS window chrome (e.g. Linux's
+        // in-window menubar eats ~35px), so the same numbers yield a smaller
+        // content area than on macOS. This pins them to the content area everywhere.
+        useContentSize: true,
+        // Best-effort match for the app's own light/dark theme (stored in renderer
+        // localStorage, not readable here) — avoids a white flash on dark-mode systems.
+        backgroundColor: nativeTheme.shouldUseDarkColors ? '#111722' : '#f6f7fb',
+        icon: path.join(__dirname, '..', 'assets', 'icon.png'),
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
@@ -313,8 +340,9 @@ app.whenReady().then(() => {
     });
 
     ipcMain.handle('notifications:requestPermission', () => {
-        if (process.platform !== 'darwin') { return; }
-        // Sending a notification from the main process is what triggers the macOS permission dialog
+        // On macOS, sending a notification from the main process is what triggers the
+        // permission dialog. Other platforms have no such prompt, but we still show a
+        // confirmation so enabling notifications in Settings gives visible feedback.
         if (ElectronNotification.isSupported()) {
             new ElectronNotification({
                 title: 'Kubernetes Dashboard',
@@ -335,9 +363,17 @@ app.whenReady().then(() => {
 
     createWindow();
 
+    app.setAboutPanelOptions({
+        applicationName: 'Kubernetes Dashboard',
+        applicationVersion: app.getVersion(),
+    });
+
+    const isMac = process.platform === 'darwin';
     const fs = require('node:fs');
     const menu = Menu.buildFromTemplate([
-        {
+        // The app-name menu (About/Services/Hide/Quit) uses macOS-only roles, so it
+        // only makes sense there; Windows/Linux get About + Quit via the other menus.
+        ...(isMac ? [{
             label: app.name,
             submenu: [
                 { role: 'about' },
@@ -350,7 +386,7 @@ app.whenReady().then(() => {
                 { type: 'separator' },
                 { role: 'quit' },
             ],
-        },
+        }] : []),
         {
             label: 'File',
             submenu: [
@@ -409,6 +445,8 @@ app.whenReady().then(() => {
                         win.webContents.send('settings:import', config);
                     },
                 },
+                // macOS gets Quit from the app-name menu above; other platforms need it here.
+                ...(isMac ? [] : [{ type: 'separator' }, { role: 'quit' }]),
             ],
         },
         {
@@ -441,11 +479,21 @@ app.whenReady().then(() => {
             label: 'Window',
             submenu: [
                 { role: 'minimize' },
-                { role: 'zoom' },
-                { type: 'separator' },
-                { role: 'front' },
+                // 'zoom' and 'front' are macOS-only window-manager roles.
+                ...(isMac ? [{ role: 'zoom' }, { type: 'separator' }, { role: 'front' }] : [{ role: 'close' }]),
             ],
         },
+        // macOS surfaces About/Quit via the app-name menu; other platforms need a Help menu.
+        ...(isMac ? [] : [{
+            label: 'Help',
+            submenu: [
+                { role: 'about' },
+                {
+                    label: 'Kubernetes Dashboard on GitHub',
+                    click: () => shell.openExternal('https://github.com/esschul/kubernetes-dashboard'),
+                },
+            ],
+        }]),
     ]);
     Menu.setApplicationMenu(menu);
 
@@ -453,7 +501,12 @@ app.whenReady().then(() => {
         if (BrowserWindow.getAllWindows().length === 0) { createWindow(); }
     });
 
-    if (app.isPackaged && process.arch !== 'x64') {
+    // Auto-update is only wired for build/platform combinations that actually publish an
+    // update feed: mac arm64 (existing behaviour — Intel mac opts out) and Linux when running
+    // from an AppImage, since electron-updater's Linux updater rewrites the file in place at
+    // process.env.APPIMAGE and throws if that isn't set (e.g. an extracted dir, `npm start`).
+    const updatesSupported = isMac ? process.arch === 'arm64' : (process.platform === 'linux' && !!process.env.APPIMAGE);
+    if (app.isPackaged && updatesSupported) {
         autoUpdater.checkForUpdates().catch((err) => console.error('[updater] checkForUpdates error:', err));
         setInterval(() => autoUpdater.checkForUpdates().catch((err) => console.error('[updater] checkForUpdates error:', err)), 30 * 60 * 1000);
 

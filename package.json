@@ -9,11 +9,14 @@
     "lint": "eslint .",
     "test": "node src/azure-client.test.js && node src/log-stream.test.js && node src/renderer-utils.test.js && node src/renderer-logs.test.js && node src/pr-client.test.js && node src/kubectl-client.test.js && node src/github-client.test.js",
     "check": "node --check src/command-paths.js && node --check src/kubectl-client.js && node --check src/main.js && node --check src/preload.js && node --check src/renderer.js && node --check src/renderer-utils.js && node --check src/renderer-logs.js && node --check src/renderer-feed.js && node --check src/renderer-pipelines.js && node --check src/renderer-prs.js && node --check src/renderer-deployments.js",
-    "build:icon": "bash scripts/build-mac-icon.sh",
-    "build:mac": "electron-builder --mac dmg",
+    "build:icon": "node scripts/build-icons.js",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
     "install-local": "bash scripts/install-local.sh",
     "install-local-intel": "bash scripts/install-local-intel.sh",
-    "release": "bash scripts/publish.sh"
+    "install-local-linux": "bash scripts/install-local-linux.sh",
+    "release": "bash scripts/publish.sh",
+    "release:linux": "bash scripts/publish-linux.sh"
   },
   "devDependencies": {
     "@electron/notarize": "^3.1.1",
@@ -22,7 +25,8 @@
     "electron-builder": "^26.8.1",
     "electron-reload": "^2.0.0-alpha.1",
     "eslint": "^10.4.1",
-    "globals": "^17.6.0"
+    "globals": "^17.6.0",
+    "sharp": "^0.35.4"
   },
   "build": {
     "appId": "io.github.esschul.kubernetes-dashboard",
@@ -40,8 +44,19 @@
       "entitlements": "assets/entitlements.mac.plist",
       "entitlementsInherit": "assets/entitlements.mac.plist",
       "target": [
-        "dmg"
+        "dmg",
+        "zip"
       ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Development",
+      "icon": "assets/icon.png",
+      "executableName": "kubernetes-dashboard",
+      "artifactName": "kubernetes-dashboard-${version}-${arch}.AppImage",
+      "synopsis": "Kubernetes deployments, PRs and pipelines in one view"
     },
     "afterSign": "scripts/notarize.js",
     "publish": {

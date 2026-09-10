@@ -455,7 +455,8 @@ function renderQuickLogsEnvs(config) {
     envEl.innerHTML = envs.map(({ label, context }, index) => {
         const isActive = context === quickLogsContext;
         const colorClass = ENV_COLOR_CLASS[label] || '';
-        const shortcut = index < 3 ? `⌘${index + 1}` : '';
+        const modKey = navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl+';
+        const shortcut = index < 3 ? `${modKey}${index + 1}` : '';
         return `<div class="logs-quick-env-item">
             <button class="logs-quick-env-btn ${colorClass} ${isActive ? 'is-active' : ''}" data-context="${escapeHtml(context)}">${escapeHtml(label)}</button>
             ${shortcut ? `<span class="logs-quick-env-shortcut">${escapeHtml(shortcut)}</span>` : ''}
