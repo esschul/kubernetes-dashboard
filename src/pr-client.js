@@ -144,7 +144,7 @@ async function fetchCheckStatus(nameWithOwner, sha, recentlyUpdated) {
 
 async function fetchHasSmoketests(nameWithOwner) {
     if (repoSmoketestCache.has(nameWithOwner)) { return repoSmoketestCache.get(nameWithOwner); }
-    const PIPELINE_PATHS = ['azure-pipelines.yml', '.azure/azure-pipelines.yml', 'azure-pipelines.yaml', '.azure/azure-pipelines.yaml'];
+    const PIPELINE_PATHS = ['azure-pipelines.yml', 'azure-pipeline.yml'];
     for (const filePath of PIPELINE_PATHS) {
         try {
             const data = await runGh(['api', `repos/${nameWithOwner}/contents/${filePath}`, '--jq', '.content'], { retry: false });
