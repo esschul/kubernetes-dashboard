@@ -1,6 +1,6 @@
 # Kubernetes Dashboard
 
-A macOS desktop app for teams running services on Kubernetes. Combines pull requests, CI pipelines, and deployments into one view so you can see what's happening across your stack without switching between GitHub, Azure DevOps, and kubectl.
+A macOS and Linux desktop app for teams running services on Kubernetes. Combines pull requests, CI pipelines, and deployments into one view so you can see what's happening across your stack without switching between GitHub, Azure DevOps, and kubectl.
 
 ## Features
 
@@ -29,12 +29,14 @@ A macOS desktop app for teams running services on Kubernetes. Combines pull requ
 
 ## Requirements
 
-- macOS (Apple Silicon)
+- macOS (Apple Silicon) or Linux (x86_64)
 - [`kubectl`](https://kubernetes.io/docs/tasks/tools/) — configured with your cluster contexts
 - [`gh`](https://cli.github.com/) — GitHub CLI, authenticated (`gh auth login`)
 - [`az`](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) — Azure CLI, authenticated (`az login`) with the [Azure DevOps extension](https://learn.microsoft.com/en-us/azure/devops/cli/get-started) installed (`az extension add --name azure-devops`)
 
-All three must be available on your `PATH`. If you use Homebrew:
+All three must be available on your `PATH`.
+
+**macOS (Homebrew):**
 
 ```bash
 brew install kubectl gh azure-cli
@@ -43,9 +45,46 @@ gh auth login
 az login
 ```
 
+**Fedora / RHEL:**
+
+```bash
+sudo dnf install kubernetes-client gh azure-cli
+az extension add --name azure-devops
+gh auth login
+az login
+```
+
+**Debian / Ubuntu:**
+
+```bash
+sudo apt install kubectl gh
+curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+az extension add --name azure-devops
+gh auth login
+az login
+```
+
+The Linux build also needs FUSE to run the AppImage: `sudo dnf install fuse` (Fedora/RHEL) or `sudo apt install libfuse2` (Debian/Ubuntu). If it's missing, either install it or launch with `--appimage-extract-and-run`.
+
 ## Installation
 
-Download the latest `.dmg` from [Releases](https://github.com/esschul/kubernetes-dashboard/releases), open it, and drag the app to `/Applications`.
+**macOS:** download the latest `.dmg` from [Releases](https://github.com/esschul/kubernetes-dashboard/releases), open it, and drag the app to `/Applications`.
+
+**Linux (x86_64):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/esschul/kubernetes-dashboard/main/scripts/install-linux.sh | sh
+```
+
+This installs to `~/.local/share/kubernetes-dashboard`, adds a `kubernetes-dashboard` launcher to `~/.local/bin`, and registers a desktop entry — no `sudo` required. To uninstall: `sh install-linux.sh --uninstall` (download it first if you piped it in originally).
+
+If you'd rather review the script before running it:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/esschul/kubernetes-dashboard/main/scripts/install-linux.sh
+less install-linux.sh
+sh install-linux.sh
+```
 
 ## Configuration
 
@@ -70,17 +109,20 @@ npm install
 npm start
 ```
 
-To build a distributable DMG:
+To build a distributable DMG (macOS) or AppImage (Linux):
 
 ```bash
-npm run build:mac
+npm run build:mac     # macOS
+npm run build:linux   # Linux
 ```
 
-To build and publish a GitHub release:
+To build and publish a GitHub release, see [docs/RELEASING.md](docs/RELEASING.md) — releases are built on both platforms and macOS goes first.
 
-```bash
-npm run release
-```
+## Troubleshooting
+
+- **App won't find `kubectl`/`gh`/`az`**: set `KUBECTL_PATH`, `GH_PATH`, or `AZ_PATH` to the tool's full path.
+- **Linux: "libfuse.so.2" error on launch**: install FUSE (see Requirements above) or run the AppImage with `--appimage-extract-and-run`.
+- **Linux: sandbox error on some Debian-based systems**: if the app refuses to start with a sandbox-related error, try launching with `--no-sandbox`.
 
 ## Tech stack
 
