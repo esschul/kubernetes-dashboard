@@ -27,11 +27,13 @@ function getLocalDateKey(d) {
 
 function getPrsForTab(data, { activePrTab, activeMergedSub, mergedSearchPrs }) {
     if (activePrTab === 'merged') {
+        const seen = new Set();
+        const dedup = (arr) => (arr || []).filter((p) => { if (seen.has(p.url)) { return false; } seen.add(p.url); return true; });
         const all = [
-            ...(data.mergedPullRequests || []),
-            ...(data.mergedDependabotPullRequests || []),
-            ...(data.mergedYesterdayPullRequests || []),
-            ...(data.mergedYesterdayDependabotPullRequests || []),
+            ...dedup(data.mergedPullRequests),
+            ...dedup(data.mergedDependabotPullRequests),
+            ...dedup(data.mergedYesterdayPullRequests),
+            ...dedup(data.mergedYesterdayDependabotPullRequests),
         ];
         if (activeMergedSub === 'today') {
             const today = getLocalDateKey();
@@ -156,6 +158,17 @@ test('merged tab (all sub) returns all merged arrays combined', () => {
         mergedYesterdayDependabotPullRequests: [],
     };
     assert.equal(getPrsForTab(data, mergedState).length, 2);
+});
+
+test('merged tab deduplicates PRs that appear in multiple lists', () => {
+    const pr = { url: 'dup', mergedAt: '2026-01-01T00:00:00Z' };
+    const data = {
+        mergedPullRequests: [pr],
+        mergedDependabotPullRequests: [pr],
+        mergedYesterdayPullRequests: [pr],
+        mergedYesterdayDependabotPullRequests: [],
+    };
+    assert.equal(getPrsForTab(data, mergedState).length, 1);
 });
 
 test('merged tab today sub filters by today date', () => {
