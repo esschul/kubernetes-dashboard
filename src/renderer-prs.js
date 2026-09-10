@@ -643,25 +643,13 @@ async function refreshPullRequests(force = false) {
 }
 
 function countMergedForSub(data) {
-    const all = [
+    const today = getLocalDateKey();
+    return [
         ...(data.mergedPullRequests || []),
         ...(data.mergedDependabotPullRequests || []),
         ...(data.mergedYesterdayPullRequests || []),
         ...(data.mergedYesterdayDependabotPullRequests || []),
-    ];
-    if (activeMergedSub === 'today') {
-        const today = getLocalDateKey();
-        return all.filter((pr) => pr.mergedAt && getLocalDateKey(pr.mergedAt) === today).length;
-    }
-    if (activeMergedSub === 'yesterday') {
-        const d = new Date(); d.setDate(d.getDate() - 1);
-        const yesterday = getLocalDateKey(d);
-        return all.filter((pr) => pr.mergedAt && getLocalDateKey(pr.mergedAt) === yesterday).length;
-    }
-    if (activeMergedSub === 'search') {
-        return mergedSearchPrs ? mergedSearchPrs.length : 0;
-    }
-    return all.length;
+    ].filter((pr) => pr.mergedAt && getLocalDateKey(pr.mergedAt) === today).length;
 }
 
 function updatePrNavCount(data) {
