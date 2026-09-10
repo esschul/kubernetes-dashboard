@@ -27,16 +27,24 @@ console.log = (...args) => {
 const os = require('node:os');
 const home = os.homedir();
 const EXTRA_PATHS = [
-    '/opt/homebrew/bin', '/opt/homebrew/sbin',   // Homebrew (Apple Silicon)
-    '/usr/local/bin', '/usr/local/sbin',           // Homebrew (Intel) / manual installs
+    ...(process.platform === 'darwin' ? [
+        '/opt/homebrew/bin', '/opt/homebrew/sbin',   // Homebrew (Apple Silicon)
+        '/usr/local/bin', '/usr/local/sbin',           // Homebrew (Intel) / manual installs
+    ] : []),
+    ...(process.platform === 'linux' ? [
+        '/snap/bin',                                   // Snap packages
+        '/var/lib/flatpak/exports/bin',                // System-wide Flatpak exports
+        `${home}/bin`,                                  // Traditional user bin dir
+    ] : []),
     `${home}/.pyenv/shims`,                        // pyenv shims (az installed via pip in pyenv)
     `${home}/.pyenv/bin`,                          // pyenv itself
     `${home}/.local/bin`,                          // pip --user installs
+    `${home}/.krew/bin`,                           // kubectl krew plugins (e.g. kubelogin for AKS)
 ];
 const currentPath = process.env.PATH || '';
-const missingPaths = EXTRA_PATHS.filter((p) => !currentPath.split(':').includes(p));
+const missingPaths = EXTRA_PATHS.filter((p) => !currentPath.split(path.delimiter).includes(p));
 if (missingPaths.length > 0) {
-    process.env.PATH = [...missingPaths, currentPath].join(':');
+    process.env.PATH = [...missingPaths, currentPath].join(path.delimiter);
 }
 const { autoUpdater } = require('electron-updater');
 
