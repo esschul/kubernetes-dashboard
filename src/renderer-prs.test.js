@@ -393,8 +393,8 @@ function makeBulkDom(doc) {
         <div id="prList"></div>
         <div id="prBulkBar" class="hidden">
             <label><input type="checkbox" id="prBulkSelectAll"><span id="prBulkCount"></span></label>
-            <button id="prBulkApprove">Approve</button>
-            <button id="prBulkClose">Close</button>
+            <button id="prBulkApprove" disabled>Approve</button>
+            <button id="prBulkClose" disabled>Close</button>
             <button id="prBulkMerge" disabled>Merge approved</button>
         </div>`;
     return doc;
@@ -419,47 +419,72 @@ function addCheckboxCard(list, doc, { key, repo, number, approved = false, check
     return cb;
 }
 
-function updateBulkBar(selectedPrKeys, doc) {
+function updateBulkBar(selectedPrKeys, doc, activePrTab = 'dependabot') {
     const bar = doc.getElementById('prBulkBar');
+    bar.classList.toggle('hidden', activePrTab !== 'dependabot');
     const count = selectedPrKeys.size;
-    bar.classList.toggle('hidden', count === 0);
-    doc.getElementById('prBulkCount').textContent = `${count} selected`;
+    const allCbs = [...doc.querySelectorAll('#prList .pr-select-cb')];
+    const total = allCbs.length;
+    const countLabel = count === 0 ? (total > 0 ? `Select all (${total})` : 'No PRs') : `${count} of ${total} selected`;
+    doc.getElementById('prBulkCount').textContent = countLabel;
     const selectAll = doc.getElementById('prBulkSelectAll');
-    const total = doc.querySelectorAll('#prList .pr-select-cb').length;
     selectAll.indeterminate = count > 0 && count < total;
-    selectAll.checked = count > 0 && count === total;
-    const approvedCount = [...doc.querySelectorAll('#prList .pr-select-cb')]
-        .filter((cb) => selectedPrKeys.has(cb.dataset.prKey) && cb.dataset.prApproved === '1').length;
+    selectAll.checked = total > 0 && count === total;
+    const approvedCount = allCbs.filter((cb) => selectedPrKeys.has(cb.dataset.prKey) && cb.dataset.prApproved === '1').length;
     const mergeBtn = doc.getElementById('prBulkMerge');
     mergeBtn.textContent = approvedCount > 0 ? `Merge approved (${approvedCount})` : 'Merge approved';
-    mergeBtn.disabled = approvedCount === 0;
+    mergeBtn.disabled = count === 0;
+    doc.getElementById('prBulkApprove').disabled = count === 0;
+    doc.getElementById('prBulkClose').disabled = count === 0;
 }
 
-test('bulk bar is hidden when nothing is selected', () => {
-    const { document } = new JSDOM('<!DOCTYPE html><body></body>').window;
-    makeBulkDom(document);
-    const sel = new Set();
-    addCheckboxCard(document.getElementById('prList'), document, { key: 'r/1', repo: 'r', number: 1 });
-    updateBulkBar(sel, document);
-    assert.ok(document.getElementById('prBulkBar').classList.contains('hidden'));
-});
-
-test('bulk bar is visible when a PR is selected', () => {
+test('bulk bar is hidden when not on dependabot tab', () => {
     const { document } = new JSDOM('<!DOCTYPE html><body></body>').window;
     makeBulkDom(document);
     const sel = new Set(['r/1']);
     addCheckboxCard(document.getElementById('prList'), document, { key: 'r/1', repo: 'r', number: 1, checked: true });
-    updateBulkBar(sel, document);
-    assert.ok(!document.getElementById('prBulkBar').classList.contains('hidden'));
-    assert.equal(document.getElementById('prBulkCount').textContent, '1 selected');
+    updateBulkBar(sel, document, 'open');
+    assert.ok(document.getElementById('prBulkBar').classList.contains('hidden'));
 });
 
-test('merge button disabled when no approved PRs selected', () => {
+test('bulk bar is always visible on dependabot tab even with nothing selected', () => {
     const { document } = new JSDOM('<!DOCTYPE html><body></body>').window;
     makeBulkDom(document);
+    const sel = new Set();
+    addCheckboxCard(document.getElementById('prList'), document, { key: 'r/1', repo: 'r', number: 1 });
+    updateBulkBar(sel, document, 'dependabot');
+    assert.ok(!document.getElementById('prBulkBar').classList.contains('hidden'));
+    assert.equal(document.getElementById('prBulkCount').textContent, 'Select all (1)');
+});
+
+test('action buttons are disabled when nothing is selected', () => {
+    const { document } = new JSDOM('<!DOCTYPE html><body></body>').window;
+    makeBulkDom(document);
+    const sel = new Set();
+    addCheckboxCard(document.getElementById('prList'), document, { key: 'r/1', repo: 'r', number: 1 });
+    updateBulkBar(sel, document, 'dependabot');
+    assert.ok(document.getElementById('prBulkApprove').disabled);
+    assert.ok(document.getElementById('prBulkClose').disabled);
+    assert.ok(document.getElementById('prBulkMerge').disabled);
+});
+
+test('count label shows "X of Y selected" when something is selected', () => {
+    const { document } = new JSDOM('<!DOCTYPE html><body></body>').window;
+    makeBulkDom(document);
+    const list = document.getElementById('prList');
     const sel = new Set(['r/1']);
-    addCheckboxCard(document.getElementById('prList'), document, { key: 'r/1', repo: 'r', number: 1, approved: false, checked: true });
-    updateBulkBar(sel, document);
+    addCheckboxCard(list, document, { key: 'r/1', repo: 'r', number: 1, checked: true });
+    addCheckboxCard(list, document, { key: 'r/2', repo: 'r', number: 2 });
+    updateBulkBar(sel, document, 'dependabot');
+    assert.equal(document.getElementById('prBulkCount').textContent, '1 of 2 selected');
+});
+
+test('merge button disabled when nothing selected', () => {
+    const { document } = new JSDOM('<!DOCTYPE html><body></body>').window;
+    makeBulkDom(document);
+    const sel = new Set();
+    addCheckboxCard(document.getElementById('prList'), document, { key: 'r/1', repo: 'r', number: 1, approved: true });
+    updateBulkBar(sel, document, 'dependabot');
     assert.ok(document.getElementById('prBulkMerge').disabled);
 });
 
@@ -470,7 +495,7 @@ test('merge button enabled and shows count for approved selected PRs', () => {
     const sel = new Set(['r/1', 'r/2']);
     addCheckboxCard(list, document, { key: 'r/1', repo: 'r', number: 1, approved: true, checked: true });
     addCheckboxCard(list, document, { key: 'r/2', repo: 'r', number: 2, approved: false, checked: true });
-    updateBulkBar(sel, document);
+    updateBulkBar(sel, document, 'dependabot');
     const mergeBtn = document.getElementById('prBulkMerge');
     assert.ok(!mergeBtn.disabled);
     assert.equal(mergeBtn.textContent, 'Merge approved (1)');
@@ -483,7 +508,7 @@ test('select-all checkbox is indeterminate when partially selected', () => {
     const sel = new Set(['r/1']);
     addCheckboxCard(list, document, { key: 'r/1', repo: 'r', number: 1, checked: true });
     addCheckboxCard(list, document, { key: 'r/2', repo: 'r', number: 2, checked: false });
-    updateBulkBar(sel, document);
+    updateBulkBar(sel, document, 'dependabot');
     assert.ok(document.getElementById('prBulkSelectAll').indeterminate);
 });
 
@@ -494,20 +519,21 @@ test('select-all checkbox is checked when all are selected', () => {
     const sel = new Set(['r/1', 'r/2']);
     addCheckboxCard(list, document, { key: 'r/1', repo: 'r', number: 1, checked: true });
     addCheckboxCard(list, document, { key: 'r/2', repo: 'r', number: 2, checked: true });
-    updateBulkBar(sel, document);
+    updateBulkBar(sel, document, 'dependabot');
     assert.ok(document.getElementById('prBulkSelectAll').checked);
     assert.ok(!document.getElementById('prBulkSelectAll').indeterminate);
 });
 
-test('clearing selection hides the bulk bar', () => {
+test('clearing selection disables action buttons but keeps bar visible on dependabot tab', () => {
     const { document } = new JSDOM('<!DOCTYPE html><body></body>').window;
     makeBulkDom(document);
     const list = document.getElementById('prList');
     const sel = new Set(['r/1']);
     addCheckboxCard(list, document, { key: 'r/1', repo: 'r', number: 1, checked: true });
-    updateBulkBar(sel, document);
-    assert.ok(!document.getElementById('prBulkBar').classList.contains('hidden'));
+    updateBulkBar(sel, document, 'dependabot');
+    assert.ok(!document.getElementById('prBulkApprove').disabled, 'approve enabled when selected');
     sel.clear();
-    updateBulkBar(sel, document);
-    assert.ok(document.getElementById('prBulkBar').classList.contains('hidden'));
+    updateBulkBar(sel, document, 'dependabot');
+    assert.ok(!document.getElementById('prBulkBar').classList.contains('hidden'), 'bar stays visible');
+    assert.ok(document.getElementById('prBulkApprove').disabled, 'approve disabled after clear');
 });

@@ -507,19 +507,21 @@ function clearSelection() {
 
 function updateBulkBar() {
     const bar = document.getElementById('prBulkBar');
+    bar.classList.toggle('hidden', activePrTab !== 'dependabot');
     const count = selectedPrKeys.size;
-    bar.classList.toggle('hidden', count === 0);
-    document.getElementById('prBulkCount').textContent = `${count} selected`;
+    const allCbs = [...document.querySelectorAll('#prList .pr-select-cb')];
+    const total = allCbs.length;
+    const countLabel = count === 0 ? (total > 0 ? `Select all (${total})` : 'No PRs') : `${count} of ${total} selected`;
+    document.getElementById('prBulkCount').textContent = countLabel;
     const selectAll = document.getElementById('prBulkSelectAll');
-    const total = document.querySelectorAll('#prList .pr-select-cb').length;
     selectAll.indeterminate = count > 0 && count < total;
-    selectAll.checked = count > 0 && count === total;
-    // Count how many selected are approved
-    const approvedCount = [...document.querySelectorAll('#prList .pr-select-cb')]
-        .filter((cb) => selectedPrKeys.has(cb.dataset.prKey) && cb.dataset.prApproved === '1').length;
+    selectAll.checked = total > 0 && count === total;
+    const approvedCount = allCbs.filter((cb) => selectedPrKeys.has(cb.dataset.prKey) && cb.dataset.prApproved === '1').length;
     const mergeBtn = document.getElementById('prBulkMerge');
     mergeBtn.textContent = approvedCount > 0 ? `Merge approved (${approvedCount})` : 'Merge approved';
-    mergeBtn.disabled = approvedCount === 0;
+    mergeBtn.disabled = count === 0;
+    document.getElementById('prBulkApprove').disabled = count === 0;
+    document.getElementById('prBulkClose').disabled = count === 0;
 }
 
 function collectSelectedCbs() {
@@ -1090,6 +1092,7 @@ function renderPrView(data) {
 
     // In-place reconcile: update changed cards, keep unchanged DOM nodes intact (avoids blink)
     reconcilePrList(list, orderedItems);
+    updateBulkBar();
 
     {
         const placeholders = list.querySelectorAll('.pr-avatar--placeholder[data-login]');
