@@ -9,6 +9,8 @@ let activeMergedSub = 'today';
 let mergedSearchPrs = null;
 let mergedSearchFetching = false;
 let latestPrData = null;
+let groupByRepo = false;
+let selectedPrKeys = new Set();
 const seenPrKeys = new Set();
 const approvedPrKeys = new Set();
 const avatarCache = new Map();
@@ -105,6 +107,7 @@ document.getElementById('prTabSwitcher').addEventListener('click', (e) => {
     document.querySelectorAll('.filter-chip[data-pr-filter]').forEach((c) => {
         c.classList.toggle('is-active', c.dataset.prFilter === 'all');
     });
+    clearSelection();
     if (latestPrData) { renderPrView(latestPrData); }
 });
 
@@ -468,6 +471,97 @@ document.getElementById('prList').addEventListener('click', (e) => {
     const card = e.target.closest('.pr-card[data-url]');
     if (card) { window.kubeDashboard.openExternal(card.dataset.url); }
 });
+
+// Checkbox change — update selection state
+document.getElementById('prList').addEventListener('change', (e) => {
+    const cb = e.target.closest('.pr-select-cb');
+    if (!cb) { return; }
+    if (cb.checked) { selectedPrKeys.add(cb.dataset.prKey); }
+    else { selectedPrKeys.delete(cb.dataset.prKey); }
+    updateBulkBar();
+});
+
+// Group-by-repo toggle
+document.getElementById('prGroupByRepo').addEventListener('click', () => {
+    groupByRepo = !groupByRepo;
+    document.getElementById('prGroupByRepo').classList.toggle('is-active', groupByRepo);
+    if (latestPrData) { renderPrView(latestPrData); }
+});
+
+// Bulk select-all checkbox
+document.getElementById('prBulkSelectAll').addEventListener('change', (e) => {
+    const checked = e.target.checked;
+    document.querySelectorAll('#prList .pr-select-cb').forEach((cb) => {
+        cb.checked = checked;
+        if (checked) { selectedPrKeys.add(cb.dataset.prKey); }
+        else { selectedPrKeys.delete(cb.dataset.prKey); }
+    });
+    updateBulkBar();
+});
+
+function clearSelection() {
+    selectedPrKeys.clear();
+    document.querySelectorAll('#prList .pr-select-cb').forEach((cb) => { cb.checked = false; });
+    updateBulkBar();
+}
+
+function updateBulkBar() {
+    const bar = document.getElementById('prBulkBar');
+    const count = selectedPrKeys.size;
+    bar.classList.toggle('hidden', count === 0);
+    document.getElementById('prBulkCount').textContent = `${count} selected`;
+    const selectAll = document.getElementById('prBulkSelectAll');
+    const total = document.querySelectorAll('#prList .pr-select-cb').length;
+    selectAll.indeterminate = count > 0 && count < total;
+    selectAll.checked = count > 0 && count === total;
+    // Count how many selected are approved
+    const approvedCount = [...document.querySelectorAll('#prList .pr-select-cb')]
+        .filter((cb) => selectedPrKeys.has(cb.dataset.prKey) && cb.dataset.prApproved === '1').length;
+    const mergeBtn = document.getElementById('prBulkMerge');
+    mergeBtn.textContent = approvedCount > 0 ? `Merge approved (${approvedCount})` : 'Merge approved';
+    mergeBtn.disabled = approvedCount === 0;
+}
+
+function collectSelectedCbs() {
+    return [...document.querySelectorAll('#prList .pr-select-cb')].filter((cb) => selectedPrKeys.has(cb.dataset.prKey));
+}
+
+async function runBulkAction(action) {
+    const cbs = collectSelectedCbs();
+    const btn = document.getElementById(
+        action === 'approve' ? 'prBulkApprove' : action === 'close' ? 'prBulkClose' : 'prBulkMerge'
+    );
+    btn.disabled = true;
+    const orig = btn.textContent;
+    btn.textContent = 'Running…';
+
+    const targets = action === 'merge'
+        ? cbs.filter((cb) => cb.dataset.prApproved === '1')
+        : cbs;
+
+    await Promise.allSettled(targets.map(async (cb) => {
+        const repoFullName = cb.dataset.prRepo;
+        const prNumber = Number(cb.dataset.prNumber);
+        if (action === 'approve') {
+            const res = await window.kubeDashboard.approvePr({ repoFullName, prNumber });
+            if (res.ok) { approvedPrKeys.add(cb.dataset.prKey); cb.dataset.prApproved = '1'; }
+        } else if (action === 'close') {
+            await window.kubeDashboard.closePr({ repoFullName, prNumber });
+        } else if (action === 'merge') {
+            await window.kubeDashboard.mergePr({ repoFullName, prNumber, method: 'squash' });
+        }
+    }));
+
+    btn.textContent = orig;
+    btn.disabled = false;
+    clearSelection();
+    window.kubeDashboard.clearPrCache?.();
+    refreshPullRequests(true);
+}
+
+document.getElementById('prBulkApprove').addEventListener('click', () => runBulkAction('approve'));
+document.getElementById('prBulkClose').addEventListener('click', () => runBulkAction('close'));
+document.getElementById('prBulkMerge').addEventListener('click', () => runBulkAction('merge'));
 
 function mergePrResults(results) {
     const dedup = (arr) => {
@@ -888,6 +982,10 @@ function patchPrCard(live, desired) {
     if (liveBody && desiredBody && liveBody.innerHTML !== desiredBody.innerHTML) {
         liveBody.innerHTML = desiredBody.innerHTML;
     }
+    // Sync data-pr-approved on the checkbox (approval state may have changed)
+    const liveCb = live.querySelector('.pr-select-cb');
+    const desiredCb = desired.querySelector('.pr-select-cb');
+    if (liveCb && desiredCb) { liveCb.dataset.prApproved = desiredCb.dataset.prApproved; }
 }
 
 function renderPrView(data) {
@@ -912,6 +1010,12 @@ function renderPrView(data) {
             chip.style.display = mergedOnlyFilters.includes(f) ? 'none' : '';
         }
     });
+
+    // Show group-by-repo toggle on all tabs except merged search
+    const groupToggle = document.getElementById('prGroupByRepo');
+    const showGroupToggle = !(isMergedTab && activeMergedSub === 'search');
+    groupToggle.classList.toggle('hidden', !showGroupToggle);
+    groupToggle.classList.toggle('is-active', groupByRepo);
 
     const counts = {
         'all': prs.length,
@@ -955,7 +1059,21 @@ function renderPrView(data) {
 
     // Build ordered list of HTML strings tagged with a key (repo/number) for diffing
     const orderedItems = []; // { key: string, html: string } | { heading: string }
-    if (multiTeam) {
+
+    const addPrItem = (pr) => orderedItems.push({ key: `${pr.repository}/${pr.number}`, html: renderPrCard(pr, isMergedTab, isDependabotTab) });
+
+    if (groupByRepo) {
+        const repoNames = [...new Set(filtered.map((p) => p.repository))].sort();
+        const groups = new Map(repoNames.map((r) => [r, []]));
+        filtered.forEach((pr) => { groups.get(pr.repository)?.push(pr); });
+        for (const [repo, groupPrs] of groups) {
+            if (!groupPrs.length) { continue; }
+            const sortedGroup = [...groupPrs].sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
+            const shortName = repo.split('/')[1] || repo;
+            orderedItems.push({ heading: shortName });
+            sortedGroup.forEach(addPrItem);
+        }
+    } else if (multiTeam) {
         const order = [...teamNamespaces, ...[...new Set(filtered.map((p) => p._teamNamespace).filter((ns) => ns && !teamNamespaces.includes(ns)))].sort()];
         const groups = new Map(order.map((ns) => [ns, []]));
         filtered.forEach((pr) => { const ns = pr._teamNamespace || ''; (groups.get(ns) || groups.set(ns, []).get(ns)).push(pr); });
@@ -963,11 +1081,11 @@ function renderPrView(data) {
             if (!groupPrs.length) { continue; }
             const sortedGroup = [...groupPrs].sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
             orderedItems.push({ heading: ns });
-            for (const pr of sortedGroup) { orderedItems.push({ key: `${pr.repository}/${pr.number}`, html: renderPrCard(pr, isMergedTab) }); }
+            sortedGroup.forEach(addPrItem);
         }
     } else {
         const sorted = [...filtered].sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
-        for (const pr of sorted) { orderedItems.push({ key: `${pr.repository}/${pr.number}`, html: renderPrCard(pr, isMergedTab) }); }
+        sorted.forEach(addPrItem);
     }
 
     // In-place reconcile: update changed cards, keep unchanged DOM nodes intact (avoids blink)
@@ -1047,7 +1165,7 @@ async function injectPrPipelineErrors(pr, config) {
     (finalCard.querySelector('.pr-card-body') || finalCard).appendChild(errDiv);
 }
 
-function renderPrCard(pr, isMerged = false) {
+function renderPrCard(pr, isMerged = false, showCheckbox = false) {
     const reviewLabel = isMerged ? 'Merged' : getPrReviewLabel(pr);
     const reviewClass = isMerged ? 'is-merged' : getPrReviewClass(pr);
     const checkClass = { success: 'is-success', failure: 'is-failure', pending: 'is-pending', none: 'is-none' }[pr.checkStatus] || 'is-none';
@@ -1091,10 +1209,11 @@ function renderPrCard(pr, isMerged = false) {
                     : `<div class="pr-avatar pr-avatar--placeholder" data-login="${escapeHtml(login)}"></div>`}
             <span class="pr-avatar-name" title="${escapeHtml(isBot ? 'dependabot' : login)}">${escapeHtml(isBot ? 'dependabot' : login)}</span>
         </div>`;
+    const checkboxHtml = showCheckbox ? `<label class="pr-select-col" onclick="event.stopPropagation()"><input type="checkbox" class="pr-select-cb" data-pr-key="${escapeHtml(prKey)}" data-pr-repo="${escapeHtml(pr.repository)}" data-pr-number="${pr.number}" data-pr-approved="${isApproved ? '1' : ''}"></label>` : '';
 
     return `
     <div class="pr-card deployment-card pr-card--with-avatar" data-url="${escapeHtml(pr.url)}">
-        ${avatarHtml}
+        ${checkboxHtml}${avatarHtml}
         <div class="pr-card-body">
         <div class="deployment-card-top">
             <div class="deployment-name-row">

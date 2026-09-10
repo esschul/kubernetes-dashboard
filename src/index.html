@@ -146,6 +146,15 @@
                     <button class="merged-sub-btn" data-merged-sub="yesterday">Yesterday</button>
                     <button class="merged-sub-btn" data-merged-sub="search">Search</button>
                 </div>
+                <button class="pr-group-toggle hidden" id="prGroupByRepo" title="Group by repository">Group by repo</button>
+            </div>
+            <div class="pr-bulk-bar hidden" id="prBulkBar">
+                <label class="pr-bulk-select-all" title="Select all">
+                    <input type="checkbox" id="prBulkSelectAll"> <span id="prBulkCount">0 selected</span>
+                </label>
+                <button class="pr-bulk-btn" id="prBulkApprove">Approve</button>
+                <button class="pr-bulk-btn pr-bulk-btn--muted" id="prBulkClose">Close</button>
+                <button class="pr-bulk-btn pr-bulk-btn--merge" id="prBulkMerge">Merge approved</button>
             </div>
             <div class="merged-search-panel hidden" id="mergedSearchPanel">
                 <svg class="merged-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
