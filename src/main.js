@@ -333,8 +333,9 @@ app.whenReady().then(() => {
     });
 
     ipcMain.handle('notifications:requestPermission', () => {
-        if (process.platform !== 'darwin') { return; }
-        // Sending a notification from the main process is what triggers the macOS permission dialog
+        // On macOS, sending a notification from the main process is what triggers the
+        // permission dialog. Other platforms have no such prompt, but we still show a
+        // confirmation so enabling notifications in Settings gives visible feedback.
         if (ElectronNotification.isSupported()) {
             new ElectronNotification({
                 title: 'Kubernetes Dashboard',
