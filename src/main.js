@@ -64,6 +64,10 @@ function createWindow() {
         height: 820,
         minWidth: 820,
         minHeight: 620,
+        // Without this, width/height include per-OS window chrome (e.g. Linux's
+        // in-window menubar eats ~35px), so the same numbers yield a smaller
+        // content area than on macOS. This pins them to the content area everywhere.
+        useContentSize: true,
         // Best-effort match for the app's own light/dark theme (stored in renderer
         // localStorage, not readable here) — avoids a white flash on dark-mode systems.
         backgroundColor: nativeTheme.shouldUseDarkColors ? '#111722' : '#f6f7fb',
