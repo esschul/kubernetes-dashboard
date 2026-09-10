@@ -1,14 +1,24 @@
 const { app, BrowserWindow, ipcMain, shell, Menu, dialog, clipboard, Notification: ElectronNotification } = require('electron');
 if (!app.isPackaged) { require('electron-reload')(__dirname); }
 
-// Redirect console.log to a file so changes can be verified without DevTools
+// Redirect console.log to a file so changes can be verified without DevTools.
+// Logging to disk is best-effort: an unwritable log directory must never block startup.
 const fs = require('node:fs');
-const _logFile = fs.createWriteStream(`${require('node:os').homedir()}/Library/Logs/kubernetes-dashboard.log`, { flags: 'a' });
+const path = require('node:path');
 const _origLog = console.log.bind(console);
+let _logFile = null;
+try {
+    const logDir = app.getPath('logs');
+    fs.mkdirSync(logDir, { recursive: true });
+    _logFile = fs.createWriteStream(path.join(logDir, 'kubernetes-dashboard.log'), { flags: 'a' });
+    _logFile.on('error', (err) => _origLog('[log file] write error:', err));
+} catch (err) {
+    _origLog('[log file] could not open log file:', err);
+}
 console.log = (...args) => {
     const line = args.map((a) => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
     _origLog(...args);
-    _logFile.write(`[${new Date().toISOString()}] ${line}\n`);
+    if (_logFile) { _logFile.write(`[${new Date().toISOString()}] ${line}\n`); }
 };
 
 // Packaged Electron apps launch with a minimal PATH that lacks homebrew and
@@ -28,7 +38,6 @@ const missingPaths = EXTRA_PATHS.filter((p) => !currentPath.split(':').includes(
 if (missingPaths.length > 0) {
     process.env.PATH = [...missingPaths, currentPath].join(':');
 }
-const path = require('node:path');
 const { autoUpdater } = require('electron-updater');
 
 let buildDate = null;
