@@ -152,8 +152,15 @@ button:disabled {
     cursor: pointer;
 }
 
-.pr-group-toggle {
+.pr-filter-right {
     margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.pr-group-toggle {
     padding: 5px 10px;
     border: 1px solid var(--line);
     border-radius: 999px;

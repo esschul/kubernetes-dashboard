@@ -141,12 +141,14 @@
                 <button class="filter-chip filter-chip--collapsible" data-pr-filter="checks-passing">Checks passing <span></span></button>
                 <button class="filter-chip filter-chip--collapsible" data-pr-filter="checks-failing">Checks failing <span></span></button>
                 <button class="pr-filter-expand" id="prFilterExpand" title="Show all filters">+</button>
-                <div class="merged-subfilter hidden" id="mergedSubfilter">
-                    <button class="merged-sub-btn is-active" data-merged-sub="today">Today</button>
-                    <button class="merged-sub-btn" data-merged-sub="yesterday">Yesterday</button>
-                    <button class="merged-sub-btn" data-merged-sub="search">Search</button>
+                <div class="pr-filter-right">
+                    <div class="merged-subfilter hidden" id="mergedSubfilter">
+                        <button class="merged-sub-btn is-active" data-merged-sub="today">Today</button>
+                        <button class="merged-sub-btn" data-merged-sub="yesterday">Yesterday</button>
+                        <button class="merged-sub-btn" data-merged-sub="search">Search</button>
+                    </div>
+                    <button class="pr-group-toggle hidden" id="prGroupByRepo" title="Group by repository">Group by repo</button>
                 </div>
-                <button class="pr-group-toggle hidden" id="prGroupByRepo" title="Group by repository">Group by repo</button>
             </div>
             <div class="pr-bulk-bar hidden" id="prBulkBar">
                 <label class="pr-bulk-select-all" title="Select all">
