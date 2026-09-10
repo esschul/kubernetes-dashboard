@@ -1205,6 +1205,19 @@ h3 {
     overflow-x: auto;
 }
 
+.help-code-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+    margin: 8px 0 0;
+}
+
+.help-code-label:first-of-type {
+    margin-top: 4px;
+}
+
 .help-table {
     width: 100%;
     border-collapse: collapse;

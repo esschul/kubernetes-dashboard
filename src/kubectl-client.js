@@ -17,7 +17,10 @@ async function runKubectl(args, options = {}) {
         return stdout;
     } catch (err) {
         if (err.code === 'ENOENT') {
-            throw new Error(`Could not find kubectl at "${kubectlPath}". Install kubectl in /opt/homebrew/bin or /usr/local/bin.`, { cause: err });
+            const hint = process.platform === 'darwin'
+                ? 'Install kubectl in /opt/homebrew/bin or /usr/local/bin.'
+                : 'Install kubectl (e.g. "sudo dnf install kubernetes-client" or "sudo apt install kubectl") so it is on your PATH, or set KUBECTL_PATH.';
+            throw new Error(`Could not find kubectl at "${kubectlPath}". ${hint}`, { cause: err });
         }
         throw err;
     }

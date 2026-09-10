@@ -297,21 +297,50 @@
                         <div class="help-step">
                             <div class="help-step-title"><code>kubectl</code> — Kubernetes CLI</div>
                             <div class="help-step-body">Used to fetch deployments, namespaces and pod status from your cluster.</div>
+                            <div class="help-code-label">macOS</div>
                             <pre class="help-code">brew install kubectl</pre>
+                            <div class="help-code-label">Fedora / RHEL</div>
+                            <pre class="help-code">sudo dnf install kubernetes-client</pre>
+                            <div class="help-code-label">Debian / Ubuntu</div>
+                            <pre class="help-code">sudo apt install kubectl</pre>
                             <div class="help-step-body">Verify your contexts are set up: <code>kubectl config get-contexts</code></div>
                         </div>
                         <div class="help-step">
                             <div class="help-step-title"><code>gh</code> — GitHub CLI</div>
                             <div class="help-step-body">Used to fetch pull requests and CI check status from GitHub.</div>
+                            <div class="help-code-label">macOS</div>
                             <pre class="help-code">brew install gh
+gh auth login</pre>
+                            <div class="help-code-label">Fedora / RHEL</div>
+                            <pre class="help-code">sudo dnf install gh
+gh auth login</pre>
+                            <div class="help-code-label">Debian / Ubuntu</div>
+                            <pre class="help-code">sudo apt install gh
 gh auth login</pre>
                         </div>
                         <div class="help-step">
                             <div class="help-step-title"><code>az</code> — Azure CLI</div>
                             <div class="help-step-body">Used to fetch pipeline runs and build logs from Azure DevOps. Also requires the Azure DevOps extension.</div>
+                            <div class="help-code-label">macOS</div>
                             <pre class="help-code">brew install azure-cli
 az extension add --name azure-devops
 az login</pre>
+                            <div class="help-code-label">Fedora / RHEL</div>
+                            <pre class="help-code">sudo dnf install azure-cli
+az extension add --name azure-devops
+az login</pre>
+                            <div class="help-code-label">Debian / Ubuntu</div>
+                            <pre class="help-code">curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+az extension add --name azure-devops
+az login</pre>
+                        </div>
+                        <div class="help-step">
+                            <div class="help-step-title">Running the AppImage on Linux</div>
+                            <div class="help-step-body">If the app won't launch with a "libfuse.so.2" error, install FUSE (the AppImage runtime needs it) or run with <code>--appimage-extract-and-run</code>.</div>
+                            <div class="help-code-label">Fedora / RHEL</div>
+                            <pre class="help-code">sudo dnf install fuse</pre>
+                            <div class="help-code-label">Debian / Ubuntu</div>
+                            <pre class="help-code">sudo apt install libfuse2</pre>
                         </div>
                     </div>
                 </div>
