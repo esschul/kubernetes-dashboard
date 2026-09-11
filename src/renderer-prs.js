@@ -576,6 +576,11 @@ document.getElementById('prBulkApprove').addEventListener('click', () => runBulk
 document.getElementById('prBulkClose').addEventListener('click', () => runBulkAction('close'));
 document.getElementById('prBulkMerge').addEventListener('click', () => runBulkAction('merge'));
 
+function unionByUrl(...lists) {
+    const seen = new Set();
+    return lists.filter(Boolean).flat().filter((pr) => !seen.has(pr.url) && seen.add(pr.url));
+}
+
 function mergePrResults(results) {
     const dedup = (arr) => {
         const seen = new Set();
@@ -716,13 +721,15 @@ async function refreshPullRequests(force = false) {
         const multiTeam = teams.length > 1;
         const data = mergePrResults(succeeded, multiTeam);
         notifyNewPrs(data.pullRequests);
-        // If merged partial arrived while we were fetching, use it — the background merged phase
-        // has newer data than what fetchPullRequests returns (which has empty merged for stale repos)
+        // Merged lists only grow within a day, so union the sources rather than picking one.
+        // Each is incomplete on its own: this fetch reports no merged PRs for repos whose
+        // background merged phase is still running, the background phase arrives later, and
+        // the previous list covers what neither has refetched. Preferring any single source
+        // dropped freshly merged PRs, which then lingered on the open tab.
         latestPrData = {
             ...data,
-            // Use merged partial if it arrived, else keep previous merged until background fetch completes
-            mergedPullRequests: (mergedFromPartial || latestPrData)?.mergedPullRequests ?? data.mergedPullRequests,
-            mergedYesterdayPullRequests: (mergedFromPartial || latestPrData)?.mergedYesterdayPullRequests ?? data.mergedYesterdayPullRequests,
+            mergedPullRequests: unionByUrl(mergedFromPartial?.mergedPullRequests, data.mergedPullRequests, latestPrData?.mergedPullRequests),
+            mergedYesterdayPullRequests: unionByUrl(mergedFromPartial?.mergedYesterdayPullRequests, data.mergedYesterdayPullRequests, latestPrData?.mergedYesterdayPullRequests),
             _refreshKey: refreshKey,
         };
         renderPrView(latestPrData);
