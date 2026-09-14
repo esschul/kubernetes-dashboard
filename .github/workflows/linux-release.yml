@@ -24,6 +24,12 @@ jobs:
 
       - run: npm ci
 
+      - name: Set version from release tag
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          VERSION="${TAG#v}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
       - name: Build and upload Linux AppImage
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
