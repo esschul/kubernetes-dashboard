@@ -29,9 +29,16 @@ jobs:
           TAG="${{ github.event.release.tag_name || inputs.tag }}"
           VERSION="${TAG#v}"
           npm version "$VERSION" --no-git-tag-version --allow-same-version
+          echo "RELEASE_TAG=${TAG}" >> "$GITHUB_ENV"
 
-      - name: Build and upload Linux AppImage
+      - name: Build Linux AppImage
+        run: npx electron-builder --linux --publish never
+
+      - name: Upload to GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --linux --publish always
+        run: |
+          gh release upload "$RELEASE_TAG" dist/kubernetes-dashboard-*.AppImage --clobber
+          if [ -f dist/latest-linux.yml ]; then
+            gh release upload "$RELEASE_TAG" dist/latest-linux.yml --clobber
+          fi
