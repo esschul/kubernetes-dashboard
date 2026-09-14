@@ -15,6 +15,34 @@ const seenPrKeys = new Set();
 const approvedPrKeys = new Set();
 const avatarCache = new Map();
 
+function patchPrApproved(repoFullName, prNumber) {
+    if (!latestPrData) { return; }
+    const url = `https://github.com/${repoFullName}/pull/${prNumber}`;
+    for (const list of [latestPrData.pullRequests, latestPrData.dependabotPullRequests]) {
+        const pr = (list || []).find((p) => p.url === url);
+        if (pr) { pr.reviewDecision = 'APPROVED'; }
+    }
+    renderPrView(latestPrData);
+}
+
+function patchPrMerged(repoFullName, prNumber) {
+    if (!latestPrData) { return; }
+    const url = `https://github.com/${repoFullName}/pull/${prNumber}`;
+    const mergedAt = new Date().toISOString();
+    // Remove from open lists, add to merged
+    for (const key of ['pullRequests', 'dependabotPullRequests']) {
+        if (!latestPrData[key]) { continue; }
+        const idx = latestPrData[key].findIndex((p) => p.url === url);
+        if (idx !== -1) {
+            const [pr] = latestPrData[key].splice(idx, 1);
+            pr.mergedAt = mergedAt;
+            latestPrData.mergedPullRequests = [pr, ...(latestPrData.mergedPullRequests || [])];
+        }
+    }
+    renderPrView(latestPrData);
+    updatePrNavCount(latestPrData);
+}
+
 // isDependabotPr and getLocalDateKey are defined in renderer-utils.js
 
 const BOT_AVATAR_SVG = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="pr-avatar-bot-icon"><rect x="3" y="8" width="18" height="13" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M9 8V6a3 3 0 0 1 6 0v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="9" cy="14" r="1.5" fill="currentColor"/><circle cx="15" cy="14" r="1.5" fill="currentColor"/><path d="M8 18h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M12 3v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
@@ -405,6 +433,7 @@ document.getElementById('prList').addEventListener('click', (e) => {
         window.kubeDashboard.approvePr({ repoFullName, prNumber }).then((res) => {
             if (res.ok) {
                 approvedPrKeys.add(`${repoFullName}/${prNumber}`);
+                patchPrApproved(repoFullName, prNumber);
                 row.innerHTML = `
                     <select class="pr-merge-method-select">
                         <option value="squash" selected>Squash</option>
@@ -433,7 +462,7 @@ document.getElementById('prList').addEventListener('click', (e) => {
         window.kubeDashboard.mergePr({ repoFullName, prNumber, method }).then((res) => {
             if (res.ok) {
                 row.innerHTML = '<span class="pr-action-done">Merged ✓</span>';
-                setTimeout(() => { window.kubeDashboard.clearPrCache?.(); refreshPullRequests(true); }, 2000);
+                patchPrMerged(repoFullName, prNumber);
             } else {
                 mergeBtn.disabled = false;
                 mergeBtn.textContent = 'Merge';
@@ -557,19 +586,19 @@ async function runBulkAction(action) {
         const prNumber = Number(cb.dataset.prNumber);
         if (action === 'approve') {
             const res = await window.kubeDashboard.approvePr({ repoFullName, prNumber });
-            if (res.ok) { approvedPrKeys.add(cb.dataset.prKey); cb.dataset.prApproved = '1'; }
+            if (res.ok) { approvedPrKeys.add(cb.dataset.prKey); cb.dataset.prApproved = '1'; patchPrApproved(repoFullName, prNumber); }
         } else if (action === 'close') {
             await window.kubeDashboard.closePr({ repoFullName, prNumber });
         } else if (action === 'merge') {
-            await window.kubeDashboard.mergePr({ repoFullName, prNumber, method: 'squash' });
+            const res = await window.kubeDashboard.mergePr({ repoFullName, prNumber, method: 'squash' });
+            if (res.ok) { patchPrMerged(repoFullName, prNumber); }
         }
     }));
 
     btn.textContent = orig;
     btn.disabled = false;
     clearSelection();
-    window.kubeDashboard.clearPrCache?.();
-    refreshPullRequests(true);
+    if (action === 'close') { window.kubeDashboard.clearPrCache?.(); refreshPullRequests(true); }
 }
 
 document.getElementById('prBulkApprove').addEventListener('click', () => runBulkAction('approve'));
