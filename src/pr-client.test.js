@@ -20,8 +20,8 @@ function fixture(name) {
 }
 
 // ── Functions under test (extracted from pr-client.js) ────────────────────────
-// These are inlined here so tests can run without spawning gh or requiring
-// the full module (which calls execFile at require time via top-level code).
+// Copies of pr-client.js internals that the module does not export. Anything it does
+// export is required directly further down — requiring the module spawns nothing.
 
 function getLatestCommentActivity(pr) {
     const timestamps = [
@@ -435,4 +435,161 @@ test('undefined merged arrays do not crash', () => {
     const openPrs = [{ url: 'https://github.com/acme/repo/pull/1' }];
     const result = filterOpenTab(openPrs, {});
     assert.equal(result.length, 1, 'no merged arrays in data — all open PRs pass through');
+});
+
+// ── merging the author search over the topic list ─────────────────────────────
+// The author search (`gh search prs --author=@me`) is uncached and runs on every
+// refresh, while the topic list can be served from the delta cache for up to 30
+// minutes. For the signed-in user's own PRs the author search is therefore the
+// fresher source — but a poorer one, carrying no head SHA, comments or reviews.
+console.log('\nmergeWithAuthorSearch');
+
+const { mergeWithAuthorSearch } = require('./pr-client.js');
+
+function topicPr(overrides = {}) {
+    return normalizePr({ ...fixture('gh-pr-list-open.json')[0], ...overrides }, 'acme/my-service');
+}
+
+// Defaults to a timestamp just after the topic fixture's, the normal case: the author search
+// ran after the topic list was cached. Tests that need the reverse override updatedAt.
+function authorPr(overrides = {}) {
+    return normalizeSearchPr({
+        ...fixture('gh-search-prs-open.json')[0],
+        url: 'https://github.com/acme/my-service/pull/42',
+        repository: { nameWithOwner: 'acme/my-service' },
+        updatedAt: '2026-06-25T15:00:00Z',
+        ...overrides,
+    });
+}
+
+test('fresh review decision from the author search wins over the cached one', () => {
+    const [pr] = mergeWithAuthorSearch([topicPr()], [authorPr()]);
+    assert.equal(pr.reviewDecision, 'APPROVED', 'cached REVIEW_REQUIRED should be overridden');
+});
+
+test('fresh updatedAt from the author search wins over the cached one', () => {
+    const [pr] = mergeWithAuthorSearch([topicPr()], [authorPr({ updatedAt: '2026-06-26T10:00:00Z' })]);
+    assert.equal(pr.updatedAt, '2026-06-26T10:00:00Z');
+});
+
+test('fresh title and draft state from the author search win over the cached ones', () => {
+    const [pr] = mergeWithAuthorSearch([topicPr()], [authorPr({ title: 'Renamed', isDraft: true })]);
+    assert.equal(pr.title, 'Renamed');
+    assert.equal(pr.isDraft, true);
+});
+
+test('head SHA is kept from the topic list — the author search has none', () => {
+    const [pr] = mergeWithAuthorSearch([topicPr()], [authorPr()]);
+    assert.equal(pr.headRefOid, 'abc123def456abc123def456abc123def456abcd',
+        'losing the SHA would exclude the PR from check enrichment');
+});
+
+test('comment activity is kept from the topic list — the author search has none', () => {
+    const [pr] = mergeWithAuthorSearch([topicPr()], [authorPr()]);
+    assert.equal(pr.commentActivityCount, 2);
+    assert.equal(pr.commentActivityAt, '2026-06-22T11:00:00Z');
+});
+
+test('a PR only the author search knows about is included', () => {
+    const merged = mergeWithAuthorSearch([], [authorPr()]);
+    assert.equal(merged.length, 1);
+    assert.equal(merged[0].url, 'https://github.com/acme/my-service/pull/42');
+});
+
+test('a PR only the topic list knows about is kept unchanged', () => {
+    const merged = mergeWithAuthorSearch([topicPr()], []);
+    assert.deepEqual(merged, [topicPr()]);
+});
+
+test('a PR in both sources appears exactly once', () => {
+    const merged = mergeWithAuthorSearch([topicPr()], [authorPr()]);
+    assert.equal(merged.length, 1);
+});
+
+test('topic list order is preserved, author-only PRs appended', () => {
+    const both = fixture('gh-pr-list-open.json').map((p) => normalizePr(p, 'acme/my-service'));
+    const authorOnly = authorPr({ url: 'https://github.com/acme/other/pull/7' });
+    const merged = mergeWithAuthorSearch(both, [authorOnly]);
+    assert.deepEqual(merged.map((p) => p.number), [42, 43, 7]);
+});
+
+test('a null reviewDecision from the author search clears a stale decision', () => {
+    const [pr] = mergeWithAuthorSearch([topicPr()], [authorPr({ reviewDecision: null })]);
+    assert.equal(pr.reviewDecision, null, 'author search is authoritative for review state');
+});
+
+test('mergedAt from the author search wins over the cached one', () => {
+    const topic = normalizePr({ ...fixture('gh-pr-list-merged.json')[0] }, 'acme/my-service');
+    const author = authorPr({ url: topic.url, mergedAt: '2026-06-25T16:00:00Z' });
+    const [pr] = mergeWithAuthorSearch([topic], [author]);
+    assert.equal(pr.mergedAt, '2026-06-25T16:00:00Z');
+});
+
+test('fresh head SHA from the author search wins — it is how a pushed commit is noticed', () => {
+    const [pr] = mergeWithAuthorSearch([topicPr()], [authorPr({ headRefOid: 'f00dcafe', updatedAt: '2026-06-26T10:00:00Z' })]);
+    assert.equal(pr.headRefOid, 'f00dcafe', 'a new SHA misses the check cache and triggers re-enrichment');
+});
+
+test('fresh branch name from the author search wins', () => {
+    const [pr] = mergeWithAuthorSearch([topicPr()], [authorPr({ headRefName: 'feature/renamed', updatedAt: '2026-06-26T10:00:00Z' })]);
+    assert.equal(pr.headRefName, 'feature/renamed');
+});
+
+test('an empty head SHA never clobbers a known one', () => {
+    const [pr] = mergeWithAuthorSearch([topicPr()], [authorPr({ headRefOid: '' })]);
+    assert.equal(pr.headRefOid, 'abc123def456abc123def456abc123def456abcd');
+});
+
+test('an author record older than the topic record is ignored entirely', () => {
+    // Search indexing can lag a topic fetch that has just completed.
+    const fresh = topicPr({ updatedAt: '2026-06-26T12:00:00Z', headRefOid: 'newsha', reviewDecision: 'APPROVED' });
+    const [pr] = mergeWithAuthorSearch([fresh], [authorPr({ updatedAt: '2026-06-26T11:00:00Z', headRefOid: 'oldsha', reviewDecision: 'REVIEW_REQUIRED' })]);
+    assert.equal(pr.headRefOid, 'newsha', 'a lagging search result must not roll back the SHA');
+    assert.equal(pr.reviewDecision, 'APPROVED');
+});
+
+test('an author record with the same timestamp still applies', () => {
+    const [pr] = mergeWithAuthorSearch(
+        [topicPr({ updatedAt: '2026-06-26T12:00:00Z' })],
+        [authorPr({ updatedAt: '2026-06-26T12:00:00Z', reviewDecision: 'APPROVED' })]
+    );
+    assert.equal(pr.reviewDecision, 'APPROVED');
+});
+
+// ── the authored PR search query ─────────────────────────────────────────────
+console.log('\nbuildAuthoredPrsQuery');
+
+const { buildAuthoredPrsQuery } = require('./pr-client.js');
+const authoredQuery = buildAuthoredPrsQuery('acme', '2026-09-11', '2026-09-10');
+
+test('covers open, merged-today and merged-yesterday in a single request', () => {
+    assert.match(authoredQuery, /open: search\(/);
+    assert.match(authoredQuery, /mergedToday: search\(/);
+    assert.match(authoredQuery, /mergedYesterday: search\(/);
+    assert.equal(authoredQuery.match(/^\s*query /m) && authoredQuery.match(/query /g).length, 1,
+        'three aliases in one document, replacing three REST calls');
+});
+
+test('scopes the search to the signed-in user and the configured org', () => {
+    assert.match(authoredQuery, /author:@me org:acme is:pr is:open/);
+});
+
+test('filters the merged searches by the given dates', () => {
+    assert.match(authoredQuery, /is:merged merged:2026-09-11/);
+    assert.match(authoredQuery, /is:merged merged:2026-09-10/);
+});
+
+test('requests the fields REST search could not return', () => {
+    // Requesting any of these from `gh search prs --json` failed the whole call.
+    for (const field of ['reviewDecision', 'headRefOid', 'headRefName', 'mergedAt']) {
+        assert.ok(authoredQuery.includes(field), `query should request ${field}`);
+    }
+});
+
+test('requests the repository so results can be attributed without an alias', () => {
+    assert.match(authoredQuery, /repository \{ nameWithOwner \}/);
+});
+
+test('narrows search hits to pull requests', () => {
+    assert.match(authoredQuery, /\.\.\. on PullRequest/);
 });

@@ -550,3 +550,53 @@ test('clearing selection disables action buttons but keeps bar visible on depend
     assert.ok(!document.getElementById('prBulkBar').classList.contains('hidden'), 'bar stays visible');
     assert.ok(document.getElementById('prBulkApprove').disabled, 'approve disabled after clear');
 });
+
+// ── merged list union across refresh sources ─────────────────────────────────
+// Each source is incomplete on its own: the fetch reports no merged PRs for repos whose
+// background merged phase is still running, that phase arrives later as a partial, and the
+// previous list covers what neither has refetched.
+console.log('\nunionByUrl — merged lists across sources');
+
+function unionByUrl(...lists) {
+    const seen = new Set();
+    return lists.filter(Boolean).flat().filter((pr) => !seen.has(pr.url) && seen.add(pr.url));
+}
+
+const pr = (n, extra = {}) => ({ url: `https://github.com/acme/repo/pull/${n}`, ...extra });
+
+test('a freshly merged PR from this fetch survives alongside previously known ones', () => {
+    const previous = [pr(1)];
+    const fetched = [pr(1), pr(2)];
+    const result = unionByUrl(undefined, fetched, previous);
+    assert.deepEqual(result.map((p) => p.url), [pr(1).url, pr(2).url]);
+});
+
+test('previously known merged PRs are kept when this fetch reports none', () => {
+    const result = unionByUrl(undefined, [], [pr(1), pr(2)]);
+    assert.equal(result.length, 2, 'merged count must not drop to zero mid-reload');
+});
+
+test('the background merged partial takes precedence for duplicates', () => {
+    const result = unionByUrl([pr(1, { source: 'partial' })], [pr(1, { source: 'fetch' })], [pr(1, { source: 'previous' })]);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].source, 'partial');
+});
+
+test('all three sources contribute their unique PRs', () => {
+    const result = unionByUrl([pr(1)], [pr(2)], [pr(3)]);
+    assert.deepEqual(result.map((p) => p.url), [pr(1).url, pr(2).url, pr(3).url]);
+});
+
+test('missing sources are ignored', () => {
+    const result = unionByUrl(undefined, undefined, undefined);
+    assert.deepEqual(result, []);
+});
+
+test('a PR merged during this fetch reaches the open-tab filter', () => {
+    const openPrs = [pr(1), pr(2)];
+    const data = {
+        mergedPullRequests: unionByUrl(undefined, [pr(2)], []),
+    };
+    const visible = getPrsForTab({ ...data, pullRequests: openPrs }, { activePrTab: 'open' });
+    assert.deepEqual(visible.map((p) => p.url), [pr(1).url], 'PR 2 was merged and must leave the open tab');
+});

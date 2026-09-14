@@ -233,6 +233,40 @@ function dedupeByUrl(prs) {
     return prs.filter((pr) => { if (seen.has(pr.url)) { return false; } seen.add(pr.url); return true; });
 }
 
+const AUTHOR_SEARCH_FRESH_FIELDS = ['title', 'isDraft', 'updatedAt', 'mergedAt', 'reviewDecision', 'headRefOid', 'headRefName'];
+
+function isStalerThan(candidate, current) {
+    return Boolean(candidate.updatedAt && current.updatedAt
+        && String(candidate.updatedAt) < String(current.updatedAt));
+}
+
+function withFreshFields(cached, fresh) {
+    if (isStalerThan(fresh, cached)) { return cached; }
+    const overlay = Object.fromEntries(
+        AUTHOR_SEARCH_FRESH_FIELDS
+            .filter((field) => fresh[field] !== undefined && fresh[field] !== '')
+            .map((field) => [field, fresh[field]])
+    );
+    return { ...cached, ...overlay };
+}
+
+function normalizeSearchPr(pr) {
+    const repo = pr.repository?.nameWithOwner || pr.repository?.fullName || '';
+    return normalizePr({ ...pr, headRefOid: pr.headRefOid || '' }, repo);
+}
+
+function mergeWithAuthorSearch(topicPrs, authorPrs) {
+    const byUrl = new Map();
+    for (const pr of topicPrs) {
+        if (!byUrl.has(pr.url)) { byUrl.set(pr.url, pr); }
+    }
+    for (const pr of authorPrs) {
+        const cached = byUrl.get(pr.url);
+        byUrl.set(pr.url, cached ? withFreshFields(cached, pr) : pr);
+    }
+    return [...byUrl.values()];
+}
+
 // Build a GraphQL query that fetches open or merged PRs for all repos in one request.
 function buildBatchQuery(name, repoNames, state, fields) {
     const aliases = repoNames.map((nameWithOwner, i) => {
@@ -266,6 +300,28 @@ const normalizeGql = (pr) => ({
 
 const OPEN_GQL_FIELDS = `number title url isDraft createdAt updatedAt reviewDecision headRefOid headRefName author { login }`;
 const MERGED_GQL_FIELDS = `number title url isDraft createdAt updatedAt mergedAt reviewDecision author { login }`;
+const AUTHOR_GQL_FIELDS = `${OPEN_GQL_FIELDS} mergedAt repository { nameWithOwner }`;
+
+function buildAuthoredPrsQuery(org, today, yesterday) {
+    const search = (alias, filter) =>
+        `${alias}: search(type: ISSUE, query: "author:@me org:${org} is:pr ${filter}", first: 100) {
+            nodes { ... on PullRequest { ${AUTHOR_GQL_FIELDS} } }
+        }`;
+    return `query AuthoredPrs {
+        ${search('open', 'is:open')}
+        ${search('mergedToday', `is:merged merged:${today}`)}
+        ${search('mergedYesterday', `is:merged merged:${yesterday}`)}
+    }`;
+}
+
+const NO_AUTHORED_PRS = { open: [], mergedToday: [], mergedYesterday: [] };
+
+async function fetchAuthoredPrs(org, today, yesterday) {
+    const data = await runGhGraphql(buildAuthoredPrsQuery(org, today, yesterday));
+    // `search` yields empty objects for non-PullRequest hits, so require a url.
+    const prs = (alias) => (data?.[alias]?.nodes || []).filter((pr) => pr?.url).map(normalizeSearchPr);
+    return { open: prs('open'), mergedToday: prs('mergedToday'), mergedYesterday: prs('mergedYesterday') };
+}
 
 // Fetch one state (OPEN or MERGED) across all repo chunks in parallel.
 async function fetchBatchPhase(repoNames, state, fields, { onProgress, onChunk } = {}) {
@@ -406,13 +462,11 @@ async function fetchPullRequests({ org, topic, watchedRepos = [], namespace }, o
     // Run all independent fetches in parallel:
     // - batch GraphQL (open + dependabot + merged phases)
     // - watched repos (REST)
-    // - author search (REST)
+    // - authored PR search (GraphQL, one request for all three states)
     const label = namespace || topic;
     const watchedReposFull = watchedRepos.map((r) => r.includes('/') ? r : `${org}/${r}`);
-    const AUTHOR_FIELDS = `number,title,url,author,isDraft,createdAt,updatedAt,reviewDecision,repository`;
-    const AUTHOR_MERGED_FIELDS = `number,title,url,author,isDraft,createdAt,updatedAt,mergedAt,reviewDecision,repository`;
 
-    const [batchResult, watchedSettled, authorOpen, authorMergedToday, authorMergedYesterday] = await Promise.all([
+    const [batchResult, watchedSettled, authored] = await Promise.all([
         batchFetchPrs(repositories, today, yesterday, onProgress, onPartialResults),
         Promise.allSettled(watchedReposFull.map(async (nameWithOwner) => {
             const [open, merged, mergedYesterday] = await Promise.all([
@@ -426,30 +480,25 @@ async function fetchPullRequests({ org, topic, watchedRepos = [], namespace }, o
                 mergedYesterdayPullRequests: mergedYesterday.map((pr) => normalizePr(pr, nameWithOwner)),
             };
         })),
-        runGh(['search', 'prs', '--author=@me', `--owner=${org}`, '--state=open', '--limit=100', '--json', AUTHOR_FIELDS]).catch(() => []),
-        runGh(['search', 'prs', '--author=@me', `--owner=${org}`, '--state=merged', `--merged-at=${today}`, '--limit=100', '--json', AUTHOR_MERGED_FIELDS]).catch(() => []),
-        runGh(['search', 'prs', '--author=@me', `--owner=${org}`, '--state=merged', `--merged-at=${yesterday}`, '--limit=100', '--json', AUTHOR_MERGED_FIELDS]).catch(() => []),
+        // Degrade to the topic list rather than failing the refresh, but say so — swallowing
+        // this error silently is what hid the broken REST search for months.
+        fetchAuthoredPrs(org, today, yesterday).catch((err) => {
+            console.error(`[gh] authored PR search failed — own PRs will show cached state: ${err?.message || err}`);
+            return NO_AUTHORED_PRS;
+        }),
     ]);
     const watchedLists = watchedSettled.filter((r) => r.status === 'fulfilled').map((r) => r.value);
-
-    function normalizeSearchPr(pr) {
-        const repo = pr.repository?.nameWithOwner || pr.repository?.fullName || '';
-        return normalizePr({ ...pr, headRefOid: pr.headRefOid || '' }, repo);
-    }
-
-    const authorOpenPrs = (authorOpen || []).map(normalizeSearchPr);
-    const authorMergedTodayPrs = (authorMergedToday || []).map(normalizeSearchPr);
-    const authorMergedYesterdayPrs = (authorMergedYesterday || []).map(normalizeSearchPr);
+    console.log(`[gh] authored search — ${authored.open.length} open, ${authored.mergedToday.length} merged today, ${authored.mergedYesterday.length} merged yesterday`);
 
     const { results: lists, staleRepos } = batchResult;
     const allLists = [...lists, ...watchedLists];
 
-    const all = dedupeByUrl([...allLists.flatMap((l) => l.pullRequests), ...authorOpenPrs])
+    const all = mergeWithAuthorSearch(allLists.flatMap((l) => l.pullRequests), authored.open)
         .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
-    const allMerged = dedupeByUrl([...allLists.flatMap((l) => l.mergedPullRequests), ...authorMergedTodayPrs])
+    const allMerged = mergeWithAuthorSearch(allLists.flatMap((l) => l.mergedPullRequests), authored.mergedToday)
         .filter((pr) => getLocalDateKey(pr.mergedAt) === today)
         .sort((a, b) => String(b.mergedAt).localeCompare(String(a.mergedAt)));
-    const allMergedYesterday = dedupeByUrl([...allLists.flatMap((l) => l.mergedYesterdayPullRequests || []), ...authorMergedYesterdayPrs])
+    const allMergedYesterday = mergeWithAuthorSearch(allLists.flatMap((l) => l.mergedYesterdayPullRequests || []), authored.mergedYesterday)
         .filter((pr) => getLocalDateKey(pr.mergedAt) === yesterday)
         .sort((a, b) => String(b.mergedAt).localeCompare(String(a.mergedAt)));
 
@@ -560,4 +609,4 @@ async function fetchMergedPrsForRange({ org, topic, watchedRepos = [], namespace
     return { mergedRangePullRequests: prs.slice(0, limit) };
 }
 
-module.exports = { fetchPullRequests, clearPrListCache, clearAllCaches, evictRepoDeltaCache, fetchCommitMessage, fetchMergedPrsForRange, fetchRepoList };
+module.exports = { fetchPullRequests, mergeWithAuthorSearch, buildAuthoredPrsQuery, clearPrListCache, clearAllCaches, evictRepoDeltaCache, fetchCommitMessage, fetchMergedPrsForRange, fetchRepoList };
