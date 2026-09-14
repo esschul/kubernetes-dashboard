@@ -3,6 +3,11 @@ name: Linux release
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to upload to (e.g. v1.1.57)'
+        required: true
 
 permissions:
   contents: write
