@@ -326,7 +326,7 @@ function renderGridCard(dep) {
     let prSection;
     if (isLocalBuild) {
         prSection = `<div class="grid-pr-section">
-            <span class="grid-pr-intro">Local build${localBy ? ` by <strong>${escapeHtml(localBy)}</strong>` : ''}</span>
+            <span class="local-build-badge">local build${localBy ? ` by ${escapeHtml(localBy)}` : ''}</span>
             ${localBranch ? (() => {
                 const branchUrl = prForBranch
                     ? prForBranch.url
