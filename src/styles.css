@@ -934,7 +934,7 @@ h3 {
 .grid-card-actions {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
     margin-top: 4px;
 }
 .grid-card-actions .trello-placeholder:empty { display: none; }
@@ -977,9 +977,9 @@ h3 {
 .grid-card-actions .grid-action-btn {
     background: var(--panel-muted);
     border: 1.5px solid var(--line);
-    border-radius: 7px;
-    padding: 5px 10px;
-    font-size: 0.78rem;
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 0.75rem;
     color: var(--text);
     cursor: pointer;
     text-align: center;
