@@ -1116,10 +1116,17 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
             .then((res) => {
                 if (res.ok) {
                     deployMasterBtn.textContent = 'Triggered ✓';
+                    const runUrl = res.result?._links?.web?.href || res.result?.url;
+                    if (runUrl) {
+                        showToast(`Pipeline triggered — ${imageRepoName}`);
+                        window.kubeDashboard.openExternal?.(runUrl);
+                    } else {
+                        showToast(`Pipeline triggered — ${imageRepoName}`);
+                    }
                 } else {
                     deployMasterBtn.disabled = false;
                     deployMasterBtn.textContent = 'Deploy master';
-                    alert(`Failed to trigger pipeline: ${res.error?.message || 'Unknown error'}`);
+                    showToast(`Failed: ${res.error?.message || 'Unknown error'}`, 'error');
                 }
             });
         return;
