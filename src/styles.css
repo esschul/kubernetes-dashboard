@@ -892,6 +892,7 @@ h3 {
     padding-top: 0;
     display: flex;
     flex-direction: column;
+    align-items: flex-start;
     gap: 4px;
     min-height: 44px;
 }
