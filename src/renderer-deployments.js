@@ -369,6 +369,7 @@ function renderGridCard(dep) {
                 ${podsBtn}
                 ${hasHistory ? `<button class="grid-action-btn grid-history-btn">History</button>` : ''}
             </div>
+            ${isLocalBuild && dep.imageRepoName ? `<button class="deploy-master-btn grid-deploy-master-btn" data-dep-name="${escapeHtml(dep.name)}" data-image-repo="${escapeHtml(dep.imageRepoName)}">Deploy master</button>` : ''}
             <div class="rollout-history hidden">${renderRolloutHistory(dep.rollouts || [], dep.imageRepoName)}</div>
         </div>
         ${podBack}
