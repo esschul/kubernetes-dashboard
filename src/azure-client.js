@@ -191,9 +191,17 @@ async function findPipelineId({ org, project, repoName }) {
         pipelineDefCache.set(key, map);
     }
     const map = pipelineDefCache.get(key);
-    // Pipeline names follow the pattern "bring.<repoName>" or just "<repoName>"
     const lower = repoName.toLowerCase();
-    return map.get(`bring.${lower}`) || map.get(lower) || null;
+    // Exact match first
+    if (map.has(`bring.${lower}`)) { return map.get(`bring.${lower}`); }
+    if (map.has(lower)) { return map.get(lower); }
+    // Fallback: find pipeline whose name contains the repo name as a substring.
+    // Pick the shortest match to avoid false positives (e.g. "woo-plugin" → "bring.checkout-plugin-woo").
+    let best = null, bestLen = Infinity;
+    for (const [name, id] of map) {
+        if (name.includes(lower) && name.length < bestLen) { best = id; bestLen = name.length; }
+    }
+    return best;
 }
 
 async function triggerMasterDeploy({ org, project, repoName }) {
