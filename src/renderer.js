@@ -1038,6 +1038,20 @@ function openHistoryModal(depName, depNamespace, historyEl) {
     body.innerHTML = historyEl.innerHTML;
     body.dataset.depName = depName;
     body.dataset.depNamespace = depNamespace || '';
+    // If the current revision is a local build, show Deploy from master at the top
+    const dep = (typeof latestDeployments !== 'undefined' ? latestDeployments : []).find((d) => d.name === depName);
+    const isLocalBuild = dep?.imageTag?.startsWith('local-build');
+    const existingBtn = body.querySelector('.deploy-master-btn-modal');
+    if (existingBtn) { existingBtn.remove(); }
+    if (isLocalBuild && dep.imageRepoName) {
+        const btn = document.createElement('button');
+        btn.className = 'deploy-master-btn deploy-master-btn-modal';
+        btn.dataset.depName = depName;
+        btn.dataset.imageRepo = dep.imageRepoName;
+        btn.title = 'Trigger pipeline on master to replace this local build';
+        btn.textContent = 'Deploy from master';
+        body.prepend(btn);
+    }
     modal.showModal();
     body.querySelectorAll('.rollout-row[data-sha][data-repo]').forEach(async (row) => {
         const titleEl = row.querySelector('span.rollout-pr-title');
