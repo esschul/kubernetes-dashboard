@@ -175,4 +175,35 @@ async function rerunFailedJobs({ org, project, buildId }) {
         '--body', `{"id":${buildId},"retry":true}`]);
 }
 
-module.exports = { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, extractLogErrors, rerunFailedJobs };
+// Cache pipeline definitions per org+project — maps repoName (lowercase) → pipeline id
+const pipelineDefCache = new Map();
+
+async function findPipelineId({ org, project, repoName }) {
+    const key = `${org}/${project}`;
+    if (!pipelineDefCache.has(key)) {
+        const orgUrl = org.replace(/\/$/, '');
+        const url = `${orgUrl}/${encodeURIComponent(project)}/_apis/pipelines?api-version=7.1&$top=500`;
+        const data = await runAz(['rest', '--method', 'get', '--resource', AZURE_DEVOPS_RESOURCE_ID, '--url', url]);
+        const map = new Map();
+        for (const p of (data.value || [])) {
+            map.set(p.name.toLowerCase(), p.id);
+        }
+        pipelineDefCache.set(key, map);
+    }
+    const map = pipelineDefCache.get(key);
+    // Pipeline names follow the pattern "bring.<repoName>" or just "<repoName>"
+    const lower = repoName.toLowerCase();
+    return map.get(`bring.${lower}`) || map.get(lower) || null;
+}
+
+async function triggerMasterDeploy({ org, project, repoName }) {
+    const pipelineId = await findPipelineId({ org, project, repoName });
+    if (!pipelineId) { throw new Error(`No pipeline found for repo "${repoName}" in ${project}`); }
+    const orgUrl = org.replace(/\/$/, '');
+    const url = `${orgUrl}/${encodeURIComponent(project)}/_apis/pipelines/${pipelineId}/runs?api-version=7.1`;
+    return runAz(['rest', '--method', 'post', '--resource', AZURE_DEVOPS_RESOURCE_ID,
+        '--url', url,
+        '--body', JSON.stringify({ resources: { repositories: { self: { refName: 'refs/heads/master' } } } })]);
+}
+
+module.exports = { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, extractLogErrors, rerunFailedJobs, triggerMasterDeploy };

@@ -366,6 +366,7 @@ function renderGridCard(dep) {
                 <span class="trello-placeholder"></span>
                 <button class="grid-action-btn logs-open-btn" data-dep-name="${escapeHtml(dep.name)}">${logsSvg}Logs</button>
                 <button class="grid-action-btn restart-btn" data-dep-name="${escapeHtml(dep.name)}">Restart ${restartSvg}</button>
+                ${isLocalBuild && dep.imageRepoName ? `<button class="grid-action-btn deploy-master-btn" data-dep-name="${escapeHtml(dep.name)}" data-image-repo="${escapeHtml(dep.imageRepoName)}" title="Trigger pipeline on master to replace this local build">Deploy from master</button>` : ''}
                 ${podsBtn}
                 ${hasHistory ? `<button class="grid-action-btn grid-history-btn">History</button>` : ''}
             </div>

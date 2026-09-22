@@ -55,7 +55,7 @@ let buildDate = null;
 try { buildDate = require('./build-info.json').date; } catch { /* not available in dev */ }
 const { fetchDeployments, hasDeploymentChanges, fetchDeploymentEvents, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs, cancelSearch } = require('./kubectl-client');
 const { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr, closePr } = require('./github-client');
-const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, rerunFailedJobs } = require('./azure-client');
+const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, rerunFailedJobs, triggerMasterDeploy } = require('./azure-client');
 const { fetchPullRequests, clearPrListCache, clearAllCaches, evictRepoDeltaCache, fetchCommitMessage, fetchMergedPrsForRange, fetchRepoList } = require('./pr-client');
 
 function createWindow() {
@@ -160,6 +160,15 @@ app.whenReady().then(() => {
     ipcMain.handle('pipeline:rerun', async (_event, config) => {
         try {
             const result = await rerunFailedJobs(config);
+            return { ok: true, result };
+        } catch (err) {
+            return { ok: false, error: { message: err.message } };
+        }
+    });
+
+    ipcMain.handle('pipeline:triggerMasterDeploy', async (_event, config) => {
+        try {
+            const result = await triggerMasterDeploy(config);
             return { ok: true, result };
         } catch (err) {
             return { ok: false, error: { message: err.message } };

@@ -1084,6 +1084,33 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
         return;
     }
 
+    // Handle deploy-from-master button
+    const deployMasterBtn = e.target.closest('.deploy-master-btn');
+    if (deployMasterBtn) {
+        e.stopPropagation();
+        const depName = deployMasterBtn.dataset.depName;
+        const imageRepoName = deployMasterBtn.dataset.imageRepo;
+        const config = loadConfig();
+        if (!config.azureOrg || !config.azureProject) {
+            alert('Azure DevOps org and project must be configured in Settings.');
+            return;
+        }
+        if (!confirm(`Trigger master pipeline for "${imageRepoName}"?\n\nThis will deploy the latest master build and replace the local build.`)) { return; }
+        deployMasterBtn.disabled = true;
+        deployMasterBtn.textContent = 'Triggering…';
+        window.kubeDashboard.triggerMasterDeploy({ org: config.azureOrg, project: config.azureProject, repoName: imageRepoName })
+            .then((res) => {
+                if (res.ok) {
+                    deployMasterBtn.textContent = 'Triggered ✓';
+                } else {
+                    deployMasterBtn.disabled = false;
+                    deployMasterBtn.textContent = 'Deploy from master';
+                    alert(`Failed to trigger pipeline: ${res.error?.message || 'Unknown error'}`);
+                }
+            });
+        return;
+    }
+
     // Handle restart button
     const restartBtn = e.target.closest('.restart-btn');
     if (restartBtn) {
