@@ -195,16 +195,26 @@ async function findPipelineId({ org, project, repoName }) {
     // Exact match first
     if (map.has(`bring.${lower}`)) { return map.get(`bring.${lower}`); }
     if (map.has(lower)) { return map.get(lower); }
-    // Fallback: find pipeline whose name contains the repo name as a substring.
-    // Pick the shortest match to avoid false positives (e.g. "woo-plugin" → "bring.checkout-plugin-woo").
+    // Substring match (e.g. "window-shopper" ⊂ "bring.checkout-window-shopper")
     let best = null, bestLen = Infinity;
     for (const [name, id] of map) {
         if (name.includes(lower) && name.length < bestLen) { best = id; bestLen = name.length; }
+    }
+    if (best) { return best; }
+    // Word match: all hyphen-separated words of repoName appear in pipeline name
+    // (e.g. "woo-plugin" → words ["woo","plugin"] both in "bring.checkout-plugin-woo")
+    const words = lower.split('-').filter(Boolean);
+    if (words.length > 1) {
+        for (const [name, id] of map) {
+            if (words.every((w) => name.includes(w)) && name.length < bestLen) { best = id; bestLen = name.length; }
+        }
     }
     return best;
 }
 
 async function triggerMasterDeploy({ org, project, repoName }) {
+    // Clear cache so a retry always gets a fresh pipeline list
+    pipelineDefCache.delete(`${org}/${project}`);
     const pipelineId = await findPipelineId({ org, project, repoName });
     if (!pipelineId) { throw new Error(`No pipeline found for repo "${repoName}" in ${project}`); }
     const orgUrl = org.replace(/\/$/, '');
