@@ -421,7 +421,7 @@ function renderDeploymentCard(dep) {
         <div class="pod-expand hidden">
             <div class="pod-expand-header">
                 <button class="restart-btn" data-dep-name="${escapeHtml(dep.name)}">Restart deployment</button>
-                ${isLocalBuild && dep.imageRepoName ? `<button class="deploy-master-btn" data-dep-name="${escapeHtml(dep.name)}" data-image-repo="${escapeHtml(dep.imageRepoName)}" title="Trigger pipeline on master to replace this local build">Deploy from master</button>` : ''}
+                ${isLocalBuild && dep.imageRepoName ? `<button class="deploy-master-btn" data-dep-name="${escapeHtml(dep.name)}" data-image-repo="${escapeHtml(dep.imageRepoName)}" title="Trigger pipeline on master to replace this local build">Deploy master</button>` : ''}
             </div>
             ${renderPodTable(dep)}
         </div>

@@ -1038,7 +1038,7 @@ function openHistoryModal(depName, depNamespace, historyEl) {
     body.innerHTML = historyEl.innerHTML;
     body.dataset.depName = depName;
     body.dataset.depNamespace = depNamespace || '';
-    // If the current revision is a local build, show Deploy from master at the top
+    // If the current revision is a local build, show Deploy master at the top
     const dep = (typeof latestDeployments !== 'undefined' ? latestDeployments : []).find((d) => d.name === depName);
     const isLocalBuild = dep?.imageTag?.startsWith('local-build');
     const existingBtn = body.querySelector('.deploy-master-btn-modal');
@@ -1049,7 +1049,7 @@ function openHistoryModal(depName, depNamespace, historyEl) {
         btn.dataset.depName = depName;
         btn.dataset.imageRepo = dep.imageRepoName;
         btn.title = 'Trigger pipeline on master to replace this local build';
-        btn.textContent = 'Deploy from master';
+        btn.textContent = 'Deploy master';
         body.prepend(btn);
     }
     modal.showModal();
@@ -1118,7 +1118,7 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
                     deployMasterBtn.textContent = 'Triggered ✓';
                 } else {
                     deployMasterBtn.disabled = false;
-                    deployMasterBtn.textContent = 'Deploy from master';
+                    deployMasterBtn.textContent = 'Deploy master';
                     alert(`Failed to trigger pipeline: ${res.error?.message || 'Unknown error'}`);
                 }
             });

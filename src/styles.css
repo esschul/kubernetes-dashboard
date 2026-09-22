@@ -3453,6 +3453,20 @@ input, select {
 }
 .restart-btn:not(.grid-action-btn):hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 
+.deploy-master-btn:not(.grid-action-btn) {
+    padding: 3px 10px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--panel);
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.deploy-master-btn:not(.grid-action-btn):hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.deploy-master-btn:not(.grid-action-btn):disabled { opacity: 0.5; cursor: default; }
+
 /* Logs modal */
 #logsModal {
     background: #0d1117;
