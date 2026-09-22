@@ -932,8 +932,8 @@ h3 {
 }
 
 .grid-card-actions {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    display: flex;
+    flex-direction: column;
     gap: 7px;
     margin-top: 4px;
 }
@@ -3467,21 +3467,6 @@ input, select {
 .deploy-master-btn:not(.grid-action-btn):hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 .deploy-master-btn:not(.grid-action-btn):disabled { opacity: 0.5; cursor: default; }
 
-.grid-deploy-master-btn {
-    width: 100%;
-    margin-top: 8px;
-    padding: 5px 10px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--panel);
-    color: var(--muted);
-    font-size: 0.78rem;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
-    text-align: center;
-}
-.grid-deploy-master-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 .grid-deploy-master-btn:disabled { opacity: 0.5; cursor: default; }
 
 /* Logs modal */
