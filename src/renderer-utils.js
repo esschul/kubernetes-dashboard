@@ -4,7 +4,8 @@
 const DEPENDABOT_LOGINS = new Set(['app/dependabot', 'dependabot[bot]', 'dependabot']);
 function isDependabotPr(pr) { return DEPENDABOT_LOGINS.has(pr.author?.login); }
 
-const IAC_BOT_LOGINS = new Set(['iac-tfupdate[bot]']);
+// GitHub GraphQL returns 'iac-tfupdate[bot]', REST returns 'app/iac-tfupdate'
+const IAC_BOT_LOGINS = new Set(['iac-tfupdate[bot]', 'app/iac-tfupdate', 'iac-tfupdate']);
 function isIacPr(pr) { return IAC_BOT_LOGINS.has(pr.author?.login); }
 
 function getLocalDateKey(value) {

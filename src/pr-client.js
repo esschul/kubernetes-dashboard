@@ -13,7 +13,7 @@ const execFileAsync = promisify(execFile);
 const DEPENDABOT_LOGINS = new Set(['app/dependabot', 'dependabot[bot]', 'dependabot']);
 function isDependabot(pr) { return DEPENDABOT_LOGINS.has(pr.author?.login); }
 
-const IAC_BOT_LOGINS = new Set(['iac-tfupdate[bot]']);
+const IAC_BOT_LOGINS = new Set(['iac-tfupdate[bot]', 'app/iac-tfupdate', 'iac-tfupdate']);
 function isIac(pr) { return IAC_BOT_LOGINS.has(pr.author?.login); }
 function isBotPr(pr) { return isDependabot(pr) || isIac(pr); }
 // headRefOid = head commit SHA, used to fetch check runs via REST
