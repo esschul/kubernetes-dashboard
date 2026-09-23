@@ -1,8 +1,11 @@
 'use strict';
-/* exported escapeHtml, getStatusLabel, getImageTag, formatRelativeTime, getAgePillClass, formatDuration, isFailingStatus, getPipelineBranchType, getPipelineStatusClass, getPipelineStatusLabel, parseLogLine, logLineMatchesFilter, getLocalDateKey, isDependabotPr */
+/* exported escapeHtml, getStatusLabel, getImageTag, formatRelativeTime, getAgePillClass, formatDuration, isFailingStatus, getPipelineBranchType, getPipelineStatusClass, getPipelineStatusLabel, parseLogLine, logLineMatchesFilter, getLocalDateKey, isDependabotPr, isIacPr */
 
 const DEPENDABOT_LOGINS = new Set(['app/dependabot', 'dependabot[bot]', 'dependabot']);
 function isDependabotPr(pr) { return DEPENDABOT_LOGINS.has(pr.author?.login); }
+
+const IAC_BOT_LOGINS = new Set(['iac-tfupdate[bot]']);
+function isIacPr(pr) { return IAC_BOT_LOGINS.has(pr.author?.login); }
 
 function getLocalDateKey(value) {
     const d = value ? new Date(value) : new Date();
@@ -142,6 +145,7 @@ if (typeof module !== 'undefined') {
         parseLogLine,
         logLineMatchesFilter,
         isDependabotPr,
+        isIacPr,
         getLocalDateKey,
     };
 }

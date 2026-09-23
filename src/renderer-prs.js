@@ -18,7 +18,7 @@ const avatarCache = new Map();
 function patchPrApproved(repoFullName, prNumber) {
     if (!latestPrData) { return; }
     const url = `https://github.com/${repoFullName}/pull/${prNumber}`;
-    for (const list of [latestPrData.pullRequests, latestPrData.dependabotPullRequests]) {
+    for (const list of [latestPrData.pullRequests, latestPrData.dependabotPullRequests, latestPrData.iacPullRequests]) {
         const pr = (list || []).find((p) => p.url === url);
         if (pr) { pr.reviewDecision = 'APPROVED'; }
     }
@@ -30,7 +30,7 @@ function patchPrMerged(repoFullName, prNumber) {
     const url = `https://github.com/${repoFullName}/pull/${prNumber}`;
     const mergedAt = new Date().toISOString();
     // Remove from open lists, add to merged
-    for (const key of ['pullRequests', 'dependabotPullRequests']) {
+    for (const key of ['pullRequests', 'dependabotPullRequests', 'iacPullRequests']) {
         if (!latestPrData[key]) { continue; }
         const idx = latestPrData[key].findIndex((p) => p.url === url);
         if (idx !== -1) {
@@ -339,7 +339,7 @@ function renderCommentsList(comments) {
 }
 
 async function showPrCommentsModal(prKey) {
-    const allPrs = [...(latestPrData?.pullRequests || []), ...(latestPrData?.dependabotPullRequests || [])];
+    const allPrs = [...(latestPrData?.pullRequests || []), ...(latestPrData?.dependabotPullRequests || []), ...(latestPrData?.iacPullRequests || [])];
     const pr = allPrs.find((p) => `${p.repository}/${p.number}` === prKey);
     if (!pr) { return; }
 
@@ -547,7 +547,7 @@ function clearSelection() {
 
 function updateBulkBar() {
     const bar = document.getElementById('prBulkBar');
-    bar.classList.toggle('hidden', activePrTab !== 'dependabot');
+    bar.classList.toggle('hidden', activePrTab !== 'dependabot' && activePrTab !== 'iac');
     const count = selectedPrKeys.size;
     const allCbs = [...document.querySelectorAll('#prList .pr-select-cb')];
     const total = allCbs.length;
@@ -603,12 +603,12 @@ async function runBulkAction(action) {
             if (!patch) { continue; }
             const url = `https://github.com/${patch.repoFullName}/pull/${patch.prNumber}`;
             if (patch.action === 'approved') {
-                for (const list of [latestPrData.pullRequests, latestPrData.dependabotPullRequests]) {
+                for (const list of [latestPrData.pullRequests, latestPrData.dependabotPullRequests, latestPrData.iacPullRequests]) {
                     const pr = (list || []).find((p) => p.url === url);
                     if (pr) { pr.reviewDecision = 'APPROVED'; }
                 }
             } else if (patch.action === 'merged') {
-                for (const key of ['pullRequests', 'dependabotPullRequests']) {
+                for (const key of ['pullRequests', 'dependabotPullRequests', 'iacPullRequests']) {
                     if (!latestPrData[key]) { continue; }
                     const idx = latestPrData[key].findIndex((p) => p.url === url);
                     if (idx !== -1) {
@@ -649,10 +649,13 @@ function mergePrResults(results) {
     return {
         pullRequests: dedup(results.flatMap((r) => tag(r.data.pullRequests || [], r.namespace))),
         dependabotPullRequests: dedup(results.flatMap((r) => tag(r.data.dependabotPullRequests || [], r.namespace))),
+        iacPullRequests: dedup(results.flatMap((r) => tag(r.data.iacPullRequests || [], r.namespace))),
         mergedPullRequests: dedup(results.flatMap((r) => tag(r.data.mergedPullRequests || [], r.namespace))),
         mergedYesterdayPullRequests: dedup(results.flatMap((r) => tag(r.data.mergedYesterdayPullRequests || [], r.namespace))),
         mergedDependabotPullRequests: dedup(results.flatMap((r) => tag(r.data.mergedDependabotPullRequests || [], r.namespace))),
         mergedYesterdayDependabotPullRequests: dedup(results.flatMap((r) => tag(r.data.mergedYesterdayDependabotPullRequests || [], r.namespace))),
+        mergedIacPullRequests: dedup(results.flatMap((r) => tag(r.data.mergedIacPullRequests || [], r.namespace))),
+        mergedYesterdayIacPullRequests: dedup(results.flatMap((r) => tag(r.data.mergedYesterdayIacPullRequests || [], r.namespace))),
         repositories: [...new Set(results.flatMap((r) => r.data.repositories || []))],
     };
 }
@@ -723,6 +726,7 @@ async function refreshPullRequests(force = false) {
                     ...(latestPrData?.pullRequests || []).filter((pr) => !fetchedRepos.has(pr.repository)),
                 ],
                 dependabotPullRequests: latestPrData?.dependabotPullRequests || [],
+                iacPullRequests: latestPrData?.iacPullRequests || [],
                 mergedPullRequests: latestPrData?.mergedPullRequests || [],
                 mergedYesterdayPullRequests: latestPrData?.mergedYesterdayPullRequests || [],
                 repositories: partial.repositories || [],
@@ -731,6 +735,10 @@ async function refreshPullRequests(force = false) {
             renderPrView(view);
         } else if (partial.type === 'dependabot') {
             const view = { ...latestPrData, dependabotPullRequests: partial.dependabotPullRequests || [], partial: true };
+            renderPrView(view);
+            updatePrNavCount(view);
+        } else if (partial.type === 'iac') {
+            const view = { ...latestPrData, iacPullRequests: partial.iacPullRequests || [], partial: true };
             renderPrView(view);
             updatePrNavCount(view);
         } else if (partial.type === 'merged') {
@@ -756,10 +764,11 @@ async function refreshPullRequests(force = false) {
                 const newHtml = card.dataset.prHtml?.replace(/check-pill [^"]*">[^<]*</, `check-pill ${({ success: 'is-success', failure: 'is-failure', pending: 'is-pending', none: 'is-none' }[checkStatus] || 'is-none')}">${checkStatusLabel || 'No checks'}<`);
                 if (newHtml) { card.dataset.prHtml = newHtml; }
             }
-            // Update latestPrData so future re-renders have the right status (both human and dependabot)
+            // Update latestPrData so future re-renders have the right status (human, dependabot, iac)
             if (latestPrData) {
                 const pr = (latestPrData.pullRequests || []).find((p) => p.url === url)
-                    || (latestPrData.dependabotPullRequests || []).find((p) => p.url === url);
+                    || (latestPrData.dependabotPullRequests || []).find((p) => p.url === url)
+                    || (latestPrData.iacPullRequests || []).find((p) => p.url === url);
                 if (pr) { pr.checkStatus = checkStatus; pr.checkStatusLabel = checkStatusLabel; }
             }
         }
@@ -837,11 +846,15 @@ function updatePrNavCount(data) {
     count.style.background = '';
     count.style.color = '';
 
+    const iacCount = data.iacPullRequests?.length || 0;
     const tabCounts = {
         tabCountOpen: data.pullRequests.length,
         tabCountMerged: countMergedForSub(data),
         tabCountDependabot: data.dependabotPullRequests?.length || 0,
+        tabCountIac: iacCount,
     };
+    const iacTab = document.getElementById('prTabIac');
+    if (iacTab) { iacTab.classList.toggle('hidden', iacCount === 0); }
     for (const [id, n] of Object.entries(tabCounts)) {
         const el = document.getElementById(id);
         if (el) { el.textContent = n; }
@@ -880,6 +893,7 @@ function getPrsForTab(data) {
         ...(data.mergedYesterdayDependabotPullRequests || []).map((p) => p.url),
     ]);
     if (activePrTab === 'dependabot') { return (data.dependabotPullRequests || []).filter((p) => !mergedUrls.has(p.url)); }
+    if (activePrTab === 'iac') { return (data.iacPullRequests || []).filter((p) => !mergedUrls.has(p.url)); }
     return (data.pullRequests || []).filter((p) => !mergedUrls.has(p.url));
 }
 

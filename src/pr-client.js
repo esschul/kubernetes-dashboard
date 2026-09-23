@@ -12,6 +12,10 @@ const execFileAsync = promisify(execFile);
 // REST API returns 'app/dependabot', GraphQL returns 'dependabot'
 const DEPENDABOT_LOGINS = new Set(['app/dependabot', 'dependabot[bot]', 'dependabot']);
 function isDependabot(pr) { return DEPENDABOT_LOGINS.has(pr.author?.login); }
+
+const IAC_BOT_LOGINS = new Set(['iac-tfupdate[bot]']);
+function isIac(pr) { return IAC_BOT_LOGINS.has(pr.author?.login); }
+function isBotPr(pr) { return isDependabot(pr) || isIac(pr); }
 // headRefOid = head commit SHA, used to fetch check runs via REST
 const OPEN_PR_FIELDS = 'number,title,url,author,isDraft,createdAt,updatedAt,reviewDecision,headRefOid,headRefName,comments,reviews,files';
 const MERGED_PR_FIELDS = 'number,title,url,author,isDraft,createdAt,updatedAt,mergedAt,reviewDecision';
@@ -370,7 +374,7 @@ async function batchFetchPrs(repositories, today, yesterday, onProgress, onParti
 
     // Immediately emit cached repos as a partial so the UI isn't blank
     if (onPartialResults && fromCache.length) {
-        const cachedHuman = dedupeByUrl(fromCache.flatMap((r) => r.openNodes.filter((pr) => !isDependabot(pr)).map((pr) => normalizePr(pr, r.nameWithOwner))))
+        const cachedHuman = dedupeByUrl(fromCache.flatMap((r) => r.openNodes.filter((pr) => !isBotPr(pr)).map((pr) => normalizePr(pr, r.nameWithOwner))))
             .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
         onPartialResults({ type: 'open', pullRequests: cachedHuman, repositories: fromCache.map((r) => r.nameWithOwner) });
     }
@@ -386,8 +390,8 @@ async function batchFetchPrs(repositories, today, yesterday, onProgress, onParti
         openPhase = await fetchBatchPhase(stale, 'OPEN', OPEN_GQL_FIELDS, {
             onProgress,
             onChunk: onPartialResults ? (fetched) => {
-                const freshHuman = dedupeByUrl(fetched.flatMap((r) => r.nodes.filter((pr) => !isDependabot(pr)).map((pr) => normalizePr(pr, r.nameWithOwner))));
-                const cachedHuman = fromCache.flatMap((r) => r.openNodes.filter((pr) => !isDependabot(pr)).map((pr) => normalizePr(pr, r.nameWithOwner)));
+                const freshHuman = dedupeByUrl(fetched.flatMap((r) => r.nodes.filter((pr) => !isBotPr(pr)).map((pr) => normalizePr(pr, r.nameWithOwner))));
+                const cachedHuman = fromCache.flatMap((r) => r.openNodes.filter((pr) => !isBotPr(pr)).map((pr) => normalizePr(pr, r.nameWithOwner)));
                 const all = dedupeByUrl([...freshHuman, ...cachedHuman]).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
                 const allRepos = [...fetched.map((r) => r.nameWithOwner), ...fromCache.map((r) => r.nameWithOwner)];
                 onPartialResults({ type: 'open', pullRequests: all, repositories: allRepos });
@@ -424,12 +428,17 @@ async function batchFetchPrs(repositories, today, yesterday, onProgress, onParti
             yesterday,
         });
     }
-    // Dependabot — emit from open results (merged runs in background separately)
+    // Dependabot + IaC — emit from open results (merged runs in background separately)
     if (onPartialResults) {
         const freshDep = openPhase.flatMap((r) => r.nodes.filter(isDependabot).map((pr) => normalizePr(pr, r.nameWithOwner)));
         const cachedDep = fromCache.flatMap((r) => r.openNodes.filter(isDependabot).map((pr) => normalizePr(pr, r.nameWithOwner)));
         const dependabotPrs = dedupeByUrl([...freshDep, ...cachedDep]).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
         onPartialResults({ type: 'dependabot', dependabotPullRequests: dependabotPrs });
+
+        const freshIac = openPhase.flatMap((r) => r.nodes.filter(isIac).map((pr) => normalizePr(pr, r.nameWithOwner)));
+        const cachedIac = fromCache.flatMap((r) => r.openNodes.filter(isIac).map((pr) => normalizePr(pr, r.nameWithOwner)));
+        const iacPrs = dedupeByUrl([...freshIac, ...cachedIac]).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+        onPartialResults({ type: 'iac', iacPullRequests: iacPrs });
     }
 
     // Build final result list in original repo order
@@ -532,13 +541,16 @@ async function fetchPullRequests({ org, topic, watchedRepos = [], namespace }, o
         return has ? { ...pr, hasSmoketests: true } : pr;
     });
     const result = {
-        pullRequests: all.filter((pr) => !isDependabot(pr)),
-        mergedPullRequests: allMerged.filter((pr) => !isDependabot(pr)),
-        mergedYesterdayPullRequests: allMergedYesterday.filter((pr) => !isDependabot(pr)),
+        pullRequests: all.filter((pr) => !isBotPr(pr)),
+        mergedPullRequests: allMerged.filter((pr) => !isBotPr(pr)),
+        mergedYesterdayPullRequests: allMergedYesterday.filter((pr) => !isBotPr(pr)),
         dependabotPullRequests: annotateWithSmoketests(all.filter(isDependabot)
             .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))),
         mergedDependabotPullRequests: allMerged.filter(isDependabot),
         mergedYesterdayDependabotPullRequests: allMergedYesterday.filter(isDependabot),
+        iacPullRequests: all.filter(isIac).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))),
+        mergedIacPullRequests: allMerged.filter(isIac),
+        mergedYesterdayIacPullRequests: allMergedYesterday.filter(isIac),
         repositories: [...repoNames, ...watchedReposFull],
         refreshedAt: new Date().toISOString(),
     };
