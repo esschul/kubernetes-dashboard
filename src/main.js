@@ -53,10 +53,10 @@ const { autoUpdater } = require('electron-updater');
 
 let buildDate = null;
 try { buildDate = require('./build-info.json').date; } catch { /* not available in dev */ }
-const { fetchDeployments, hasDeploymentChanges, fetchDeploymentEvents, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs, cancelSearch } = require('./kubectl-client');
+const { fetchDeployments, hasDeploymentChanges, fetchDeploymentEvents, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs, cancelSearch, deployMaster } = require('./kubectl-client');
 const { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr, closePr } = require('./github-client');
-const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, rerunFailedJobs, triggerMasterDeploy } = require('./azure-client');
-const { fetchPullRequests, clearPrListCache, clearAllCaches, evictRepoDeltaCache, fetchCommitMessage, fetchMergedPrsForRange, fetchRepoList } = require('./pr-client');
+const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, rerunFailedJobs } = require('./azure-client');
+const { fetchPullRequests, clearPrListCache, clearAllCaches, evictRepoDeltaCache, fetchCommitMessage, fetchMergedPrsForRange, fetchRepoList, getMasterSha } = require('./pr-client');
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -166,11 +166,16 @@ app.whenReady().then(() => {
         }
     });
 
-    ipcMain.handle('pipeline:triggerMasterDeploy', async (_event, config) => {
+    ipcMain.handle('deployment:deployMaster', async (_event, { context, namespace, name, imageRepoName, githubOrg, kubectlPath }) => {
         try {
-            const result = await triggerMasterDeploy(config);
-            return { ok: true, result };
+            console.log(`[deployMaster] fetching SHA for ${githubOrg}/${imageRepoName}`);
+            const sha = await getMasterSha(githubOrg, imageRepoName);
+            console.log(`[deployMaster] got SHA ${sha} — running kubectl set image for ${name} in ${namespace}`);
+            const result = await deployMaster({ context, namespace, name, imageRepoName, sha, kubectlPath });
+            console.log(`[deployMaster] done:`, result);
+            return { ok: true, result, sha };
         } catch (err) {
+            console.error(`[deployMaster] error:`, err.message);
             return { ok: false, error: { message: err.message } };
         }
     });

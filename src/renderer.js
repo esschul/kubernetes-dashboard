@@ -1048,7 +1048,7 @@ function openHistoryModal(depName, depNamespace, historyEl) {
         btn.className = 'deploy-master-btn deploy-master-btn-modal';
         btn.dataset.depName = depName;
         btn.dataset.imageRepo = dep.imageRepoName;
-        btn.title = 'Trigger pipeline on master to replace this local build';
+        btn.title = 'Deploy master SHA directly via kubectl set image';
         btn.textContent = 'Deploy master';
         body.prepend(btn);
     }
@@ -1105,24 +1105,23 @@ document.getElementById('deploymentList').addEventListener('click', (e) => {
         const depName = deployMasterBtn.dataset.depName;
         const imageRepoName = deployMasterBtn.dataset.imageRepo;
         const config = loadConfig();
-        if (!config.azureOrg || !config.azureProject) {
-            alert('Azure DevOps org and project must be configured in Settings.');
+        if (!config.githubOrg) {
+            alert('GitHub org must be configured in Settings.');
             return;
         }
-        if (!confirm(`Trigger master pipeline for "${imageRepoName}"?\n\nThis will deploy the latest master build and replace the local build.`)) { return; }
+        const dep = (typeof latestDeployments !== 'undefined' ? latestDeployments : []).find((d) => d.name === depName);
+        const namespace = dep?.namespace || config.namespace;
+        if (!confirm(`Deploy master of "${imageRepoName}" to ${namespace}?\n\nThis fetches the latest master SHA from GitHub and updates the deployment directly.`)) { return; }
         deployMasterBtn.disabled = true;
-        deployMasterBtn.textContent = 'Triggering…';
-        window.kubeDashboard.triggerMasterDeploy({ org: config.azureOrg, project: config.azureProject, repoName: imageRepoName })
+        deployMasterBtn.textContent = 'Deploying…';
+        window.kubeDashboard.deployMaster({ context: config.context, namespace, name: depName, imageRepoName, githubOrg: config.githubOrg })
             .then((res) => {
                 if (res.ok) {
-                    deployMasterBtn.textContent = 'Triggered ✓';
-                    const runUrl = res.result?._links?.web?.href || res.result?.url;
-                    if (runUrl) {
-                        showToast(`Pipeline triggered — ${imageRepoName}`);
-                        window.kubeDashboard.openExternal?.(runUrl);
-                    } else {
-                        showToast(`Pipeline triggered — ${imageRepoName}`);
-                    }
+                    deployMasterBtn.textContent = 'Deploying…';
+                    showToast(`Deploying master of ${imageRepoName} (${res.sha?.slice(0, 7)})`);
+                    // Kick off rapid polling so the rollout progress shows up immediately
+                    clearTimeout(_deploymentPollTimer);
+                    _deploymentPollTimer = setTimeout(schedulePoll, 3_000);
                 } else {
                     deployMasterBtn.disabled = false;
                     deployMasterBtn.textContent = 'Deploy master';
@@ -1279,7 +1278,10 @@ _deploymentPollTimer = setTimeout(schedulePoll, 30_000);
 function schedulePrPoll() {
     const cfg = loadConfig();
     const topic = cfg.teams?.[0]?.githubTopic || cfg.teams?.[0]?.namespace;
-    if (cfg.githubOrg && topic) { refreshPullRequests(true); }
+    if (cfg.githubOrg && topic) {
+        window.kubeDashboard.clearPrCache?.();
+        refreshPullRequests(true);
+    }
     setTimeout(schedulePrPoll, 120_000);
 }
 setTimeout(schedulePrPoll, 120_000);
@@ -1394,14 +1396,21 @@ function renderPodTab(dep, pod, podIndex) {
 
 function renderDeploymentTab(dep) {
     const latestRollout = dep.rollouts?.[0];
+    // The annotation-based imageTag may be stale after kubectl set image — use the actual image tag
+    const actualImageTag = dep.image?.includes(':') ? dep.image.split(':').pop() : null;
+    const annotationTag = latestRollout?.imageTag || null;
+    const displayTag = actualImageTag || annotationTag;
+    const displayBranch = (annotationTag && actualImageTag && annotationTag !== actualImageTag)
+        ? null  // annotation is stale, hide stale branch too
+        : latestRollout?.branch;
     const infoRows = [
         ['Namespace', dep.namespace],
         ['Image', dep.image || '—'],
         ['Replicas', `${dep.ready ?? 0} / ${dep.desired ?? 1} ready`],
         ['Status', dep.status],
-        latestRollout?.imageTag ? ['Image tag', latestRollout.imageTag.slice(0, 12)] : null,
-        latestRollout?.branch ? ['Branch', latestRollout.branch] : null,
-        latestRollout?.deployedBy ? ['Deployed by', latestRollout.deployedBy] : null,
+        displayTag ? ['Image tag', displayTag.slice(0, 12)] : null,
+        displayBranch ? ['Branch', displayBranch] : null,
+        (latestRollout?.deployedBy && displayBranch) ? ['Deployed by', latestRollout.deployedBy] : null,
         latestRollout?.releaseCommit ? ['Commit', latestRollout.releaseCommit.slice(0, 12)] : null,
         dep.gitSha && dep.gitSha !== latestRollout?.imageTag ? ['Version tag', dep.gitSha.slice(0, 12)] : null,
     ].filter(Boolean);

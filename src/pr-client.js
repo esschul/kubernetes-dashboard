@@ -609,4 +609,20 @@ async function fetchMergedPrsForRange({ org, topic, watchedRepos = [], namespace
     return { mergedRangePullRequests: prs.slice(0, limit) };
 }
 
-module.exports = { fetchPullRequests, mergeWithAuthorSearch, buildAuthoredPrsQuery, clearPrListCache, clearAllCaches, evictRepoDeltaCache, fetchCommitMessage, fetchMergedPrsForRange, fetchRepoList };
+async function getMasterSha(org, repoName) {
+    const search = await runGh(['api', `search/repositories?q=${encodeURIComponent(repoName)}+org:${org}&per_page=5`]);
+    const match = (search.items || []).find((r) =>
+        r.name === repoName || r.name.endsWith(`-${repoName}`) || r.name.startsWith(`${repoName}-`)
+    );
+    if (!match) { throw new Error(`No GitHub repo found for image "${repoName}" in org "${org}"`); }
+    for (const branch of [match.default_branch, 'master', 'main']) {
+        if (!branch) { continue; }
+        try {
+            const data = await runGh(['api', `repos/${org}/${match.name}/commits/${branch}`]);
+            return data.sha;
+        } catch { /* try next */ }
+    }
+    throw new Error(`Could not resolve master SHA for "${repoName}" (repo "${match.name}")`);
+}
+
+module.exports = { fetchPullRequests, mergeWithAuthorSearch, buildAuthoredPrsQuery, clearPrListCache, clearAllCaches, evictRepoDeltaCache, fetchCommitMessage, fetchMergedPrsForRange, fetchRepoList, getMasterSha };

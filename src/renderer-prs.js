@@ -581,19 +581,49 @@ async function runBulkAction(action) {
         ? cbs.filter((cb) => cb.dataset.prApproved === '1')
         : cbs;
 
-    await Promise.allSettled(targets.map(async (cb) => {
+    const results = await Promise.allSettled(targets.map(async (cb) => {
         const repoFullName = cb.dataset.prRepo;
         const prNumber = Number(cb.dataset.prNumber);
         if (action === 'approve') {
             const res = await window.kubeDashboard.approvePr({ repoFullName, prNumber });
-            if (res.ok) { approvedPrKeys.add(cb.dataset.prKey); cb.dataset.prApproved = '1'; patchPrApproved(repoFullName, prNumber); }
+            if (res.ok) { approvedPrKeys.add(cb.dataset.prKey); cb.dataset.prApproved = '1'; }
+            return res.ok ? { action: 'approved', repoFullName, prNumber } : null;
         } else if (action === 'close') {
             await window.kubeDashboard.closePr({ repoFullName, prNumber });
         } else if (action === 'merge') {
             const res = await window.kubeDashboard.mergePr({ repoFullName, prNumber, method: 'squash' });
-            if (res.ok) { patchPrMerged(repoFullName, prNumber); }
+            return res.ok ? { action: 'merged', repoFullName, prNumber } : null;
         }
     }));
+    // Apply all patches to latestPrData first, then render once
+    if (latestPrData) {
+        const mergedAt = new Date().toISOString();
+        for (const r of results) {
+            const patch = r.value;
+            if (!patch) { continue; }
+            const url = `https://github.com/${patch.repoFullName}/pull/${patch.prNumber}`;
+            if (patch.action === 'approved') {
+                for (const list of [latestPrData.pullRequests, latestPrData.dependabotPullRequests]) {
+                    const pr = (list || []).find((p) => p.url === url);
+                    if (pr) { pr.reviewDecision = 'APPROVED'; }
+                }
+            } else if (patch.action === 'merged') {
+                for (const key of ['pullRequests', 'dependabotPullRequests']) {
+                    if (!latestPrData[key]) { continue; }
+                    const idx = latestPrData[key].findIndex((p) => p.url === url);
+                    if (idx !== -1) {
+                        const [pr] = latestPrData[key].splice(idx, 1);
+                        pr.mergedAt = mergedAt;
+                        latestPrData.mergedPullRequests = [pr, ...(latestPrData.mergedPullRequests || [])];
+                    }
+                }
+            }
+        }
+        if (results.some((r) => r.value)) {
+            renderPrView(latestPrData);
+            updatePrNavCount(latestPrData);
+        }
+    }
 
     btn.textContent = orig;
     btn.disabled = false;
@@ -787,12 +817,18 @@ async function refreshPullRequests(force = false) {
 
 function countMergedForSub(data) {
     const today = getLocalDateKey();
+    const seen = new Set();
     return [
         ...(data.mergedPullRequests || []),
         ...(data.mergedDependabotPullRequests || []),
         ...(data.mergedYesterdayPullRequests || []),
         ...(data.mergedYesterdayDependabotPullRequests || []),
-    ].filter((pr) => pr.mergedAt && getLocalDateKey(pr.mergedAt) === today).length;
+    ].filter((pr) => {
+        if (!pr.mergedAt || getLocalDateKey(pr.mergedAt) !== today) { return false; }
+        if (seen.has(pr.url)) { return false; }
+        seen.add(pr.url);
+        return true;
+    }).length;
 }
 
 function updatePrNavCount(data) {
@@ -1047,7 +1083,14 @@ function renderPrView(data) {
 
     const openCount = data.pullRequests?.length ?? 0;
     const statusEl = document.getElementById('prStatusPanel');
-    if (statusEl) { statusEl.textContent = `${openCount} open PR${openCount !== 1 ? 's' : ''}`; }
+    if (statusEl) {
+        if (isMergedTab) {
+            const mergedCount = prs.length;
+            statusEl.textContent = `${mergedCount} merged PR${mergedCount !== 1 ? 's' : ''}`;
+        } else {
+            statusEl.textContent = `${openCount} open PR${openCount !== 1 ? 's' : ''}`;
+        }
+    }
 
     const filterBar = document.getElementById('prFilterBar');
     filterBar.style.display = '';

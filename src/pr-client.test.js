@@ -593,3 +593,74 @@ test('requests the repository so results can be attributed without an alias', ()
 test('narrows search hits to pull requests', () => {
     assert.match(authoredQuery, /\.\.\. on PullRequest/);
 });
+
+// ── prListCache behaviour (inlined cache logic matching pr-client.js) ─────────
+
+function makePrListCache() {
+    const PR_LIST_TTL_MS = 5 * 60 * 1000;
+    const cache = new Map();
+
+    function clear() { cache.clear(); }
+
+    async function fetchPrList(nameWithOwner, cacheKey, fetchFn) {
+        const key = `${nameWithOwner}/${cacheKey}`;
+        const cached = cache.get(key);
+        if (cached && (Date.now() - cached.fetchedAt) < PR_LIST_TTL_MS) {
+            return cached.prs;
+        }
+        const prs = await fetchFn();
+        cache.set(key, { prs, fetchedAt: Date.now() });
+        return prs;
+    }
+
+    return { fetchPrList, clear };
+}
+
+async function asyncTest(name, fn) {
+    try {
+        await fn();
+        console.log(`  ✓ ${name}`);
+    } catch (err) {
+        console.error(`  ✗ ${name}`);
+        console.error(`    ${err.message}`);
+        process.exitCode = 1;
+    }
+}
+
+asyncTest('fetchPrList returns cached result within TTL without calling fetch', async () => {
+    const { fetchPrList } = makePrListCache();
+    let calls = 0;
+    const fetch = () => { calls++; return Promise.resolve([{ url: 'pr-1' }]); };
+
+    await fetchPrList('org/repo', 'open', fetch);
+    await fetchPrList('org/repo', 'open', fetch);
+
+    assert.equal(calls, 1, 'fetch must be called only once within TTL');
+});
+
+asyncTest('clearPrListCache forces a new fetch on next call', async () => {
+    const { fetchPrList, clear } = makePrListCache();
+    let calls = 0;
+    const fetch = () => { calls++; return Promise.resolve([]); };
+
+    await fetchPrList('org/repo', 'open', fetch);
+    clear();
+    await fetchPrList('org/repo', 'open', fetch);
+
+    assert.equal(calls, 2, 'fetch must be called again after clearPrListCache');
+});
+
+asyncTest('poll without clearing cache serves stale data within TTL', async () => {
+    // This test documents the bug that was fixed: poll must clear cache first
+    const { fetchPrList } = makePrListCache();
+    let calls = 0;
+    const fetch = () => { calls++; return Promise.resolve([]); };
+
+    await fetchPrList('org/repo', 'open', fetch);
+    // Simulate three poll ticks without clearing — all should hit cache
+    await fetchPrList('org/repo', 'open', fetch);
+    await fetchPrList('org/repo', 'open', fetch);
+    await fetchPrList('org/repo', 'open', fetch);
+
+    assert.equal(calls, 1, 'without clearPrListCache all poll ticks hit cache and miss new PRs');
+});

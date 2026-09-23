@@ -600,3 +600,145 @@ test('a PR merged during this fetch reaches the open-tab filter', () => {
     const visible = getPrsForTab({ ...data, pullRequests: openPrs }, { activePrTab: 'open' });
     assert.deepEqual(visible.map((p) => p.url), [pr(1).url], 'PR 2 was merged and must leave the open tab');
 });
+
+// ── Bulk patch helpers (inlined from renderer-prs.js) ────────────────────────
+
+function applyBulkPatches(latestPrData, patches) {
+    const mergedAt = new Date().toISOString();
+    for (const patch of patches) {
+        if (!patch) { continue; }
+        const url = `https://github.com/${patch.repoFullName}/pull/${patch.prNumber}`;
+        if (patch.action === 'approved') {
+            for (const list of [latestPrData.pullRequests, latestPrData.dependabotPullRequests]) {
+                const p = (list || []).find((p) => p.url === url);
+                if (p) { p.reviewDecision = 'APPROVED'; }
+            }
+        } else if (patch.action === 'merged') {
+            for (const key of ['pullRequests', 'dependabotPullRequests']) {
+                if (!latestPrData[key]) { continue; }
+                const idx = latestPrData[key].findIndex((p) => p.url === url);
+                if (idx !== -1) {
+                    const [p] = latestPrData[key].splice(idx, 1);
+                    p.mergedAt = mergedAt;
+                    latestPrData.mergedPullRequests = [p, ...(latestPrData.mergedPullRequests || [])];
+                }
+            }
+        }
+    }
+}
+
+const mkPr = (repo, n, extra = {}) => ({ url: `https://github.com/${repo}/pull/${n}`, repository: repo, ...extra });
+
+test('bulk merge removes all selected PRs from open list', () => {
+    const data = {
+        pullRequests: [mkPr('org/a', 1), mkPr('org/b', 2), mkPr('org/c', 3)],
+        dependabotPullRequests: [],
+        mergedPullRequests: [],
+    };
+    const patches = [
+        { action: 'merged', repoFullName: 'org/a', prNumber: 1 },
+        { action: 'merged', repoFullName: 'org/b', prNumber: 2 },
+    ];
+    applyBulkPatches(data, patches);
+    assert.equal(data.pullRequests.length, 1, 'only pr 3 should remain open');
+    assert.equal(data.pullRequests[0].url, 'https://github.com/org/c/pull/3');
+    assert.equal(data.mergedPullRequests.length, 2, 'both merged PRs added to merged list');
+});
+
+test('bulk approve sets APPROVED on all selected PRs', () => {
+    const data = {
+        pullRequests: [mkPr('org/a', 1), mkPr('org/b', 2), mkPr('org/c', 3)],
+        dependabotPullRequests: [],
+        mergedPullRequests: [],
+    };
+    const patches = [
+        { action: 'approved', repoFullName: 'org/a', prNumber: 1 },
+        { action: 'approved', repoFullName: 'org/c', prNumber: 3 },
+    ];
+    applyBulkPatches(data, patches);
+    assert.equal(data.pullRequests[0].reviewDecision, 'APPROVED');
+    assert.equal(data.pullRequests[1].reviewDecision, undefined, 'pr 2 must remain unchanged');
+    assert.equal(data.pullRequests[2].reviewDecision, 'APPROVED');
+});
+
+test('bulk merge on three PRs removes all three', () => {
+    const data = {
+        pullRequests: [mkPr('org/a', 1), mkPr('org/b', 2), mkPr('org/c', 3)],
+        dependabotPullRequests: [],
+        mergedPullRequests: [],
+    };
+    const patches = [
+        { action: 'merged', repoFullName: 'org/a', prNumber: 1 },
+        { action: 'merged', repoFullName: 'org/b', prNumber: 2 },
+        { action: 'merged', repoFullName: 'org/c', prNumber: 3 },
+    ];
+    applyBulkPatches(data, patches);
+    assert.equal(data.pullRequests.length, 0, 'all PRs should be removed');
+    assert.equal(data.mergedPullRequests.length, 3);
+});
+
+test('null patches (failed requests) are skipped', () => {
+    const data = {
+        pullRequests: [mkPr('org/a', 1), mkPr('org/b', 2)],
+        dependabotPullRequests: [],
+        mergedPullRequests: [],
+    };
+    applyBulkPatches(data, [null, { action: 'merged', repoFullName: 'org/b', prNumber: 2 }]);
+    assert.equal(data.pullRequests.length, 1);
+    assert.equal(data.pullRequests[0].url, 'https://github.com/org/a/pull/1');
+});
+
+// ── countMergedForSub deduplication ─────────────────────────────────────────
+
+function countMergedForSub(data) {
+    const today = getLocalDateKey();
+    const seen = new Set();
+    return [
+        ...(data.mergedPullRequests || []),
+        ...(data.mergedDependabotPullRequests || []),
+        ...(data.mergedYesterdayPullRequests || []),
+        ...(data.mergedYesterdayDependabotPullRequests || []),
+    ].filter((p) => {
+        if (!p.mergedAt || getLocalDateKey(p.mergedAt) !== today) { return false; }
+        if (seen.has(p.url)) { return false; }
+        seen.add(p.url);
+        return true;
+    }).length;
+}
+
+const todayIso = new Date().toISOString();
+const yesterdayIso = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString(); })();
+const mergedPr = (n, mergedAt = todayIso) => ({ url: `https://github.com/org/repo/pull/${n}`, mergedAt });
+
+test('badge count matches visible list when a PR appears in multiple merged lists', () => {
+    const dupPr = mergedPr(1);
+    const data = {
+        mergedPullRequests: [dupPr, mergedPr(2)],
+        mergedDependabotPullRequests: [dupPr],  // same PR duplicated
+        mergedYesterdayPullRequests: [],
+        mergedYesterdayDependabotPullRequests: [],
+    };
+    assert.equal(countMergedForSub(data), 2, 'duplicate PR must be counted only once');
+});
+
+test('badge excludes PRs merged yesterday', () => {
+    const data = {
+        mergedPullRequests: [mergedPr(1), mergedPr(2, yesterdayIso)],
+        mergedDependabotPullRequests: [],
+        mergedYesterdayPullRequests: [mergedPr(2, yesterdayIso)],
+        mergedYesterdayDependabotPullRequests: [],
+    };
+    assert.equal(countMergedForSub(data), 1, 'only today PRs count toward badge');
+});
+
+test('badge count equals visible list count when there are no duplicates', () => {
+    const data = {
+        mergedPullRequests: [mergedPr(1), mergedPr(2), mergedPr(3)],
+        mergedDependabotPullRequests: [mergedPr(4), mergedPr(5)],
+        mergedYesterdayPullRequests: [],
+        mergedYesterdayDependabotPullRequests: [],
+    };
+    const badge = countMergedForSub(data);
+    const visible = getPrsForTab(data, { activePrTab: 'merged', activeMergedSub: 'today' }).length;
+    assert.equal(badge, visible, 'badge and visible list must agree');
+});

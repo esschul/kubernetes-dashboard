@@ -578,4 +578,28 @@ async function fetchDeploymentEvents({ context, namespace, kubectlPath, deployme
     }).sort((a, b) => new Date(b.lastTimestamp) - new Date(a.lastTimestamp));
 }
 
-module.exports = { fetchDeployments, hasDeploymentChanges, fetchDeploymentEvents, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs, cancelSearch, getLogLineTimestamp };
+async function deployMaster({ context, namespace, name, imageRepoName, sha, kubectlPath }) {
+    const kPath = kubectlPath || resolveCommand('kubectl', 'KUBECTL_PATH');
+    const ctxArgs = context ? ['--context', context] : [];
+    const registry = 'postenbring.azurecr.io';
+    const image = `${registry}/${imageRepoName}:${sha}`;
+    const env = { ...process.env, HOME: process.env.HOME || require('node:os').homedir() };
+    const opts = { timeout: 30_000, env };
+    // Annotate deployment BEFORE set image so k8s copies change-cause onto the new replica set
+    const changeCause = `ImageTag: ${sha}, Branch: master, Deployed: ${new Date().toISOString()}`;
+    await execFileAsync(
+        kPath,
+        [...ctxArgs, '--namespace', namespace, 'annotate', '--overwrite',
+            `deployment/${name}`,
+            `kubernetes.io/change-cause=${changeCause}`],
+        opts
+    ).catch(() => {});
+    const { stdout, stderr } = await execFileAsync(
+        kPath,
+        [...ctxArgs, '--namespace', namespace, 'set', 'image', `deployment/${name}`, `${name}=${image}`],
+        opts
+    ).catch((err) => { throw new Error(err.stderr || err.message); });
+    return { stdout, stderr, image };
+}
+
+module.exports = { fetchDeployments, hasDeploymentChanges, fetchDeploymentEvents, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs, cancelSearch, getLogLineTimestamp, deployMaster };

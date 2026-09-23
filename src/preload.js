@@ -89,8 +89,8 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
         if (!response.ok) { throw response.error; }
         return response.result;
     },
-    triggerMasterDeploy: async (config) => {
-        const response = await ipcRenderer.invoke('pipeline:triggerMasterDeploy', config);
+    deployMaster: async (config) => {
+        const response = await ipcRenderer.invoke('deployment:deployMaster', config);
         return response;
     },
     restartDeployment: async (config) => {
