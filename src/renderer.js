@@ -104,7 +104,7 @@ sidebarToggle.addEventListener('click', () => {
 
 // Compact mode when window is short
 new ResizeObserver(([entry]) => {
-    appShell.classList.toggle('is-compact', entry.contentRect.height < 520);
+    appShell.classList.toggle('is-compact', entry.contentRect.height < 680);
 }).observe(appShell);
 
 // --- Navigation ---
