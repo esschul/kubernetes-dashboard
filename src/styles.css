@@ -1075,7 +1075,9 @@ h3 {
     align-self: flex-start;
     min-width: 0;
     max-width: 100%;
+    width: 100%;
 }
+.merged-search-text { flex: 1; }
 .merged-search-panel.hidden { display: none; }
 .merged-search-icon {
     width: 15px;
@@ -1086,6 +1088,7 @@ h3 {
 }
 .merged-search-text {
     width: 180px;
+    min-width: 60px;
     padding: 7px 6px;
     border: none;
     background: transparent;
