@@ -1356,6 +1356,7 @@ h3 {
     padding: 18px 22px;
     cursor: pointer;
     transition: background 0.1s;
+    min-width: 0;
 }
 
 .deployment-card:hover {
@@ -2305,6 +2306,8 @@ input, select {
 }
 
 /* Compact mode — triggered when window height < 900px */
+/* Content area — tighter side padding */
+.is-compact .content { padding: 14px 18px 18px; }
 /* Header chrome — all views */
 .is-compact .topbar { margin-bottom: 4px; }
 .is-compact .topbar .status-panel { font-size: 0.75rem; margin-bottom: 2px; }
@@ -2355,9 +2358,17 @@ input, select {
 .is-compact .deployment-list { gap: 6px; }
 .is-compact .deployment-card:not(.deployment-card--grid) { padding: 10px 16px; }
 .is-compact .deployment-card:not(.deployment-card--grid) .deployment-name-row { gap: 6px; }
-.is-compact .deployment-card:not(.deployment-card--grid) h3 { font-size: 0.88rem; margin-bottom: 4px; }
+.is-compact .deployment-card:not(.deployment-card--grid) h3 { font-size: 0.84rem; }
 .is-compact .deployment-card:not(.deployment-card--grid) .grid-pr-meta,
-.is-compact .deployment-card:not(.deployment-card--grid) .grid-pr-title { font-size: 0.78rem; }
+.is-compact .deployment-card:not(.deployment-card--grid) .grid-pr-title { font-size: 0.75rem; }
+.is-compact .deployment-card:not(.deployment-card--grid) .deployment-card-top { flex-wrap: wrap; gap: 4px 8px; }
+.is-compact .deployment-card:not(.deployment-card--grid) .deployment-pill-row { gap: 4px; flex-shrink: 1; }
+.is-compact .deployment-card:not(.deployment-card--grid) .logs-open-btn,
+.is-compact .deployment-card:not(.deployment-card--grid) .datadog-link,
+.is-compact .deployment-card:not(.deployment-card--grid) .rollout-history-btn { font-size: 0.7rem; padding: 2px 6px; }
+.is-compact .deployment-card:not(.deployment-card--grid) .expand-chevron { display: none; }
+.is-compact .deployment-card:not(.deployment-card--grid) .pr-meta { flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; min-width: 0; white-space: normal; }
+.is-compact .deployment-card:not(.deployment-card--grid) .pr-row-link { overflow: hidden; }
 /* Deployment grid view */
 .is-compact .deployment-card--grid { padding: 14px 16px; gap: 8px; }
 .is-compact .grid-card-name { font-size: 0.9rem; }
