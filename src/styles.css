@@ -1149,6 +1149,20 @@ h3 {
 .merged-search-go:hover { opacity: 0.85; }
 .merged-search-panel input[type="date"].is-invalid { color: #ef4444; }
 
+.pr-filter-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+.pr-filter-bar-row .filter-bar {
+    margin-bottom: 0;
+    flex: 1;
+}
+.pr-filter-bar-row .pr-filter-right {
+    flex-shrink: 0;
+}
+
 .filter-bar {
     display: flex;
     flex-wrap: wrap;
