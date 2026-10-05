@@ -2341,6 +2341,22 @@ input, select {
     padding-right: 6px;
 }
 
+/* Compact mode — triggered when window height < 520px */
+.is-compact .pr-list { gap: 4px; }
+.is-compact .pr-card.deployment-card { padding: 8px 14px; }
+.is-compact .pr-card--with-avatar { gap: 8px; }
+.is-compact .pr-avatar-col { width: 28px; }
+.is-compact .pr-avatar { width: 26px; height: 26px; }
+.is-compact .pr-avatar-name { display: none; }
+.is-compact .deployment-card-top { gap: 12px; }
+.is-compact .deployment-name-row { gap: 6px; }
+.is-compact .deployment-name-row h3 { font-size: 0.82rem; }
+.is-compact .eyebrow-inline { font-size: 0.66rem; }
+.is-compact .pr-meta-row { padding: 2px 0 0; gap: 5px; font-size: 0.73rem; }
+.is-compact .pr-meta { font-size: 0.73rem; }
+.is-compact .status-pill, .is-compact .check-pill, .is-compact .age-pill, .is-compact .branch-pill { font-size: 0.68rem; padding: 1px 6px; }
+.is-compact .pr-actions-row { padding: 4px 0 0; margin-top: 3px; }
+
 .pr-card {
     cursor: pointer;
 }

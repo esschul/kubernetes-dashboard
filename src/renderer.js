@@ -102,6 +102,11 @@ sidebarToggle.addEventListener('click', () => {
     localStorage.setItem(STORAGE_KEYS.sidebarCollapsed, JSON.stringify(collapsed));
 });
 
+// Compact mode when window is short
+new ResizeObserver(([entry]) => {
+    appShell.classList.toggle('is-compact', entry.contentRect.height < 520);
+}).observe(appShell);
+
 // --- Navigation ---
 document.querySelectorAll('.nav-item[data-view]').forEach((btn) => {
     btn.addEventListener('click', () => {
