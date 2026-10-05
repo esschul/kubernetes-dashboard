@@ -1073,6 +1073,8 @@ h3 {
     overflow: hidden;
     padding: 0;
     align-self: flex-start;
+    min-width: 0;
+    max-width: 100%;
 }
 .merged-search-panel.hidden { display: none; }
 .merged-search-icon {
@@ -2370,6 +2372,14 @@ input, select {
 .is-compact .pipeline-card .deployment-pill-row { gap: 4px; }
 .is-compact .pipeline-meta-row { margin-top: 4px; padding-top: 4px; gap: 6px; font-size: 0.78rem; }
 .is-compact .pipeline-meta-text { font-size: 0.75rem; }
+/* PR merged search panel */
+.is-compact .merged-search-panel { height: 30px; font-size: 0.8rem; }
+.is-compact .merged-search-panel .merged-search-text { width: 120px; font-size: 0.8rem; padding: 4px 6px; }
+.is-compact .merged-search-panel input[type="date"] { width: 100px; font-size: 0.78rem; padding: 4px 4px; }
+.is-compact .merged-search-panel select { font-size: 0.78rem; padding: 4px 4px; }
+.is-compact .merged-search-panel .merged-search-author { width: 90px; }
+.is-compact .merged-search-panel .merged-search-limit { width: 36px; font-size: 0.78rem; }
+.is-compact .merged-search-panel .merged-search-go { width: 30px; height: 30px; }
 /* Deployment list view */
 .is-compact .deployment-list { gap: 6px; }
 .is-compact .deployment-card:not(.deployment-card--grid) { padding: 10px 16px; }
