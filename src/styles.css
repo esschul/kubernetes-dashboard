@@ -2344,6 +2344,13 @@ input, select {
 .is-compact .pr-meta { font-size: 0.73rem; }
 .is-compact .status-pill, .is-compact .check-pill, .is-compact .age-pill, .is-compact .branch-pill { font-size: 0.68rem; padding: 1px 6px; }
 .is-compact .pr-actions-row { padding: 4px 0 0; margin-top: 3px; }
+/* Pipeline cards */
+.is-compact .pipeline-list { gap: 6px; }
+.is-compact .pipeline-card { padding: 10px 16px; }
+.is-compact .pipeline-card h3 { font-size: 0.84rem; }
+.is-compact .pipeline-card .deployment-pill-row { gap: 4px; }
+.is-compact .pipeline-meta-row { margin-top: 4px; padding-top: 4px; gap: 6px; font-size: 0.78rem; }
+.is-compact .pipeline-meta-text { font-size: 0.75rem; }
 /* Deployment list view */
 .is-compact .deployment-list { gap: 6px; }
 .is-compact .deployment-card:not(.deployment-card--grid) { padding: 10px 16px; }
