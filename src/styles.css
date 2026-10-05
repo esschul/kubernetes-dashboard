@@ -2343,10 +2343,13 @@ input, select {
 
 /* Compact mode — triggered when window height < 680px */
 /* Header chrome */
-.is-compact #pull-requestsView .topbar { margin-bottom: 6px; gap: 8px; }
-.is-compact #pull-requestsView h2 { font-size: 1.1rem; margin-bottom: 0; }
+.is-compact #pull-requestsView .topbar { margin-bottom: 4px; gap: 8px; flex-wrap: nowrap; align-items: center; }
+.is-compact #pull-requestsView h2 { display: none; }
 .is-compact #pull-requestsView .status-panel { display: none; }
-.is-compact #pull-requestsView .filter-bar { margin-bottom: 6px; gap: 4px; }
+.is-compact #pull-requestsView .topbar > div:first-child { display: none; }
+.is-compact #pull-requestsView .pr-topbar-right { flex-direction: row; align-items: center; gap: 6px; flex: 1; justify-content: space-between; }
+.is-compact #pull-requestsView .env-switcher { flex-direction: row; flex-wrap: nowrap; }
+.is-compact #pull-requestsView .filter-bar { margin-bottom: 4px; gap: 4px; }
 .is-compact .filter-chip { padding: 4px 8px; font-size: 0.74rem; gap: 4px; }
 .is-compact .env-btn { padding: 4px 8px; font-size: 0.74rem; }
 .is-compact .pr-topbar-right { gap: 4px; }
