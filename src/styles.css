@@ -2324,6 +2324,8 @@ input, select {
 .is-compact .settings-form { gap: 10px; margin-top: 10px; }
 .is-compact .settings-panel { gap: 10px; padding: 14px; }
 .is-compact .settings-grid { gap: 10px; grid-template-columns: 1fr; }
+.is-compact .settings-panel--left,
+.is-compact .settings-panel--right { grid-column: 1; }
 .is-compact .settings-section-heading { padding-top: 4px; }
 .is-compact .settings-form select,
 .is-compact .settings-form input[type="text"],
