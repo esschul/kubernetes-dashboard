@@ -2291,43 +2291,6 @@ input, select {
     display: none;
 }
 
-@media (max-width: 760px) {
-    .app-shell.is-sidebar-collapsed,
-    .app-shell {
-        grid-template-columns: 1fr;
-        height: auto;
-    }
-
-    .sidebar {
-        position: static;
-        height: auto;
-        border-right: 0;
-        border-bottom: 1px solid var(--line);
-    }
-
-    .content {
-        padding: 22px;
-    }
-
-    body {
-        height: auto;
-        overflow: auto;
-    }
-
-    .view:not(.hidden), .deployment-list {
-        max-height: none;
-        overflow: visible;
-    }
-
-    .deployment-card-top {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .deployment-pill-row {
-        flex-wrap: wrap;
-    }
-}
 
 /* ── Pull Request view ───────────────────────────────────────────── */
 
@@ -2341,15 +2304,28 @@ input, select {
     padding-right: 6px;
 }
 
-/* Compact mode — triggered when window height < 680px */
-/* Header chrome */
-.is-compact #pull-requestsView .topbar { margin-bottom: 4px; gap: 8px; flex-wrap: nowrap; align-items: center; }
-.is-compact #pull-requestsView h2 { display: none; }
-.is-compact #pull-requestsView .status-panel { display: none; }
-.is-compact #pull-requestsView .topbar > div:first-child { display: none; }
-.is-compact #pull-requestsView .pr-topbar-right { flex-direction: row; align-items: center; gap: 6px; flex: 1; justify-content: space-between; }
+/* Compact mode — triggered when window height < 900px */
+/* Header chrome — all views */
+.is-compact .topbar { margin-bottom: 4px; }
+.is-compact .topbar .status-panel { font-size: 0.75rem; margin-bottom: 2px; }
+.is-compact .topbar h2 { font-size: 1.1rem; margin-bottom: 0; }
+.is-compact .filter-bar { margin-bottom: 4px; gap: 4px; }
+/* PR view — compact column header */
+.is-compact #pull-requestsView .topbar { gap: 2px; }
+.is-compact #pull-requestsView .topbar .status-panel { display: none; }
+.is-compact #pull-requestsView .pr-topbar-right { flex-direction: row; align-items: center; gap: 6px; flex-wrap: wrap; }
 .is-compact #pull-requestsView .env-switcher { flex-direction: row; flex-wrap: nowrap; }
-.is-compact #pull-requestsView .filter-bar { margin-bottom: 4px; gap: 4px; }
+/* Feed view — keep refresh inline with headline even at narrow widths */
+#feedView .topbar { flex-direction: row; align-items: center; flex-wrap: nowrap; gap: 8px; }
+/* Settings compact */
+.is-compact .settings-form { gap: 10px; margin-top: 10px; }
+.is-compact .settings-panel { gap: 10px; padding: 14px; }
+.is-compact .settings-grid { gap: 10px; grid-template-columns: 1fr; }
+.is-compact .settings-section-heading { padding-top: 4px; }
+.is-compact .settings-form select,
+.is-compact .settings-form input[type="text"],
+.is-compact .settings-form input[type="url"],
+.is-compact .settings-form input[type="password"] { padding: 4px 8px; font-size: 0.84rem; }
 .is-compact .filter-chip { padding: 4px 8px; font-size: 0.74rem; gap: 4px; }
 .is-compact .env-btn { padding: 4px 8px; font-size: 0.74rem; }
 .is-compact .pr-topbar-right { gap: 4px; }
@@ -2368,6 +2344,20 @@ input, select {
 .is-compact .pr-meta { font-size: 0.73rem; }
 .is-compact .status-pill, .is-compact .check-pill, .is-compact .age-pill, .is-compact .branch-pill { font-size: 0.68rem; padding: 1px 6px; }
 .is-compact .pr-actions-row { padding: 4px 0 0; margin-top: 3px; }
+/* Deployment list view */
+.is-compact .deployment-list { gap: 6px; }
+.is-compact .deployment-card:not(.deployment-card--grid) { padding: 10px 16px; }
+.is-compact .deployment-card:not(.deployment-card--grid) .deployment-name-row { gap: 6px; }
+.is-compact .deployment-card:not(.deployment-card--grid) h3 { font-size: 0.88rem; margin-bottom: 4px; }
+.is-compact .deployment-card:not(.deployment-card--grid) .grid-pr-meta,
+.is-compact .deployment-card:not(.deployment-card--grid) .grid-pr-title { font-size: 0.78rem; }
+/* Deployment grid view */
+.is-compact .deployment-card--grid { padding: 14px 16px; gap: 8px; }
+.is-compact .grid-card-name { font-size: 0.9rem; }
+.is-compact .grid-card-pods { font-size: 0.76rem; }
+.is-compact .grid-pr-title { font-size: 0.8rem; }
+.is-compact .deployment-list.is-grid { gap: 8px; }
+.is-compact .deployment-list.is-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
 
 .pr-card {
     cursor: pointer;
