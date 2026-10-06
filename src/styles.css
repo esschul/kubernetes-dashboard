@@ -477,8 +477,8 @@ h3 {
 .nav-icon svg {
     width: 18px;
     height: 18px;
-    fill: currentColor;
 }
+.nav-icon svg[fill="none"] * { fill: none; }
 
 .check-pill {
     border: 1px solid transparent;
