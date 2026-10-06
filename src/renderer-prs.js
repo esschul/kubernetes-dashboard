@@ -902,6 +902,7 @@ function matchesPrFilter(pr) {
     if (activePrFilter === 'dependabot') { return isDependabotPr(pr); }
     if (activePrFilter === 'opened-today') { return getLocalDateKey(pr.createdAt) === getLocalDateKey(); }
     if (activePrFilter === 'approved') { return pr.reviewDecision === 'APPROVED' && !pr.isDraft; }
+    if (activePrFilter === 'review-required') { return pr.reviewDecision === 'REVIEW_REQUIRED' && !pr.isDraft; }
     if (activePrFilter === 'changes-requested') { return pr.reviewDecision === 'CHANGES_REQUESTED' && !pr.isDraft; }
     if (activePrFilter === 'draft') { return Boolean(pr.isDraft); }
     if (activePrFilter === 'checks-passing') { return pr.checkStatus === 'success'; }
@@ -1108,7 +1109,7 @@ function renderPrView(data) {
 
     const filterBar = document.getElementById('prFilterBar');
     filterBar.style.display = '';
-    const openOnlyFilters = ['opened-today', 'approved', 'changes-requested', 'draft', 'checks-passing', 'checks-failing'];
+    const openOnlyFilters = ['approved', 'review-required', 'draft'];
     const mergedOnlyFilters = ['human', 'dependabot'];
     document.querySelectorAll('.filter-chip[data-pr-filter]').forEach((chip) => {
         const f = chip.dataset.prFilter;
@@ -1129,12 +1130,9 @@ function renderPrView(data) {
         'all': prs.length,
         'human': prs.filter((p) => !isDependabotPr(p)).length,
         'dependabot': prs.filter((p) => isDependabotPr(p)).length,
-        'opened-today': prs.filter((p) => getLocalDateKey(p.createdAt) === getLocalDateKey()).length,
         'approved': prs.filter((p) => p.reviewDecision === 'APPROVED' && !p.isDraft).length,
-        'changes-requested': prs.filter((p) => p.reviewDecision === 'CHANGES_REQUESTED' && !p.isDraft).length,
+        'review-required': prs.filter((p) => p.reviewDecision === 'REVIEW_REQUIRED' && !p.isDraft).length,
         'draft': prs.filter((p) => p.isDraft).length,
-        'checks-passing': prs.filter((p) => p.checkStatus === 'success').length,
-        'checks-failing': prs.filter((p) => p.checkStatus === 'failure').length,
     };
     document.querySelectorAll('.filter-chip[data-pr-filter]').forEach((chip) => {
         const span = chip.querySelector('span');
