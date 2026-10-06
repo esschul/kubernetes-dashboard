@@ -104,7 +104,7 @@ sidebarToggle.addEventListener('click', () => {
 
 // Compact mode when window is short
 new ResizeObserver(([entry]) => {
-    appShell.classList.toggle('is-compact', entry.contentRect.height < 520);
+    appShell.classList.toggle('is-compact', entry.contentRect.height < 900);
 }).observe(appShell);
 
 // --- Navigation ---
@@ -137,6 +137,10 @@ function switchView(view) {
     if (view === 'feed') {
         initFeedDateRange();
         refreshFeed();
+    }
+    if (view === 'trello' && typeof refreshTrello !== 'undefined' && !window._trelloLoaded) {
+        window._trelloLoaded = true;
+        refreshTrello();
     }
 }
 
@@ -295,6 +299,7 @@ function populateSettingsForm() {
     document.getElementById('datadogSiteInput').value = config.datadogSite || '';
     document.getElementById('notificationsEnabledInput').checked = config.notificationsEnabled || false;
     document.getElementById('pipelineNotificationsEnabledInput').checked = config.pipelineNotificationsEnabled || false;
+    document.getElementById('trelloBoardUrlInput').value = config.trelloBoardUrl || '';
     document.getElementById('azureOrgInput').value = config.azureOrg || '';
     document.getElementById('azureProjectInput').value = config.azureProject || '';
     document.getElementById('envProdInput').value = config.envContexts?.prod || '';
@@ -315,6 +320,7 @@ function readFormConfig() {
         datadogSite: document.getElementById('datadogSiteInput').value.trim().replace(/\/$/, ''),
         notificationsEnabled: document.getElementById('notificationsEnabledInput').checked,
         pipelineNotificationsEnabled: document.getElementById('pipelineNotificationsEnabledInput').checked,
+        trelloBoardUrl: document.getElementById('trelloBoardUrlInput').value.trim(),
         azureOrg: document.getElementById('azureOrgInput').value.trim(),
         azureProject: document.getElementById('azureProjectInput').value.trim(),
         envContexts: {
@@ -333,6 +339,7 @@ function updateSaveButtonState() {
         context: c.context, teams: c.teams, watchedDeployments: c.watchedDeployments,
         githubOrg: c.githubOrg, datadogSite: c.datadogSite,
         notificationsEnabled: c.notificationsEnabled, pipelineNotificationsEnabled: c.pipelineNotificationsEnabled,
+        trelloBoardUrl: c.trelloBoardUrl,
         azureOrg: c.azureOrg, azureProject: c.azureProject, envContexts: c.envContexts,
     });
     const isDirty = JSON.stringify(normalize(saved)) !== JSON.stringify(normalize(current));
@@ -342,7 +349,7 @@ function updateSaveButtonState() {
 // Static settings inputs dirty-check
 ['contextInput', 'githubOrgInput', 'datadogSiteInput',
     'azureOrgInput', 'azureProjectInput', 'envProdInput', 'envQaInput', 'envTestInput',
-    'notificationsEnabledInput', 'pipelineNotificationsEnabledInput',
+    'notificationsEnabledInput', 'pipelineNotificationsEnabledInput', 'trelloBoardUrlInput',
 ].forEach((id) => {
     document.getElementById(id)?.addEventListener('change', updateSaveButtonState);
     document.getElementById(id)?.addEventListener('input', updateSaveButtonState);
@@ -743,10 +750,15 @@ document.getElementById('saveSettings').addEventListener('click', () => {
         (config.pipelineNotificationsEnabled && !oldConfig.pipelineNotificationsEnabled)) {
         window.kubeDashboard.requestNotificationPermission();
     }
+    const oldTrelloUrl = oldConfig.trelloBoardUrl;
     saveConfig(config);
     updateSaveButtonState();
     updateContextLabel(config);
     updatePipelinesNavVisibility(config);
+    if (config.trelloBoardUrl !== oldTrelloUrl) {
+        window._trelloLoaded = false;
+        if (typeof window.updateTrelloNavVisibility === 'function') window.updateTrelloNavVisibility();
+    }
     renderEnvSwitcher(config);
     if (!config.namespace) {
         setStatus('Set at least one team in Settings before refreshing deployments.');

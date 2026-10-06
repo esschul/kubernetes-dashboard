@@ -224,4 +224,33 @@ async function triggerMasterDeploy({ org, project, repoName }) {
         '--body', JSON.stringify({ resources: { repositories: { self: { refName: 'refs/heads/master' } } } })]);
 }
 
-module.exports = { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, extractLogErrors, rerunFailedJobs, triggerMasterDeploy };
+const TRELLO_VAULT = 'shared-qa-8yi';
+const TRELLO_KEY_SECRET = 'bringbot-svc-trello-api-key';
+const TRELLO_TOKEN_SECRET = 'bringbot-svc-trello-api-token';
+
+let trelloSecretsCache = null;
+
+async function runAzRaw(args) {
+    const { stdout } = await execFileAsync(resolveCommand('az', 'AZ_PATH'), args, {
+        timeout: 30_000,
+        maxBuffer: 1024 * 1024,
+        env: { ...process.env, HOME: process.env.HOME || require('node:os').homedir() },
+    });
+    return stdout;
+}
+
+async function fetchTrelloSecrets() {
+    if (trelloSecretsCache) return trelloSecretsCache;
+    const [keyResult, tokenResult] = await Promise.all([
+        runAzRaw(['keyvault', 'secret', 'show', '--vault-name', TRELLO_VAULT, '--name', TRELLO_KEY_SECRET, '--query', 'value', '-o', 'tsv']).catch(() => null),
+        runAzRaw(['keyvault', 'secret', 'show', '--vault-name', TRELLO_VAULT, '--name', TRELLO_TOKEN_SECRET, '--query', 'value', '-o', 'tsv']).catch(() => null),
+    ]);
+    const apiKey = typeof keyResult === 'string' ? keyResult.trim() : null;
+    const apiToken = typeof tokenResult === 'string' ? tokenResult.trim() : null;
+    if (apiKey && apiToken) {
+        trelloSecretsCache = { apiKey, apiToken };
+    }
+    return { apiKey, apiToken };
+}
+
+module.exports = { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, extractLogErrors, rerunFailedJobs, triggerMasterDeploy, fetchTrelloSecrets };
