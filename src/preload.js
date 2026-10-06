@@ -113,6 +113,11 @@ contextBridge.exposeInMainWorld('kubeDashboard', {
     onScreenshotFailed: (cb) => ipcRenderer.on('screenshot:failed', (_e, message) => cb(message)),
     onQuickOpenLogs: (cb) => ipcRenderer.on('logs:quickOpen', () => cb()),
     openExternal: (url) => ipcRenderer.invoke('external:open', url),
+    fetchTrelloSecrets: async () => {
+        const res = await ipcRenderer.invoke('trello:fetchSecrets');
+        if (!res.ok) throw new Error(res.error);
+        return res.result;
+    },
     requestNotificationPermission: () => ipcRenderer.invoke('notifications:requestPermission'),
     searchLogs: async (config) => {
         const response = await ipcRenderer.invoke('logs:search', config);

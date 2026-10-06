@@ -55,7 +55,7 @@ let buildDate = null;
 try { buildDate = require('./build-info.json').date; } catch { /* not available in dev */ }
 const { fetchDeployments, hasDeploymentChanges, fetchDeploymentEvents, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs, cancelSearch, deployMaster } = require('./kubectl-client');
 const { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr, closePr } = require('./github-client');
-const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, rerunFailedJobs } = require('./azure-client');
+const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, rerunFailedJobs, fetchTrelloSecrets } = require('./azure-client');
 const { fetchPullRequests, clearPrListCache, clearAllCaches, evictRepoDeltaCache, fetchCommitMessage, fetchMergedPrsForRange, fetchRepoList, getMasterSha } = require('./pr-client');
 
 function createWindow() {
@@ -293,6 +293,13 @@ app.whenReady().then(() => {
     });
     ipcMain.handle('pr:fetchCommit', async (_event, nameWithOwner, sha) => {
         return fetchCommitMessage(nameWithOwner, sha);
+    });
+    ipcMain.handle('trello:fetchSecrets', async () => {
+        try {
+            return { ok: true, result: await fetchTrelloSecrets() };
+        } catch (err) {
+            return { ok: false, error: err.message };
+        }
     });
 
     let activeLogProcess = null;

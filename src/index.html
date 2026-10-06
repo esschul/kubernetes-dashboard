@@ -23,6 +23,12 @@
                 </div>
             </div>
             <nav class="nav">
+                <button class="nav-item" data-view="trello" id="trelloNavItem" hidden>
+                    <div class="nav-icon">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 3H3a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zM10.5 17.5h-5v-11h5v11zm8 0h-5V10h5v7.5z"/></svg>
+                    </div>
+                    <span class="nav-label">Trello</span>
+                </button>
                 <button class="nav-item is-active" data-view="pull-requests">
                     <div class="nav-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><line x1="6" y1="7" x2="6" y2="17"/><path d="M18 7v4a6 6 0 0 1-6 6H9"/><polyline points="6 14 9 17 6 20"/></svg>
@@ -279,6 +285,14 @@
                             <span class="toggle-row-label">Get notified when a pipeline fails</span>
                             <input type="checkbox" id="pipelineNotificationsEnabledInput" class="toggle-checkbox" />
                         </div>
+                        <div id="trelloSettingsSection" hidden>
+                        <div class="settings-section-heading">Trello</div>
+                        <label>
+                            Board URL
+                            <input type="text" id="trelloBoardUrlInput" placeholder="https://trello.com/b/…" />
+                            <span class="form-help">Paste the URL of the Trello board you want to show.</span>
+                        </label>
+                        </div>
                     </div>
 
                     <div class="settings-panel settings-panel--full panel">
@@ -301,6 +315,33 @@
                 </div>
             </div>
         </div>
+        <!-- Trello view -->
+        <div class="view hidden" id="trelloView">
+            <div class="topbar">
+                <div>
+                    <h2>Trello</h2>
+                    <p class="status-panel" id="trelloStatusPanel">Loading…</p>
+                </div>
+                <div class="trello-topbar-right">
+                    <div class="trello-lists-dropdown-wrap" id="trelloListsDropdownWrap">
+                        <button class="theme-button trello-lists-btn" id="trelloListsBtn" title="Filter lists">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h6v-2H3v2zm0-5h12v-2H3v2zm0-7v2h18V6H3z"/></svg>
+                            Lists
+                        </button>
+                        <div class="trello-lists-dropdown" id="trelloListsDropdown" hidden></div>
+                    </div>
+                    <button class="theme-button" id="trelloRefreshBtn" title="Refresh board">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="trello-empty-state" id="trelloEmptyState">
+                <p>No Trello board configured.</p>
+                <p>Add a board URL in <a href="#" id="trelloGoToSettings">Settings → Trello</a>.</p>
+            </div>
+            <div class="trello-board" id="trelloBoard"></div>
+        </div>
+
         <!-- Help view -->
         <div class="view hidden" id="helpView">
             <div class="topbar">
@@ -566,6 +607,7 @@ az login</pre>
     </div>
 </dialog>
 <script src="renderer-utils.js"></script>
+<script src="renderer-trello.js"></script>
 <script src="renderer-feed.js"></script>
 <script src="renderer-pipelines.js"></script>
 <script src="renderer-prs.js"></script>
