@@ -1,4 +1,4 @@
-/* global escapeHtml, loadConfig */
+/* global escapeHtml, loadConfig, formatRelativeTime, getAgePillClass */
 
 const TRELLO_HIDDEN_KEY = 'kube-dashboard:trello-hidden-lists';
 
@@ -30,7 +30,7 @@ async function fetchTrelloBoard(boardId, apiKey, apiToken) {
     const q = authParams ? `?${authParams}&` : '?';
     const [listsRes, cardsRes] = await Promise.all([
         fetch(`https://api.trello.com/1/boards/${boardId}/lists${q}filter=open`),
-        fetch(`https://api.trello.com/1/boards/${boardId}/cards${q}filter=open&fields=name,idList,shortUrl,labels,due,dueComplete&actions=commentCard&action_fields=data`),
+        fetch(`https://api.trello.com/1/boards/${boardId}/cards${q}filter=open&fields=name,idList,shortUrl,labels,due,dueComplete,dateLastActivity&actions=commentCard&action_fields=data`),
     ]);
     if (!listsRes.ok) throw new Error(`Trello lists: ${listsRes.status} ${listsRes.statusText}`);
     if (!cardsRes.ok) throw new Error(`Trello cards: ${cardsRes.status} ${cardsRes.statusText}`);
@@ -46,6 +46,13 @@ function formatDue(iso) {
     if (Math.abs(diffMs) < 20 * 60 * 60 * 1000) return 'Today';
     if (diffMs > 0 && diffMs < 48 * 60 * 60 * 1000) return 'Tomorrow';
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function cardAgeClass(iso) {
+    const days = (Date.now() - new Date(iso).getTime()) / 86_400_000;
+    if (days < 5)  return 'card-age--fresh';
+    if (days < 10) return 'card-age--aging';
+    return 'card-age--old';
 }
 
 const PULL_RE = /https:\/\/github\.com\/([^/\s)]+)\/([^/\s)]+)\/pull\/(\d+)/g;
@@ -152,17 +159,27 @@ function renderTrelloColumns(data) {
             const prs = prLinks.map(pr =>
                 `<span class="trello-pr-link trello-pr-link--${escapeHtml(pr.status.cls)} external-link" data-url="${escapeHtml(pr.url)}">${escapeHtml(pr.label)}</span>`
             ).join('');
-            html += `<div class="trello-card">
+            const updatedAt = card.dateLastActivity ? `<span class="trello-card-updated">${formatRelativeTime(card.dateLastActivity)}</span>` : '';
+            const ageClass = card.dateLastActivity ? cardAgeClass(card.dateLastActivity) : '';
+            html += `<div class="trello-card${ageClass ? ` ${ageClass}` : ''}">
                 ${labels ? `<div class="trello-card-labels">${labels}</div>` : ''}
                 <div class="trello-card-name external-link" data-url="${escapeHtml(card.shortUrl)}">${escapeHtml(card.name)}</div>
                 ${due}
                 ${prs ? `<div class="trello-card-prs">${prs}</div>` : ''}
+                ${updatedAt}
             </div>`;
         }
         html += '</div></div>';
     }
     html += '</div>';
     board.innerHTML = html;
+
+    const ageFilter = board.dataset.ageFilter;
+    if (ageFilter && ageFilter !== 'all') {
+        board.querySelectorAll('.trello-card').forEach(card => {
+            card.style.display = card.classList.contains(`card-age--${ageFilter}`) ? '' : 'none';
+        });
+    }
 
     board.querySelectorAll('.external-link[data-url]').forEach(el => {
         el.addEventListener('click', (e) => {
@@ -238,6 +255,20 @@ window.updateTrelloNavVisibility = updateTrelloNavVisibility;
 updateTrelloNavVisibility();
 
 document.getElementById('trelloRefreshBtn').addEventListener('click', refreshTrello);
+
+document.getElementById('trelloAgeFilterBar').addEventListener('click', (e) => {
+    const chip = e.target.closest('.trello-age-chip');
+    if (!chip) return;
+    document.querySelectorAll('.trello-age-chip').forEach(c => c.classList.remove('is-active'));
+    chip.classList.add('is-active');
+    const age = chip.dataset.age;
+    const board = document.getElementById('trelloBoard');
+    board.dataset.ageFilter = age;
+    board.querySelectorAll('.trello-card').forEach(card => {
+        const show = age === 'all' || card.classList.contains(`card-age--${age}`);
+        card.style.display = show ? '' : 'none';
+    });
+});
 
 document.getElementById('trelloGoToSettings').addEventListener('click', (e) => {
     e.preventDefault();

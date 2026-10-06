@@ -335,11 +335,17 @@
                     </button>
                 </div>
             </div>
+            <div class="filter-bar trello-age-filter-bar" id="trelloAgeFilterBar">
+                <button class="filter-chip is-active trello-age-chip" data-age="all">Alle</button>
+                <button class="filter-chip trello-age-chip trello-age-chip--fresh" data-age="fresh">Nylig oppdatert</button>
+                <button class="filter-chip trello-age-chip trello-age-chip--aging" data-age="aging">Mer enn 5 dager</button>
+                <button class="filter-chip trello-age-chip trello-age-chip--old" data-age="old">Mer enn 10 dager</button>
+            </div>
             <div class="trello-empty-state" id="trelloEmptyState">
                 <p>No Trello board configured.</p>
                 <p>Add a board URL in <a href="#" id="trelloGoToSettings">Settings → Trello</a>.</p>
             </div>
-            <div class="trello-board" id="trelloBoard"></div>
+            <div class="trello-board is-heatmap" id="trelloBoard"></div>
         </div>
 
         <!-- Help view -->

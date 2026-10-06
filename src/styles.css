@@ -4312,6 +4312,23 @@ details[open] .log-stack-summary::before { transform: rotate(90deg); }
 .trello-card-name { cursor: pointer; }
 .trello-card-name:hover { text-decoration: underline; }
 
+.trello-card-updated {
+    display: block;
+    margin-top: 5px;
+    font-size: 0.68rem;
+    color: var(--muted);
+}
+
+
+.is-heatmap .card-age--fresh  { border-left: 3px solid #4caf6e; }
+.is-heatmap .card-age--aging  { border-left: 3px solid #f0c040; }
+.is-heatmap .card-age--old    { border-left: 3px solid #d95a3a; }
+
+.trello-age-chip { border-left: 3px solid var(--muted); }
+.trello-age-chip--fresh { border-left-color: #4caf6e; }
+.trello-age-chip--aging { border-left-color: #f0c040; }
+.trello-age-chip--old   { border-left-color: #d95a3a; }
+
 .trello-card-prs { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
 .trello-pr-link {
     display: inline-flex; align-items: center; gap: 4px;
