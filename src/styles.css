@@ -4345,6 +4345,23 @@ details[open] .log-stack-summary::before { transform: rotate(90deg); }
 .trello-pr-link--closed   { color: #a03020; } .trello-pr-link--closed::before   { content: '✕'; }
 
 
+:root[data-theme="dark"] .trello-label--green  { background: #1a3d14; color: #7de06a; }
+:root[data-theme="dark"] .trello-label--yellow { background: #3d3000; color: #f0d060; }
+:root[data-theme="dark"] .trello-label--orange { background: #3d1e00; color: #f0a060; }
+:root[data-theme="dark"] .trello-label--red    { background: #3d1010; color: #f07070; }
+:root[data-theme="dark"] .trello-label--purple { background: #2a1040; color: #c090f0; }
+:root[data-theme="dark"] .trello-label--blue   { background: #0a2040; color: #70b0f0; }
+:root[data-theme="dark"] .trello-label--sky    { background: #002d38; color: #60d8f0; }
+:root[data-theme="dark"] .trello-label--lime   { background: #0d2d1a; color: #70f0a0; }
+:root[data-theme="dark"] .trello-label--pink   { background: #3d0a25; color: #f080c0; }
+:root[data-theme="dark"] .trello-label--black  { background: #1a1f2e; color: #a0aac0; }
+
+:root[data-theme="dark"] .trello-pr-link--open     { color: #4ade80; }
+:root[data-theme="dark"] .trello-pr-link--approved { color: #4ade80; }
+:root[data-theme="dark"] .trello-pr-link--review   { color: #f0c040; }
+:root[data-theme="dark"] .trello-pr-link--merged   { color: #c084fc; }
+:root[data-theme="dark"] .trello-pr-link--closed   { color: #f87171; }
+
 .is-compact .trello-column { min-width: 200px; max-width: 220px; }
 .is-compact .trello-card { font-size: 0.78rem; padding: 6px 8px; }
 .is-compact .trello-column-header { font-size: 0.78rem; padding: 7px 10px 6px; }

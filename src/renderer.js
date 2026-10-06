@@ -1235,8 +1235,10 @@ populateSettingsForm();
 window.kubeDashboard.onUpdateAvailable((version) => {
     const banner = document.getElementById('updateBanner');
     const text = document.getElementById('updateBannerText');
+    const btn = document.getElementById('updateBannerBtn');
     if (banner && text) {
         text.textContent = `Version ${version} downloading…`;
+        if (btn) btn.style.display = 'none';
         banner.classList.remove('hidden');
     }
 });
@@ -1244,8 +1246,10 @@ window.kubeDashboard.onUpdateAvailable((version) => {
 window.kubeDashboard.onUpdateReady((version) => {
     const banner = document.getElementById('updateBanner');
     const text = document.getElementById('updateBannerText');
+    const btn = document.getElementById('updateBannerBtn');
     if (banner && text) {
         text.textContent = `Version ${version} is ready to install`;
+        if (btn) btn.style.display = '';
         banner.classList.remove('hidden');
     }
 });

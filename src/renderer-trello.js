@@ -218,7 +218,10 @@ async function refreshTrello() {
         const data = await fetchTrelloBoard(boardId, apiKey, apiToken);
         trelloBoardData = data;
         renderTrelloBoard(data);
-        status.textContent = `${data.cards.length} cards across ${data.lists.length} lists`;
+        const visibleLists = data.lists.filter(l => !trelloHiddenLists.has(l.id));
+        const visibleListIds = new Set(visibleLists.map(l => l.id));
+        const visibleCards = data.cards.filter(c => visibleListIds.has(c.idList));
+        status.textContent = `${visibleCards.length} cards across ${visibleLists.length} lists`;
     } catch (err) {
         status.textContent = `Error: ${err.message}`;
     }
