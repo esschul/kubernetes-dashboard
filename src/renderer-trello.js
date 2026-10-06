@@ -1,6 +1,8 @@
 /* global escapeHtml, loadConfig, formatRelativeTime, getAgePillClass */
 
 const TRELLO_HIDDEN_KEY = 'kube-dashboard:trello-hidden-lists';
+const TRELLO_SHOW_PRS_KEY = 'kube-dashboard:trello-show-prs';
+let trelloShowPrs = (() => { try { return localStorage.getItem(TRELLO_SHOW_PRS_KEY) !== 'false'; } catch { return true; } })();
 
 let trelloBoardData = null;
 let trelloHiddenLists = (() => {
@@ -156,9 +158,16 @@ function renderTrelloColumns(data) {
             const overdue = card.due && !card.dueComplete && new Date(card.due) < new Date();
             const due = card.due ? `<span class="trello-due${card.dueComplete ? ' trello-due--done' : overdue ? ' trello-due--overdue' : ''}">${formatDue(card.due)}</span>` : '';
             const prLinks = extractPrLinks(card);
-            const prs = prLinks.map(pr =>
-                `<span class="trello-pr-link trello-pr-link--${escapeHtml(pr.status.cls)} external-link" data-url="${escapeHtml(pr.url)}">${escapeHtml(pr.label)}</span>`
-            ).join('');
+            let prs = '';
+            if (trelloShowPrs && prLinks.length > 0) {
+                if (prLinks.length > 10) {
+                    prs = `<span class="trello-pr-overflow">${prLinks.length} PRs</span>`;
+                } else {
+                    prs = prLinks.map(pr =>
+                        `<span class="trello-pr-link trello-pr-link--${escapeHtml(pr.status.cls)} external-link" data-url="${escapeHtml(pr.url)}">${escapeHtml(pr.label)}</span>`
+                    ).join('');
+                }
+            }
             const updatedAt = card.dateLastActivity ? `<span class="trello-card-updated">${formatRelativeTime(card.dateLastActivity)}</span>` : '';
             const ageClass = card.dateLastActivity ? cardAgeClass(card.dateLastActivity) : '';
             html += `<div class="trello-card${ageClass ? ` ${ageClass}` : ''}">
@@ -205,6 +214,7 @@ function renderTrelloBoard(data) {
 
 async function refreshTrello() {
     const status = document.getElementById('trelloStatusPanel');
+    const btn = document.getElementById('trelloRefreshBtn');
     const config = loadConfig();
     const boardId = extractBoardId(config.trelloBoardUrl);
     if (!boardId) {
@@ -213,6 +223,7 @@ async function refreshTrello() {
         return;
     }
     status.textContent = 'Loading…';
+    btn.classList.add('is-spinning');
     try {
         const { apiKey, apiToken } = await getTrelloSecrets();
         const data = await fetchTrelloBoard(boardId, apiKey, apiToken);
@@ -224,6 +235,8 @@ async function refreshTrello() {
         status.textContent = `${visibleCards.length} cards across ${visibleLists.length} lists`;
     } catch (err) {
         status.textContent = `Error: ${err.message}`;
+    } finally {
+        btn.classList.remove('is-spinning');
     }
 }
 
@@ -256,6 +269,15 @@ async function updateTrelloNavVisibility() {
 
 window.updateTrelloNavVisibility = updateTrelloNavVisibility;
 updateTrelloNavVisibility();
+
+const _prsBtn = document.getElementById('trelloPrsBtn');
+_prsBtn.classList.toggle('is-active', trelloShowPrs);
+_prsBtn.addEventListener('click', () => {
+    trelloShowPrs = !trelloShowPrs;
+    _prsBtn.classList.toggle('is-active', trelloShowPrs);
+    try { localStorage.setItem(TRELLO_SHOW_PRS_KEY, trelloShowPrs); } catch {}
+    if (trelloBoardData) renderTrelloColumns(trelloBoardData);
+});
 
 document.getElementById('trelloRefreshBtn').addEventListener('click', refreshTrello);
 

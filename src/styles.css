@@ -4324,6 +4324,10 @@ details[open] .log-stack-summary::before { transform: rotate(90deg); }
 .is-heatmap .card-age--aging  { border-left: 3px solid #f0c040; }
 .is-heatmap .card-age--old    { border-left: 3px solid #d95a3a; }
 
+.trello-prs-btn { font-size: 0.78rem; padding: 4px 10px; width: auto; height: auto; opacity: 0.45; }
+.trello-prs-btn.is-active { opacity: 1; }
+.trello-pr-overflow { font-size: 0.72rem; color: var(--muted); font-style: italic; }
+
 .trello-age-chip { border-left: 3px solid var(--muted); }
 .trello-age-chip--fresh { border-left-color: #4caf6e; }
 .trello-age-chip--aging { border-left-color: #f0c040; }
