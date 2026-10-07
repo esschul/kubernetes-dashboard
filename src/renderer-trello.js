@@ -30,15 +30,19 @@ async function getTrelloSecrets() {
 async function fetchTrelloBoard(boardId, apiKey, apiToken) {
     const authParams = apiKey && apiToken ? `key=${encodeURIComponent(apiKey)}&token=${encodeURIComponent(apiToken)}` : '';
     const q = authParams ? `?${authParams}&` : '?';
-    const [listsRes, cardsRes] = await Promise.all([
+    const [listsRes, cardsRes, membersRes] = await Promise.all([
         fetch(`https://api.trello.com/1/boards/${boardId}/lists${q}filter=open`),
-        fetch(`https://api.trello.com/1/boards/${boardId}/cards${q}filter=open&fields=name,idList,shortUrl,labels,due,dueComplete,dateLastActivity&actions=commentCard&action_fields=data`),
+        fetch(`https://api.trello.com/1/boards/${boardId}/cards${q}filter=open&fields=name,idList,shortUrl,labels,due,dueComplete,dateLastActivity,idMembers&actions=commentCard&action_fields=data`),
+        fetch(`https://api.trello.com/1/boards/${boardId}/members${q}fields=fullName`),
     ]);
     if (!listsRes.ok) throw new Error(`Trello lists: ${listsRes.status} ${listsRes.statusText}`);
     if (!cardsRes.ok) throw new Error(`Trello cards: ${cardsRes.status} ${cardsRes.statusText}`);
+    if (!membersRes.ok) throw new Error(`Trello members: ${membersRes.status} ${membersRes.statusText}`);
     const lists = await listsRes.json();
     const cards = await cardsRes.json();
-    return { lists, cards };
+    const membersArr = await membersRes.json();
+    const members = Object.fromEntries(membersArr.map(m => [m.id, m.fullName.split(/[\s.]/)[0]]));
+    return { lists, cards, members };
 }
 
 function formatDue(iso) {
@@ -136,7 +140,7 @@ function renderTrelloColumns(data) {
     const board = document.getElementById('trelloBoard');
     if (!data) { board.innerHTML = ''; return; }
 
-    const { lists, cards } = data;
+    const { lists, cards, members = {} } = data;
     const cardsByList = {};
     for (const c of cards) {
         if (!cardsByList[c.idList]) cardsByList[c.idList] = [];
@@ -170,12 +174,14 @@ function renderTrelloColumns(data) {
             }
             const updatedAt = card.dateLastActivity ? `<span class="trello-card-updated">${formatRelativeTime(card.dateLastActivity)}</span>` : '';
             const ageClass = card.dateLastActivity ? cardAgeClass(card.dateLastActivity) : '';
+            const assignees = (card.idMembers || []).map(id => members[id]).filter(Boolean);
+            const assigneesHtml = assignees.length ? `<div class="trello-card-members">${assignees.map(n => `<span class="trello-member">${escapeHtml(n)}</span>`).join('')}</div>` : '';
             html += `<div class="trello-card${ageClass ? ` ${ageClass}` : ''}">
                 ${labels ? `<div class="trello-card-labels">${labels}</div>` : ''}
                 <div class="trello-card-name external-link" data-url="${escapeHtml(card.shortUrl)}">${escapeHtml(card.name)}</div>
                 ${due}
                 ${prs ? `<div class="trello-card-prs">${prs}</div>` : ''}
-                ${updatedAt}
+                <div class="trello-card-footer">${updatedAt}${assigneesHtml}</div>
             </div>`;
         }
         html += '</div></div>';
@@ -201,13 +207,12 @@ function renderTrelloColumns(data) {
 
 function renderTrelloBoard(data) {
     const empty = document.getElementById('trelloEmptyState');
+    empty.style.display = 'none';
     if (!data) {
-        empty.style.display = '';
         renderTrelloColumns(null);
         renderListsDropdown(null);
         return;
     }
-    empty.style.display = 'none';
     renderListsDropdown(data.lists);
     renderTrelloColumns(data);
 }
@@ -218,11 +223,10 @@ async function refreshTrello() {
     const config = loadConfig();
     const boardId = extractBoardId(config.trelloBoardUrl);
     if (!boardId) {
-        status.textContent = 'No board configured — add a board URL in Settings';
         renderTrelloBoard(null);
         return;
     }
-    status.textContent = 'Loading…';
+    status.textContent = '';
     btn.classList.add('is-spinning');
     try {
         const { apiKey, apiToken } = await getTrelloSecrets();

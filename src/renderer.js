@@ -1232,15 +1232,8 @@ updatePipelinesNavVisibility(initialConfig);
 renderEnvSwitcher(initialConfig);
 populateSettingsForm();
 
-window.kubeDashboard.onUpdateAvailable((version) => {
-    const banner = document.getElementById('updateBanner');
-    const text = document.getElementById('updateBannerText');
-    const btn = document.getElementById('updateBannerBtn');
-    if (banner && text) {
-        text.textContent = `Version ${version} downloading…`;
-        if (btn) btn.style.display = 'none';
-        banner.classList.remove('hidden');
-    }
+window.kubeDashboard.onUpdateAvailable((_version) => {
+    // Banner stays hidden until update is ready to install
 });
 
 window.kubeDashboard.onUpdateReady((version) => {

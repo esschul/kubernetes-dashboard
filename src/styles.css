@@ -4143,6 +4143,9 @@ details[open] .log-stack-summary::before { transform: rotate(90deg); }
 
 .trello-topbar-right { display: flex; align-items: center; gap: 6px; }
 
+#trelloView .topbar { align-items: center; min-height: 52px; }
+#trelloStatusPanel { min-height: 1.4em; margin-bottom: 0; }
+
 .trello-board {
     flex: 1;
     min-height: 0;
@@ -4295,6 +4298,8 @@ details[open] .log-stack-summary::before { transform: rotate(90deg); }
 .trello-card-name {
     line-height: 1.35;
     word-break: break-word;
+    margin: 10px 0 8px;
+    font-size: 0.88rem;
 }
 
 .trello-due {
@@ -4312,9 +4317,18 @@ details[open] .log-stack-summary::before { transform: rotate(90deg); }
 .trello-card-name { cursor: pointer; }
 .trello-card-name:hover { text-decoration: underline; }
 
+.trello-loading { display: flex; align-items: center; justify-content: center; height: 200px; }
+.trello-loading .spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+
+.trello-card-footer { display: flex; justify-content: space-between; align-items: baseline; margin-top: 6px; min-height: 1em; }
+.trello-card-members { display: flex; gap: 4px; }
+.trello-member {
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: var(--muted);
+}
+
 .trello-card-updated {
-    display: block;
-    margin-top: 5px;
     font-size: 0.68rem;
     color: var(--muted);
 }
