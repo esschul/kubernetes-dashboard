@@ -285,6 +285,8 @@ _prsBtn.addEventListener('click', () => {
 
 document.getElementById('trelloRefreshBtn').addEventListener('click', refreshTrello);
 
+setInterval(refreshTrello, 2 * 60 * 1000);
+
 document.getElementById('trelloAgeFilterBar').addEventListener('click', (e) => {
     const chip = e.target.closest('.trello-age-chip');
     if (!chip) return;
