@@ -538,6 +538,15 @@ h3 {
     color: #c4b5fd;
 }
 
+.pr-test-link {
+    background: #dcfce7;
+    color: #166534;
+}
+:root[data-theme="dark"] .pr-test-link {
+    background: #14532d;
+    color: #86efac;
+}
+
 .pr-being-tested-badge {
     position: absolute;
     top: 10px;

@@ -3,6 +3,7 @@
 
 let prRefreshInProgress = false;
 let qaDeploymentsByBranch = new Map(); // branch → deployment object
+let testDeploymentsByBranch = new Map(); // branch → deployment object
 let activePrTab = 'open';
 let activePrFilter = 'all';
 let activeMergedSub = 'today';
@@ -660,26 +661,33 @@ function mergePrResults(results) {
     };
 }
 
-async function refreshQaDeployments(config) {
-    const qaContext = config.envContexts?.qa;
-    if (!qaContext) { return; }
+async function refreshEnvDeployments(config, contextKey) {
+    const context = config.envContexts?.[contextKey];
+    if (!context) { return new Map(); }
     const teamNamespaces = (config.teams || []).map((t) => t.namespace).filter(Boolean);
-    if (!teamNamespaces.length) { return; }
+    if (!teamNamespaces.length) { return new Map(); }
     const results = await Promise.allSettled(
-        teamNamespaces.map((ns) => window.kubeDashboard.fetchDeployments({ ...config, context: qaContext, namespace: ns }))
+        teamNamespaces.map((ns) => window.kubeDashboard.fetchDeployments({ ...config, context, namespace: ns }))
     );
     const deps = results.filter((r) => r.status === 'fulfilled').flatMap((r) => r.value);
     const byBranch = new Map();
     for (const dep of deps) {
         const branch = dep.rollouts?.[0]?.branch;
         if (branch) {
-            // Key on repo+branch to avoid false matches when the same branch name exists in multiple repos
             if (dep.imageRepoName) { byBranch.set(`${dep.imageRepoName}/${branch}`, dep); }
-            // Also store by branch alone as fallback for deployments without imageRepoName
             if (!dep.imageRepoName) { byBranch.set(branch, dep); }
         }
     }
-    qaDeploymentsByBranch = byBranch;
+    return byBranch;
+}
+
+async function refreshQaDeployments(config) {
+    qaDeploymentsByBranch = await refreshEnvDeployments(config, 'qa');
+    if (latestPrData) { renderPrView(latestPrData); }
+}
+
+async function refreshTestDeployments(config) {
+    testDeploymentsByBranch = await refreshEnvDeployments(config, 'test');
     if (latestPrData) { renderPrView(latestPrData); }
 }
 
@@ -808,6 +816,7 @@ async function refreshPullRequests(force = false) {
         setLastUpdated();
         updatePrNavCount(latestPrData);
         refreshQaDeployments(config).catch(() => {});
+        refreshTestDeployments(config).catch(() => {});
     } catch (err) {
         document.getElementById('prList').innerHTML = `<div class="error-panel"><strong>Failed to load pull requests</strong><pre>${escapeHtml(err?.message || String(err))}</pre></div>`;
         document.getElementById('prStatusPanel').textContent = 'Refresh failed';
@@ -1285,6 +1294,9 @@ function renderPrCard(pr, isMerged = false, showCheckbox = false) {
     const qaDeployment = !isMerged && pr.headRefName
         ? (qaDeploymentsByBranch.get(`${repoShortName}/${pr.headRefName}`) || qaDeploymentsByBranch.get(pr.headRefName))
         : null;
+    const testDeployment = !isMerged && pr.headRefName
+        ? (testDeploymentsByBranch.get(`${repoShortName}/${pr.headRefName}`) || testDeploymentsByBranch.get(pr.headRefName))
+        : null;
     const pipelineLink = pipelineStatus?.url
         ? `<span class="datadog-link pr-pipeline-link" data-url="${escapeHtml(pipelineStatus.url)}">Pipeline ↗</span>`
         : '';
@@ -1340,11 +1352,12 @@ function renderPrCard(pr, isMerged = false, showCheckbox = false) {
             ${isDependabotPr(pr) ? analyzeDependabotPr(pr).map((w) => `<span class="dep-warn-pill dep-warn-pill--${w.level}">${escapeHtml(w.label)}</span>`).join('') : ''}
             ${pr.hasSmoketests ? `<span class="dep-warn-pill dep-warn-pill--smoketests">smoketests</span>` : ''}
         </div>
-        ${(pipelineStatus && isMerged) || deploymentStatus || qaDeployment ? `
+        ${(pipelineStatus && isMerged) || deploymentStatus || qaDeployment || testDeployment ? `
         <div class="pr-infra-row">
             ${pipelineStatus && isMerged ? `<span class="pr-infra-item"><span class="pr-infra-label">Pipeline</span><span class="status-pill ${pipelineStatus.cls}">${escapeHtml(pipelineStatus.label.replace('Pipeline ', ''))}</span></span>` : ''}
             ${deploymentStatus ? `<span class="pr-infra-item"><span class="pr-infra-label">Deployment</span><span class="status-pill ${deploymentStatus.cls}">${escapeHtml(deploymentStatus.label.replace('Deployed · ', ''))}</span></span>` : ''}
             ${qaDeployment ? `<span class="status-pill pr-qa-link">Deployed in QA</span>` : ''}
+            ${testDeployment ? `<span class="status-pill pr-test-link">Deployed in test</span>` : ''}
         </div>` : ''}
         ${actionsHtml}
         </div>
