@@ -4154,6 +4154,10 @@ details[open] .log-stack-summary::before { transform: rotate(90deg); }
 
 #trelloView .topbar { align-items: center; min-height: 52px; }
 #trelloStatusPanel { min-height: 1.4em; margin-bottom: 0; }
+.is-compact #trelloView .topbar { flex-direction: row; align-items: center; margin-bottom: 4px; min-height: 0; }
+.is-compact #trelloView .topbar > div:first-child { display: flex; align-items: baseline; gap: 10px; }
+.is-compact #trelloView .topbar h2 { margin-bottom: 0; }
+.is-compact #trelloStatusPanel { min-height: 0; }
 
 .trello-board {
     flex: 1;
