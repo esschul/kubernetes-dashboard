@@ -138,9 +138,13 @@ function switchView(view) {
         initFeedDateRange();
         refreshFeed();
     }
-    if (view === 'trello' && typeof refreshTrello !== 'undefined' && !window._trelloLoaded) {
-        window._trelloLoaded = true;
-        refreshTrello();
+    if (view === 'trello' && typeof refreshTrello !== 'undefined') {
+        if (!window._trelloLoaded) {
+            window._trelloLoaded = true;
+            refreshTrello();
+        } else {
+            refreshTrelloIfStale();
+        }
     }
 }
 

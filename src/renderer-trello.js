@@ -9,6 +9,8 @@ let trelloHiddenLists = (() => {
     try { return new Set(JSON.parse(localStorage.getItem(TRELLO_HIDDEN_KEY) || '[]')); } catch { return new Set(); }
 })();
 let trelloSecretsPromise = null;
+const TRELLO_REFRESH_MS = 2 * 60 * 1000;
+let trelloLastFetch = 0;
 
 function saveTrelloHiddenLists() {
     try { localStorage.setItem(TRELLO_HIDDEN_KEY, JSON.stringify([...trelloHiddenLists])); } catch { /* ignore */ }
@@ -226,6 +228,7 @@ async function refreshTrello() {
         renderTrelloBoard(null);
         return;
     }
+    trelloLastFetch = Date.now();
     status.textContent = '';
     btn.classList.add('is-spinning');
     try {
@@ -285,7 +288,16 @@ _prsBtn.addEventListener('click', () => {
 
 document.getElementById('trelloRefreshBtn').addEventListener('click', refreshTrello);
 
-setInterval(refreshTrello, 2 * 60 * 1000);
+function isTrelloViewVisible() {
+    return !document.hidden && !document.getElementById('trelloView').classList.contains('hidden');
+}
+
+function refreshTrelloIfStale() {
+    if (Date.now() - trelloLastFetch >= TRELLO_REFRESH_MS) refreshTrello();
+}
+
+// Only poll while the board is on screen; switching to the view catches up if stale.
+setInterval(() => { if (isTrelloViewVisible()) refreshTrelloIfStale(); }, 30 * 1000);
 
 document.getElementById('trelloAgeFilterBar').addEventListener('click', (e) => {
     const chip = e.target.closest('.trello-age-chip');
