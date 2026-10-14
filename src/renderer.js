@@ -303,6 +303,7 @@ function populateSettingsForm() {
     document.getElementById('datadogSiteInput').value = config.datadogSite || '';
     document.getElementById('notificationsEnabledInput').checked = config.notificationsEnabled || false;
     document.getElementById('pipelineNotificationsEnabledInput').checked = config.pipelineNotificationsEnabled || false;
+    document.getElementById('dependabotInactivityWarningInput').checked = config.dependabotInactivityWarning || false;
     document.getElementById('trelloBoardUrlInput').value = config.trelloBoardUrl || '';
     document.getElementById('azureOrgInput').value = config.azureOrg || '';
     document.getElementById('azureProjectInput').value = config.azureProject || '';
@@ -324,6 +325,7 @@ function readFormConfig() {
         datadogSite: document.getElementById('datadogSiteInput').value.trim().replace(/\/$/, ''),
         notificationsEnabled: document.getElementById('notificationsEnabledInput').checked,
         pipelineNotificationsEnabled: document.getElementById('pipelineNotificationsEnabledInput').checked,
+        dependabotInactivityWarning: document.getElementById('dependabotInactivityWarningInput').checked,
         trelloBoardUrl: document.getElementById('trelloBoardUrlInput').value.trim(),
         azureOrg: document.getElementById('azureOrgInput').value.trim(),
         azureProject: document.getElementById('azureProjectInput').value.trim(),
@@ -342,7 +344,7 @@ function updateSaveButtonState() {
     const normalize = (c) => ({
         context: c.context, teams: c.teams, watchedDeployments: c.watchedDeployments,
         githubOrg: c.githubOrg, datadogSite: c.datadogSite,
-        notificationsEnabled: c.notificationsEnabled, pipelineNotificationsEnabled: c.pipelineNotificationsEnabled,
+        notificationsEnabled: c.notificationsEnabled, pipelineNotificationsEnabled: c.pipelineNotificationsEnabled, dependabotInactivityWarning: c.dependabotInactivityWarning,
         trelloBoardUrl: c.trelloBoardUrl,
         azureOrg: c.azureOrg, azureProject: c.azureProject, envContexts: c.envContexts,
     });
@@ -353,7 +355,7 @@ function updateSaveButtonState() {
 // Static settings inputs dirty-check
 ['contextInput', 'githubOrgInput', 'datadogSiteInput',
     'azureOrgInput', 'azureProjectInput', 'envProdInput', 'envQaInput', 'envTestInput',
-    'notificationsEnabledInput', 'pipelineNotificationsEnabledInput', 'trelloBoardUrlInput',
+    'notificationsEnabledInput', 'pipelineNotificationsEnabledInput', 'dependabotInactivityWarningInput', 'trelloBoardUrlInput',
 ].forEach((id) => {
     document.getElementById(id)?.addEventListener('change', updateSaveButtonState);
     document.getElementById(id)?.addEventListener('input', updateSaveButtonState);

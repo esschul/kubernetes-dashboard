@@ -1986,6 +1986,16 @@ h3 {
     background: #2d1f0a;
     color: #fbbf24;
 }
+.dependabot-inactivity-banner { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; padding: 12px 14px; background: #fff; border: 1px solid var(--line); border-radius: 6px; font-size: 0.82rem; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+:root[data-theme="dark"] .dependabot-inactivity-banner { background: #1e1e1e; }
+.dependabot-inactivity-banner .dependabot-warning-text { flex: 1; }
+.dependabot-warning-header { font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.dependabot-warning-repo { color: var(--muted); padding: 2px 0; }
+.dependabot-warning-repo strong { color: var(--text); font-weight: 500; }
+.warn-panel--dismissable { display: flex; align-items: flex-start; gap: 10px; }
+.warn-panel--dismissable .dependabot-warning-text { flex: 1; }
+.warn-panel-dismiss { background: none; border: none; cursor: pointer; font-size: 1.1rem; line-height: 1; color: inherit; opacity: 0.6; padding: 0; }
+.warn-panel-dismiss:hover { opacity: 1; }
 
 .error-panel pre {
     margin-bottom: 0;

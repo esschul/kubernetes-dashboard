@@ -4,6 +4,7 @@
 let prRefreshInProgress = false;
 let qaDeploymentsByBranch = new Map(); // branch → deployment object
 let testDeploymentsByBranch = new Map(); // branch → deployment object
+let dependabotInactiveWarning = false;
 let activePrTab = 'open';
 let activePrFilter = 'all';
 let activeMergedSub = 'today';
@@ -148,6 +149,11 @@ document.getElementById('prTabSwitcher').addEventListener('click', (e) => {
         c.classList.toggle('is-active', c.dataset.prFilter === 'all');
     });
     clearSelection();
+    const inactBanner = document.getElementById('dependabotInactivityWarning');
+    if (inactBanner) {
+        const show = dependabotInactiveWarning && activePrTab === 'dependabot' && !inactBanner.dataset.dismissed;
+        inactBanner.classList.toggle('hidden', !show);
+    }
     if (latestPrData) { renderPrView(latestPrData); }
 });
 
@@ -632,6 +638,23 @@ async function runBulkAction(action) {
     if (action === 'close') { window.kubeDashboard.clearPrCache?.(); refreshPullRequests(true); }
 }
 
+document.getElementById('dependabotInactivityWarning').querySelector('.warn-panel-dismiss').addEventListener('click', () => {
+    const banner = document.getElementById('dependabotInactivityWarning');
+    banner.dataset.dismissed = '1';
+    banner.classList.add('hidden');
+    try { localStorage.setItem('kube-dashboard:dependabot-warning-dismissed', new Date().toDateString()); } catch {}
+});
+
+(() => {
+    try {
+        const dismissed = localStorage.getItem('kube-dashboard:dependabot-warning-dismissed');
+        if (dismissed === new Date().toDateString()) {
+            const banner = document.getElementById('dependabotInactivityWarning');
+            if (banner) { banner.dataset.dismissed = '1'; }
+        }
+    } catch {}
+})();
+
 document.getElementById('prBulkApprove').addEventListener('click', () => runBulkAction('approve'));
 document.getElementById('prBulkClose').addEventListener('click', () => runBulkAction('close'));
 document.getElementById('prBulkMerge').addEventListener('click', () => runBulkAction('merge'));
@@ -659,6 +682,41 @@ function mergePrResults(results) {
         mergedYesterdayIacPullRequests: dedup(results.flatMap((r) => tag(r.data.mergedYesterdayIacPullRequests || [], r.namespace))),
         repositories: [...new Set(results.flatMap((r) => r.data.repositories || []))],
     };
+}
+
+async function checkDependabotInactivity(config) {
+    const banner = document.getElementById('dependabotInactivityWarning');
+    if (!banner) { return; }
+    if (!config.dependabotInactivityWarning) {
+        dependabotInactiveWarning = false;
+        banner.classList.add('hidden');
+        return;
+    }
+    try {
+        const from = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        console.log('[dependabot-check] config:', config.dependabotInactivityWarning, 'org:', config.githubOrg, 'topic:', config.githubTopic, 'from:', from);
+        const topic = config.githubTopic || config.teams?.[0]?.githubTopic || config.namespace;
+        const { mergedRangePullRequests } = await window.kubeDashboard.fetchMergedPrsForRange({
+            org: config.githubOrg, topic,
+            watchedRepos: config.watchedRepos, from, author: 'app/dependabot', limit: 500,
+        });
+        console.log('[dependabot-check] merged PRs:', mergedRangePullRequests.length);
+        const activeRepos = new Set(mergedRangePullRequests.map((pr) => pr.repository?.split('/')?.[1] || pr.repository));
+        const allRepos = (latestPrData?.repositories || []).map((r) => (typeof r === 'string' ? r : r.nameWithOwner)).map((r) => r.split('/').pop());
+        console.log('[dependabot-check] allRepos:', allRepos, 'activeRepos:', [...activeRepos]);
+        const stale = allRepos.filter((r) => !activeRepos.has(r)).sort();
+        console.log('[dependabot-check] stale:', stale);
+        dependabotInactiveWarning = stale.length > 0;
+        if (dependabotInactiveWarning) {
+            const list = stale.map((r) => `<div class="dependabot-warning-repo">– ${escapeHtml(r)}</div>`).join('');
+            banner.querySelector('.dependabot-warning-text').innerHTML = `<div class="dependabot-warning-header">No Dependabot PRs merged in the last month</div>${list}`;
+        }
+    } catch (err) {
+        console.log('[dependabot-check] error:', err);
+        dependabotInactiveWarning = false;
+    }
+    if (!dependabotInactiveWarning) { banner.classList.add('hidden'); return; }
+    if (activePrTab === 'dependabot' && !banner.dataset.dismissed) { banner.classList.remove('hidden'); }
 }
 
 async function refreshEnvDeployments(config, contextKey) {
@@ -817,6 +875,7 @@ async function refreshPullRequests(force = false) {
         updatePrNavCount(latestPrData);
         refreshQaDeployments(config).catch(() => {});
         refreshTestDeployments(config).catch(() => {});
+        checkDependabotInactivity(config).catch((e) => console.error('[dependabot-check] uncaught:', e));
     } catch (err) {
         document.getElementById('prList').innerHTML = `<div class="error-panel"><strong>Failed to load pull requests</strong><pre>${escapeHtml(err?.message || String(err))}</pre></div>`;
         document.getElementById('prStatusPanel').textContent = 'Refresh failed';

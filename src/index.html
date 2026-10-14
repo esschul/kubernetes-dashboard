@@ -158,6 +158,11 @@
                     <button class="pr-group-toggle hidden" id="prGroupByRepo" title="Group by repository">Group by repo</button>
                 </div>
             </div>
+            <div class="dependabot-inactivity-banner hidden" id="dependabotInactivityWarning">
+                <span>⚠️</span>
+                <span class="dependabot-warning-text"></span>
+                <button class="warn-panel-dismiss" title="Dismiss">×</button>
+            </div>
             <div class="pr-bulk-bar hidden" id="prBulkBar">
                 <label class="pr-bulk-select-all" title="Select all">
                     <input type="checkbox" id="prBulkSelectAll"> <span id="prBulkCount">0 selected</span>
@@ -281,6 +286,10 @@
                         <div class="toggle-row">
                             <span class="toggle-row-label">Get notified when a pipeline fails</span>
                             <input type="checkbox" id="pipelineNotificationsEnabledInput" class="toggle-checkbox" />
+                        </div>
+                        <div class="toggle-row">
+                            <span class="toggle-row-label">Warn if no Dependabot PRs merged in the last month</span>
+                            <input type="checkbox" id="dependabotInactivityWarningInput" class="toggle-checkbox" />
                         </div>
                         <div id="trelloSettingsSection" hidden>
                         <div class="settings-section-heading">Trello</div>
