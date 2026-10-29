@@ -155,7 +155,7 @@ npm run build:mac     # macOS
 npm run build:linux   # Linux
 ```
 
-To build and publish a GitHub release, see [docs/RELEASING.md](docs/RELEASING.md) — releases are built on both platforms and macOS goes first.
+To publish a release, run `npm run release` on the Mac; GitHub Actions builds the Linux AppImage. See [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Troubleshooting
 
