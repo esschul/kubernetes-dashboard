@@ -102,6 +102,45 @@ Open the app and go to **Settings**:
 | Datadog Site URL | e.g. `https://app.datadoghq.eu` |
 | Environment shortcuts | Map Prod/QA/Test to specific kubectl contexts |
 
+## Snapshot and MCP server
+
+After each fetch the app writes what it got to `snapshot.json` in its data folder:
+
+- macOS: `~/Library/Application Support/kubernetes-dashboard/snapshot.json`
+- Linux: `~/.config/kubernetes-dashboard/snapshot.json`
+
+| Key | Contents |
+|---|---|
+| `version` | Format version, bumped on breaking changes |
+| `writtenAt` | When the file was last written |
+| `app` | App `version`, `pid` and `startedAt` – a reader can tell if the app still runs |
+| `pullRequests` | `fetchedAt`, `lastError`, and the PR lists per tab. Each PR has `trelloCard` (`id`, `slug`, `url`) from the branch name, or `null` |
+| `pipelines` | Per `org/project`: `fetchedAt`, `lastError`, `runs` |
+| `deployments` | Per `context/namespace`: `fetchedAt`, `lastError`, `deployments` |
+
+A failed fetch sets `lastError` and keeps the last good data. The file is replaced in one step, so readers never see half a file.
+
+### MCP server
+
+`mcp/server.js` serves the snapshot read-only over MCP (stdio, no dependencies). Run it from a clone of this repo – it is not part of the installed app.
+
+```bash
+claude mcp add kubernetes-dashboard -- node /path/to/kubernetes-dashboard/mcp/server.js
+```
+
+| Tool | What it returns |
+|---|---|
+| `dashboard_status` | Age and last error for PRs, each pipeline source and each context/namespace |
+| `list_pull_requests` | Open/merged PRs; filter by repo, author, Trello card, bots |
+| `list_trello_cards` | PRs grouped by Trello card |
+| `list_pipeline_runs` | Pipeline runs, newest first; filter by result, repo, branch |
+| `list_deployments` | Deployments with status, image and SHA; filter by context, namespace, name, failing |
+| `get_deployment` | One deployment with pods, events and rollouts |
+
+Every result starts with `snapshot`: `writtenAt`, `ageMinutes`, `appRunning`, `stale` (older than 15 min or a bad timestamp) and a `note` when the data is not being updated. List tools also get `sources` (age and last error of the data they read) and `warnings` when a source failed or was never fetched.
+
+List results are `{ total, returned, items }`, capped by `limit` (default 30–100). Bad arguments come back as tool errors that say what to fix. Set `KUBE_DASHBOARD_SNAPSHOT` to read another file.
+
 ## Development
 
 ```bash

@@ -11,7 +11,7 @@ let activeMergedSub = 'today';
 let mergedSearchPrs = null;
 let mergedSearchFetching = false;
 let latestPrData = null;
-let groupByRepo = false;
+let prGroupBy = null;
 let selectedPrKeys = new Set();
 const seenPrKeys = new Set();
 const approvedPrKeys = new Set();
@@ -395,7 +395,7 @@ async function showPrCommentsModal(prKey) {
 }
 
 document.getElementById('prList').addEventListener('click', (e) => {
-    const searchLink = e.target.closest('.search-pr-link[data-url]');
+    const searchLink = e.target.closest('.search-pr-link[data-url], .trello-link[data-url], .pr-group-title[data-url]');
     if (searchLink) {
         e.preventDefault();
         window.kubeDashboard.openExternal(searchLink.dataset.url);
@@ -528,12 +528,15 @@ document.getElementById('prList').addEventListener('change', (e) => {
     updateBulkBar();
 });
 
-// Group-by-repo toggle
-document.getElementById('prGroupByRepo').addEventListener('click', () => {
-    groupByRepo = !groupByRepo;
-    document.getElementById('prGroupByRepo').classList.toggle('is-active', groupByRepo);
-    if (latestPrData) { renderPrView(latestPrData); }
-});
+// Group-by toggles (repo / card)
+for (const [id, mode] of [['prGroupByRepo', 'repo'], ['prGroupByCard', 'card']]) {
+    document.getElementById(id).addEventListener('click', () => {
+        prGroupBy = prGroupBy === mode ? null : mode;
+        document.getElementById('prGroupByRepo').classList.toggle('is-active', prGroupBy === 'repo');
+        document.getElementById('prGroupByCard').classList.toggle('is-active', prGroupBy === 'card');
+        if (latestPrData) { renderPrView(latestPrData); }
+    });
+}
 
 // Bulk select-all checkbox
 document.getElementById('prBulkSelectAll').addEventListener('change', (e) => {
@@ -1101,11 +1104,25 @@ function renderSearchTable(list, prs) {
 function reconcilePrList(list, orderedItems) {
     const tmp = document.createElement('div');
     const desiredNodes = orderedItems.map((item) => {
+        if (item.headerHtml !== undefined) {
+            tmp.innerHTML = item.headerHtml;
+            const el = tmp.firstElementChild;
+            el.dataset.headingKey = item.headingKey;
+            el.dataset.prHtml = item.headerHtml;
+            return el;
+        }
         if (item.heading !== undefined) {
             const el = document.createElement('div');
             el.className = 'team-group-heading';
             el.textContent = item.heading;
-            el.dataset.headingKey = item.heading;
+            el.dataset.headingKey = item.headingKey || item.heading;
+            if (item.url) {
+                const link = document.createElement('span');
+                link.className = 'trello-link';
+                link.dataset.url = item.url;
+                link.textContent = 'Trello ↗';
+                el.append(' ', link);
+            }
             return el;
         }
         tmp.innerHTML = item.html;
@@ -1147,6 +1164,11 @@ function reconcilePrList(list, orderedItems) {
 
 // Patch changed sub-elements of a PR card without touching the avatar column (preserves loaded img).
 function patchPrCard(live, desired) {
+    live.className = desired.className;
+    if (!live.dataset.prKey) {
+        live.innerHTML = desired.innerHTML;
+        return;
+    }
     const liveBody = live.querySelector('.pr-card-body');
     const desiredBody = desired.querySelector('.pr-card-body');
     if (liveBody && desiredBody && liveBody.innerHTML !== desiredBody.innerHTML) {
@@ -1188,11 +1210,13 @@ function renderPrView(data) {
         }
     });
 
-    // Show group-by-repo toggle on all tabs except merged search
-    const groupToggle = document.getElementById('prGroupByRepo');
+    // Show group-by toggles on all tabs except merged search
     const showGroupToggle = !(isMergedTab && activeMergedSub === 'search');
-    groupToggle.classList.toggle('hidden', !showGroupToggle);
-    groupToggle.classList.toggle('is-active', groupByRepo);
+    for (const [id, mode] of [['prGroupByRepo', 'repo'], ['prGroupByCard', 'card']]) {
+        const groupToggle = document.getElementById(id);
+        groupToggle.classList.toggle('hidden', !showGroupToggle);
+        groupToggle.classList.toggle('is-active', prGroupBy === mode);
+    }
 
     const counts = {
         'all': prs.length,
@@ -1208,6 +1232,7 @@ function renderPrView(data) {
     });
 
     const filtered = activePrFilter === 'all' ? prs : prs.filter(matchesPrFilter);
+    list.classList.toggle('pr-list--by-card', prGroupBy === 'card' && !(isMergedTab && activeMergedSub === 'search'));
 
     if (isMergedTab && activeMergedSub === 'search' && mergedSearchPrs !== null) {
         renderSearchTable(list, filtered);
@@ -1236,7 +1261,27 @@ function renderPrView(data) {
 
     const addPrItem = (pr) => orderedItems.push({ key: `${pr.repository}/${pr.number}`, html: renderPrCard(pr, isMergedTab, isDependabotTab) });
 
-    if (groupByRepo) {
+    if (prGroupBy === 'card') {
+        const groups = new Map();
+        const noCard = [];
+        filtered.forEach((pr) => {
+            const card = getTrelloCardFromBranch(pr.headRefName);
+            if (!card) { noCard.push(pr); return; }
+            if (!groups.has(card.id)) { groups.set(card.id, { card, prs: [] }); }
+            groups.get(card.id).prs.push(pr);
+        });
+        const newest = (prs) => prs.map(sortKey).sort().pop();
+        const ordered = [...groups.values()].sort((a, b) => newest(b.prs).localeCompare(newest(a.prs)));
+        if (noCard.length) { ordered.push({ card: null, prs: noCard }); }
+        for (const { card, prs: groupPrs } of ordered) {
+            const sortedGroup = [...groupPrs].sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
+            orderedItems.push({ headerHtml: renderCardGroupHeader(card, sortedGroup, isMergedTab), headingKey: `card:${card?.id || 'none'}` });
+            sortedGroup.forEach((pr, i) => orderedItems.push({
+                key: `${pr.repository}/${pr.number}`,
+                html: renderPrCard(pr, isMergedTab, isDependabotTab, { variant: 'row', groupEnd: i === sortedGroup.length - 1 }),
+            }));
+        }
+    } else if (prGroupBy === 'repo') {
         const repoNames = [...new Set(filtered.map((p) => p.repository))].sort();
         const groups = new Map(repoNames.map((r) => [r, []]));
         filtered.forEach((pr) => { groups.get(pr.repository)?.push(pr); });
@@ -1315,7 +1360,8 @@ async function injectPrPipelineErrors(pr, config) {
 
     const cardBody = freshCard.querySelector('.pr-card-body') || freshCard;
     const metaRow = cardBody.querySelector('.pr-meta-row');
-    if (metaRow && !cardBody.querySelector('.pr-pipeline-failed-step')) {
+    const isRow = freshCard.classList.contains('pr-card--row');
+    if (metaRow && !isRow && !cardBody.querySelector('.pr-pipeline-failed-step')) {
         const el = document.createElement('span');
         el.className = 'pipeline-failed-step pr-pipeline-failed-step';
         el.textContent = `Pipeline: ${run.name} · Failed at: ${result.stepName}`;
@@ -1335,12 +1381,38 @@ async function injectPrPipelineErrors(pr, config) {
     const errDiv = document.createElement('details');
     errDiv.className = 'pipeline-errors';
     errDiv.dataset.errors = JSON.stringify(errors);
-    errDiv.innerHTML = `<summary class="pipeline-errors-summary">${errors.length} error${errors.length !== 1 ? 's' : ''}<button class="copy-errors-btn" title="Copy errors to clipboard">Copy</button></summary>`
+    const failedAt = finalCard.classList.contains('pr-card--row') && result.stepName ? `Failed at ${escapeHtml(result.stepName)} · ` : '';
+    errDiv.innerHTML = `<summary class="pipeline-errors-summary">${failedAt}${errors.length} error${errors.length !== 1 ? 's' : ''}<button class="copy-errors-btn" title="Copy errors to clipboard">Copy</button></summary>`
         + errors.map((e) => `<div class="pipeline-error-line">${escapeHtml(e)}</div>`).join('');
     (finalCard.querySelector('.pr-card-body') || finalCard).appendChild(errDiv);
 }
 
-function renderPrCard(pr, isMerged = false, showCheckbox = false) {
+function renderCardGroupHeader(card, prs, isMerged) {
+    const title = card ? card.slug.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase()) : 'No Trello card';
+    const repoCount = new Set(prs.map((p) => p.repository)).size;
+    const counts = [`${prs.length} PR${prs.length !== 1 ? 's' : ''}`];
+    if (repoCount > 1) { counts.push(`${repoCount} repos`); }
+    const chips = [];
+    if (!isMerged) {
+        const failing = prs.filter((p) => p.checkStatus === 'failure').length;
+        const drafts = prs.filter((p) => p.isDraft).length;
+        const approved = prs.filter((p) => p.reviewDecision === 'APPROVED' && !p.isDraft).length;
+        if (failing) { chips.push(`<span class="pr-group-chip is-failure">${failing} failing</span>`); }
+        if (approved) { chips.push(`<span class="pr-group-chip is-success">${approved} approved</span>`); }
+        if (drafts) { chips.push(`<span class="pr-group-chip">${drafts} draft${drafts !== 1 ? 's' : ''}</span>`); }
+    }
+    const titleHtml = card
+        ? `<span class="pr-group-title" data-url="${escapeHtml(card.url)}" title="Open the Trello card">${escapeHtml(title)}<span class="pr-group-title-icon">↗</span></span>`
+        : `<span class="pr-group-title is-muted">${escapeHtml(title)}</span>`;
+    return `<div class="pr-group-header${card ? '' : ' pr-group-header--none'}">
+        ${titleHtml}
+        <span class="pr-group-meta">${counts.join(' · ')}</span>
+        ${chips.length ? `<span class="pr-group-chips">${chips.join('')}</span>` : ''}
+    </div>`;
+}
+
+function renderPrCard(pr, isMerged = false, showCheckbox = false, { variant = 'card', groupEnd = false } = {}) {
+    const isRow = variant === 'row';
     const reviewLabel = isMerged ? 'Merged' : getPrReviewLabel(pr);
     const reviewClass = isMerged ? 'is-merged' : getPrReviewClass(pr);
     const checkClass = { success: 'is-success', failure: 'is-failure', pending: 'is-pending', none: 'is-none' }[pr.checkStatus] || 'is-none';
@@ -1356,8 +1428,11 @@ function renderPrCard(pr, isMerged = false, showCheckbox = false) {
     const testDeployment = !isMerged && pr.headRefName
         ? (testDeploymentsByBranch.get(`${repoShortName}/${pr.headRefName}`) || testDeploymentsByBranch.get(pr.headRefName))
         : null;
-    const pipelineLink = pipelineStatus?.url
+    const pipelineLink = pipelineStatus?.url && !isRow
         ? `<span class="datadog-link pr-pipeline-link" data-url="${escapeHtml(pipelineStatus.url)}">Pipeline ↗</span>`
+        : '';
+    const checkPillLink = isRow && pipelineStatus?.url
+        ? ` pr-pipeline-link" data-url="${escapeHtml(pipelineStatus.url)}" title="Open pipeline`
         : '';
 
     const prKey = `${pr.repository}/${pr.number}`;
@@ -1390,7 +1465,7 @@ function renderPrCard(pr, isMerged = false, showCheckbox = false) {
     const checkboxHtml = showCheckbox ? `<label class="pr-select-col" onclick="event.stopPropagation()"><input type="checkbox" class="pr-select-cb" data-pr-key="${escapeHtml(prKey)}" data-pr-repo="${escapeHtml(pr.repository)}" data-pr-number="${pr.number}" data-pr-approved="${isApproved ? '1' : ''}"></label>` : '';
 
     return `
-    <div class="pr-card deployment-card pr-card--with-avatar" data-url="${escapeHtml(pr.url)}">
+    <div class="pr-card deployment-card pr-card--with-avatar${isRow ? ' pr-card--row' : ''}${isRow && groupEnd ? ' pr-card--group-end' : ''}" data-url="${escapeHtml(pr.url)}">
         ${checkboxHtml}${avatarHtml}
         <div class="pr-card-body">
         <div class="deployment-card-top">
@@ -1400,12 +1475,12 @@ function renderPrCard(pr, isMerged = false, showCheckbox = false) {
             </div>
             <div class="deployment-pill-row">
                 ${pipelineLink}
-                <span class="check-pill ${checkClass}">${escapeHtml(pr.checkStatusLabel || 'No checks')}</span>
+                <span class="check-pill ${checkClass}${checkPillLink}">${escapeHtml(pr.checkStatusLabel || 'No checks')}</span>
                 <span class="status-pill ${reviewClass}">${escapeHtml(reviewLabel)}</span>
             </div>
         </div>
         <div class="pr-meta-row">
-            <span class="pr-meta">#${pr.number} · ${escapeHtml(dateLabel)}</span>
+            <span class="pr-meta">${isRow ? `<span class="pr-meta-repo">${escapeHtml(repoShortName)}</span> #${pr.number} · ${escapeHtml(login)} · ${escapeHtml(dateLabel.toLowerCase())}` : `#${pr.number} · ${escapeHtml(dateLabel)}`}</span>
             ${ageDetails ? `<span class="age-pill ${ageDetails.cssClass}">${escapeHtml(ageDetails.label)}</span>` : ''}
             ${pr.headRefOid ? `<span class="branch-pill pr-comments-pill" data-pr-key="${escapeHtml(pr.repository + '/' + pr.number)}" style="cursor:pointer">${pr.commentActivityCount > 0 ? `${pr.commentActivityCount} comment${pr.commentActivityCount !== 1 ? 's' : ''}` : 'Description'}</span>` : ''}
             ${isDependabotPr(pr) ? analyzeDependabotPr(pr).map((w) => `<span class="dep-warn-pill dep-warn-pill--${w.level}">${escapeHtml(w.label)}</span>`).join('') : ''}

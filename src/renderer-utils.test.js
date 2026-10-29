@@ -16,6 +16,7 @@ const {
     logLineMatchesFilter,
     isDependabotPr,
     getLocalDateKey,
+    getTrelloCardFromBranch,
 } = require('./renderer-utils');
 
 function test(name, fn) {
@@ -291,4 +292,24 @@ test('returns todays date when no argument given', () => {
 });
 test('pads single-digit month and day', () => {
     assert.match(getLocalDateKey('2026-01-05T00:00:00Z'), /^\d{4}-\d{2}-\d{2}$/);
+});
+
+// ── getTrelloCardFromBranch ───────────────────────────────────────────────────
+console.log('\ngetTrelloCardFromBranch');
+
+test('reads the card shortLink from a b branch name', () => {
+    assert.deepEqual(getTrelloCardFromBranch('add-booking-validation-for-3639_xRqkAzIU'), {
+        id: 'xRqkAzIU',
+        slug: 'add-booking-validation-for-3639',
+        url: 'https://trello.com/c/xRqkAzIU',
+    });
+});
+test('returns null for branches without a card suffix', () => {
+    assert.equal(getTrelloCardFromBranch('feat/retry-logic'), null);
+    assert.equal(getTrelloCardFromBranch('dependabot/npm_and_yarn/electron-38.1.0'), null);
+    assert.equal(getTrelloCardFromBranch('fix_short'), null);
+});
+test('returns null when branch is missing', () => {
+    assert.equal(getTrelloCardFromBranch(undefined), null);
+    assert.equal(getTrelloCardFromBranch(''), null);
 });

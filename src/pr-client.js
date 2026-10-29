@@ -18,7 +18,7 @@ function isIac(pr) { return IAC_BOT_LOGINS.has(pr.author?.login); }
 function isBotPr(pr) { return isDependabot(pr) || isIac(pr); }
 // headRefOid = head commit SHA, used to fetch check runs via REST
 const OPEN_PR_FIELDS = 'number,title,url,author,isDraft,createdAt,updatedAt,reviewDecision,headRefOid,headRefName,comments,reviews,files';
-const MERGED_PR_FIELDS = 'number,title,url,author,isDraft,createdAt,updatedAt,mergedAt,reviewDecision';
+const MERGED_PR_FIELDS = 'number,title,url,author,isDraft,createdAt,updatedAt,mergedAt,reviewDecision,headRefName';
 
 const RECENT_PUSH_MS = 24 * 60 * 60 * 1000; // 24 hours — controls cache TTL aggressiveness
 const CHECK_RUNS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // skip check-runs for PRs older than 7 days
@@ -108,6 +108,14 @@ function interpretCheckRuns(runs) {
     return { checkStatus: 'success', checkStatusLabel: 'Checks passing' };
 }
 
+function statusesToRuns(statuses) {
+    return (statuses || []).map((s) => ({
+        name: s.context,
+        status: s.state === 'pending' ? 'in_progress' : 'completed',
+        conclusion: s.state === 'success' ? 'success' : s.state === 'pending' ? null : 'failure',
+    }));
+}
+
 async function fetchCheckStatus(nameWithOwner, sha, recentlyUpdated) {
     const cacheKey = `${nameWithOwner}/${sha}`;
     const cached = checkRunsCache.get(cacheKey);
@@ -124,8 +132,11 @@ async function fetchCheckStatus(nameWithOwner, sha, recentlyUpdated) {
     }
 
     try {
-        const data = await runGh(['api', `repos/${nameWithOwner}/commits/${sha}/check-runs`, '--jq', '[.check_runs[] | {name,status,conclusion,started_at}]']);
-        const allRuns = Array.isArray(data) ? data : [];
+        const [data, statuses] = await Promise.all([
+            runGh(['api', `repos/${nameWithOwner}/commits/${sha}/check-runs`, '--jq', '[.check_runs[] | {name,status,conclusion,started_at}]']),
+            runGh(['api', `repos/${nameWithOwner}/commits/${sha}/status`, '--jq', '[.statuses[] | {context,state}]']).catch(() => []),
+        ]);
+        const allRuns = (Array.isArray(data) ? data : []).concat(statusesToRuns(Array.isArray(statuses) ? statuses : []));
         // Keep only the latest run per check name (re-runs produce duplicates with old cancelled entries)
         const latestByName = new Map();
         for (const r of allRuns) {
@@ -303,7 +314,7 @@ const normalizeGql = (pr) => ({
 });
 
 const OPEN_GQL_FIELDS = `number title url isDraft createdAt updatedAt reviewDecision headRefOid headRefName author { login }`;
-const MERGED_GQL_FIELDS = `number title url isDraft createdAt updatedAt mergedAt reviewDecision author { login }`;
+const MERGED_GQL_FIELDS = `number title url isDraft createdAt updatedAt mergedAt reviewDecision headRefName author { login }`;
 const AUTHOR_GQL_FIELDS = `${OPEN_GQL_FIELDS} mergedAt repository { nameWithOwner }`;
 
 function buildAuthoredPrsQuery(org, today, yesterday) {
@@ -537,8 +548,8 @@ async function fetchPullRequests({ org, topic, watchedRepos = [], namespace }, o
     await Promise.allSettled(depRepos.map((repo) => fetchHasSmoketests(repo)));
 
     const annotateWithSmoketests = (prs) => prs.map((pr) => {
-        const has = repoSmoketestCache.get(pr.repository);
-        return has ? { ...pr, hasSmoketests: true } : pr;
+        if (repoSmoketestCache.get(pr.repository)) { pr.hasSmoketests = true; }
+        return pr;
     });
     const result = {
         pullRequests: all.filter((pr) => !isBotPr(pr)),
@@ -637,4 +648,4 @@ async function getMasterSha(org, repoName) {
     throw new Error(`Could not resolve master SHA for "${repoName}" (repo "${match.name}")`);
 }
 
-module.exports = { fetchPullRequests, mergeWithAuthorSearch, buildAuthoredPrsQuery, clearPrListCache, clearAllCaches, evictRepoDeltaCache, fetchCommitMessage, fetchMergedPrsForRange, fetchRepoList, getMasterSha };
+module.exports = { fetchPullRequests, statusesToRuns, mergeWithAuthorSearch, buildAuthoredPrsQuery, clearPrListCache, clearAllCaches, evictRepoDeltaCache, fetchCommitMessage, fetchMergedPrsForRange, fetchRepoList, getMasterSha };

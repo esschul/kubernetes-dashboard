@@ -722,6 +722,13 @@ h3 {
     margin-bottom: -4px;
 }
 
+.team-group-heading .trello-link {
+    margin-left: 6px;
+    padding: 1px 6px;
+    letter-spacing: normal;
+    text-transform: none;
+}
+
 .team-group-heading:first-child {
     padding-top: 0;
 }
@@ -4406,3 +4413,159 @@ details[open] .log-stack-summary::before { transform: rotate(90deg); }
 .is-compact .trello-column { min-width: 200px; max-width: 220px; }
 .is-compact .trello-card { font-size: 0.78rem; padding: 6px 8px; }
 .is-compact .trello-column-header { font-size: 0.78rem; padding: 7px 10px 6px; }
+
+.pr-list--by-card {
+    gap: 0;
+}
+
+.pr-group-header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    margin-top: 18px;
+    padding: 12px 18px;
+    border: 1px solid var(--line);
+    border-bottom: none;
+    border-radius: 14px 14px 0 0;
+    background: var(--panel);
+}
+
+.pr-group-header:first-child {
+    margin-top: 0;
+}
+
+.pr-group-title {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: var(--text);
+    cursor: pointer;
+}
+
+.pr-group-title:hover {
+    color: var(--accent);
+}
+
+.pr-group-title.is-muted {
+    color: var(--muted);
+    cursor: default;
+}
+
+.pr-group-title-icon {
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+
+.pr-group-title:hover .pr-group-title-icon {
+    color: var(--accent);
+}
+
+.pr-group-meta {
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+
+.pr-group-chips {
+    display: inline-flex;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.pr-group-chip {
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: var(--panel-muted);
+    color: var(--muted);
+}
+
+.pr-group-chip.is-failure {
+    background: var(--danger-bg);
+    color: var(--danger-text);
+}
+
+.pr-group-chip.is-success {
+    background: #e8f6ed;
+    color: #237441;
+}
+
+:root[data-theme="dark"] .pr-group-chip.is-success {
+    background: #064e3b;
+    color: #a7f3d0;
+}
+
+.pr-list .pr-card--row {
+    padding: 10px 18px;
+    border-radius: 0;
+    border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+    box-shadow: none;
+    gap: 10px;
+    align-items: center;
+}
+
+.pr-list .pr-card--row:hover {
+    border-color: var(--line);
+    border-top-color: color-mix(in srgb, var(--line) 60%, transparent);
+    background: var(--panel-muted);
+}
+
+.pr-list .pr-card--row.pr-card--group-end {
+    border-radius: 0 0 14px 14px;
+}
+
+.pr-card--row .pr-avatar-col {
+    width: 26px;
+    padding-top: 0;
+}
+
+.pr-card--row .pr-avatar,
+.pr-card--row .pr-avatar--placeholder,
+.pr-card--row .pr-avatar--bot {
+    width: 26px;
+    height: 26px;
+}
+
+.pr-card--row .pr-avatar-name,
+.pr-card--row .eyebrow-inline {
+    display: none;
+}
+
+.pr-card--row h3 {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.pr-card--row .deployment-card-top {
+    gap: 16px;
+}
+
+.pr-card--row .pr-meta-row {
+    margin-top: 2px;
+}
+
+.pr-meta-repo {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.pr-card--row .check-pill.pr-pipeline-link {
+    cursor: pointer;
+}
+
+.pr-card--row .check-pill.pr-pipeline-link:hover {
+    text-decoration: underline;
+}
+
+.pr-card--row .pipeline-errors {
+    margin-top: 6px;
+}
+
+.pr-card--row .pipeline-errors-summary {
+    padding: 4px 10px;
+    font-size: 0.78rem;
+}

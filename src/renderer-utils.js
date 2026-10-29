@@ -1,5 +1,10 @@
 'use strict';
-/* exported escapeHtml, getStatusLabel, getImageTag, formatRelativeTime, getAgePillClass, formatDuration, isFailingStatus, getPipelineBranchType, getPipelineStatusClass, getPipelineStatusLabel, parseLogLine, logLineMatchesFilter, getLocalDateKey, isDependabotPr, isIacPr */
+/* exported escapeHtml, getStatusLabel, getImageTag, formatRelativeTime, getAgePillClass, formatDuration, isFailingStatus, getPipelineBranchType, getPipelineStatusClass, getPipelineStatusLabel, parseLogLine, logLineMatchesFilter, getLocalDateKey, isDependabotPr, isIacPr, getTrelloCardFromBranch */
+
+function getTrelloCardFromBranch(branch) {
+    const match = /^(.+)_([A-Za-z0-9]{8})$/.exec(branch || '');
+    return match ? { id: match[2], slug: match[1], url: `https://trello.com/c/${match[2]}` } : null;
+}
 
 const DEPENDABOT_LOGINS = new Set(['app/dependabot', 'dependabot[bot]', 'dependabot']);
 function isDependabotPr(pr) { return DEPENDABOT_LOGINS.has(pr.author?.login); }
@@ -148,5 +153,6 @@ if (typeof module !== 'undefined') {
         isDependabotPr,
         isIacPr,
         getLocalDateKey,
+        getTrelloCardFromBranch,
     };
 }

@@ -56,6 +56,7 @@ try { buildDate = require('./build-info.json').date; } catch { /* not available 
 const { fetchDeployments, hasDeploymentChanges, fetchDeploymentEvents, fetchContexts, invalidateContextsCache, fetchNamespaces, rolloutRestart, rolloutUndo, rolloutStatus, spawnLogStream, searchLogs, cancelSearch, deployMaster } = require('./kubectl-client');
 const { fetchPrForSha, fetchPrByNumber, fetchGithubUser, approvePr, mergePr, closePr } = require('./github-client');
 const { fetchPipelineRuns, fetchFailedStep, fetchLogErrors, rerunFailedJobs, fetchTrelloSecrets } = require('./azure-client');
+const { createSnapshotStore } = require('./snapshot');
 const { fetchPullRequests, clearPrListCache, clearAllCaches, evictRepoDeltaCache, fetchCommitMessage, fetchMergedPrsForRange, fetchRepoList, getMasterSha } = require('./pr-client');
 
 function createWindow() {
@@ -83,6 +84,8 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+    const snapshot = createSnapshotStore(path.join(app.getPath('userData'), 'snapshot.json'), { app: { version: app.getVersion() } });
+
     ipcMain.handle('deployments:changed', async (_event, config) => {
         return hasDeploymentChanges(config);
     });
@@ -98,8 +101,10 @@ app.whenReady().then(() => {
     ipcMain.handle('deployments:fetch', async (_event, config) => {
         try {
             const result = await fetchDeployments(config);
+            snapshot.setDeployments(config, result);
             return { ok: true, result };
         } catch (err) {
+            snapshot.setDeploymentsError(config, err);
             const msg = err.message || '';
             const isVpn = msg.includes('privatelink') || msg.includes('no such host') || msg.includes('Unable to connect to the server');
             return {
@@ -151,8 +156,10 @@ app.whenReady().then(() => {
     ipcMain.handle('pipelines:fetch', async (_event, config) => {
         try {
             const result = await fetchPipelineRuns(config);
+            snapshot.setPipelines(config, result);
             return { ok: true, result };
         } catch (err) {
+            snapshot.setPipelinesError(config, err);
             return { ok: false, error: { message: err.message } };
         }
     });
@@ -235,10 +242,15 @@ app.whenReady().then(() => {
             const wc = _event.sender; // capture webContents reference before async gap
             const send = (channel, payload) => { try { if (!wc.isDestroyed()) { wc.send(channel, payload); } } catch {} };
             const onProgress = (pct) => send('pr:progress', pct);
-            const onPartialResults = (partial) => send('pr:partial', partial);
+            const onPartialResults = (partial) => {
+                send('pr:partial', partial);
+                if (partial?.type === 'checks' && partial.pr) { snapshot.applyCheckStatus(partial.pr); }
+            };
             const result = await fetchPullRequests(config, onProgress, onPartialResults);
+            snapshot.setPullRequests(result);
             return { ok: true, result };
         } catch (err) {
+            snapshot.setPullRequestsError(err);
             return { ok: false, error: { message: err.message } };
         }
     });

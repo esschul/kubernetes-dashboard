@@ -664,3 +664,25 @@ asyncTest('poll without clearing cache serves stale data within TTL', async () =
 
     assert.equal(calls, 1, 'without clearPrListCache all poll ticks hit cache and miss new PRs');
 });
+
+// ── statusesToRuns ───────────────────────────────────────────────────────────
+console.log('\nstatusesToRuns — commit statuses (Azure Pipelines via OAuth)');
+const { statusesToRuns } = require('./pr-client.js');
+
+test('maps commit statuses to check-run shape', () => {
+    assert.deepEqual(statusesToRuns([
+        { context: 'bring.checkout-plugin-woo', state: 'success' },
+        { context: 'ci', state: 'pending' },
+        { context: 'lint', state: 'failure' },
+        { context: 'build', state: 'error' },
+    ]), [
+        { name: 'bring.checkout-plugin-woo', status: 'completed', conclusion: 'success' },
+        { name: 'ci', status: 'in_progress', conclusion: null },
+        { name: 'lint', status: 'completed', conclusion: 'failure' },
+        { name: 'build', status: 'completed', conclusion: 'failure' },
+    ]);
+});
+test('a failing status alone makes the PR fail, even with no check runs', () => {
+    assert.equal(interpretCheckRuns(statusesToRuns([{ context: 'bring.checkout-plugin-woo', state: 'failure' }])).checkStatus, 'failure');
+    assert.equal(interpretCheckRuns(statusesToRuns([])).checkStatus, 'none');
+});
