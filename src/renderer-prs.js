@@ -1,5 +1,5 @@
 'use strict';
-/* exported latestPrData, prRefreshInProgress, isDependabotPr, fetchAvatar, refreshPullRequests, renderPrView */
+/* exported latestPrData, prRefreshInProgress, isDependabotPr, fetchAvatar, refreshPullRequests, renderPrView, fillPrAvatars, renderCardGroupHeader, renderPrCard, showPrCommentsModal */
 
 let prRefreshInProgress = false;
 let qaDeploymentsByBranch = new Map(); // branch → deployment object
@@ -820,9 +820,9 @@ async function refreshPullRequests(force = false) {
         } else if (partial.type === 'checks' && partial.pr) {
             // Patch just the check-pill on the matching card — no full re-render needed
             const { url, checkStatus, checkStatusLabel } = partial.pr;
-            const card = document.querySelector(`.pr-card[data-url="${CSS.escape(url)}"]`);
-            window.kubeDashboard.log(`checks partial received — card ${card ? 'FOUND' : 'NOT FOUND'} for ${url} → ${checkStatus}`);
-            if (card) {
+            const cards = document.querySelectorAll(`.pr-card[data-url="${CSS.escape(url)}"]`);
+            window.kubeDashboard.log(`checks partial received — ${cards.length} card(s) for ${url} → ${checkStatus}`);
+            for (const card of cards) {
                 const pill = card.querySelector('.check-pill');
                 if (pill) {
                     const cls = { success: 'is-success', failure: 'is-failure', pending: 'is-pending', none: 'is-none' }[checkStatus] || 'is-none';
@@ -1181,6 +1181,7 @@ function patchPrCard(live, desired) {
 }
 
 function renderPrView(data) {
+    window.renderTrelloCardsIfVisible?.();
     const list = document.getElementById('prList');
     const prs = getPrsForTab(data);
     const isMergedTab = activePrTab === 'merged';
@@ -1311,21 +1312,7 @@ function renderPrView(data) {
     reconcilePrList(list, orderedItems);
     updateBulkBar();
 
-    {
-        const placeholders = list.querySelectorAll('.pr-avatar--placeholder[data-login]');
-        for (const el of placeholders) {
-            const login = el.dataset.login;
-            fetchAvatar(login).then((url) => {
-                if (!url) { return; }
-                const img = document.createElement('img');
-                img.className = 'pr-avatar';
-                img.src = url;
-                img.alt = login;
-                img.onerror = () => { img.style.display = 'none'; };
-                el.replaceWith(img);
-            });
-        }
-    }
+    fillPrAvatars(list);
     if (config.azureOrg && config.azureProject && window._lastPipelineRuns) {
         for (const pr of filtered) {
             if (pr.checkStatus === 'failure') { injectPrPipelineErrors(pr, config); }
@@ -1387,8 +1374,23 @@ async function injectPrPipelineErrors(pr, config) {
     (finalCard.querySelector('.pr-card-body') || finalCard).appendChild(errDiv);
 }
 
-function renderCardGroupHeader(card, prs, isMerged) {
-    const title = card ? card.slug.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase()) : 'No Trello card';
+function fillPrAvatars(root) {
+    for (const el of root.querySelectorAll('.pr-avatar--placeholder[data-login]')) {
+        const login = el.dataset.login;
+        fetchAvatar(login).then((url) => {
+            if (!url) { return; }
+            const img = document.createElement('img');
+            img.className = 'pr-avatar';
+            img.src = url;
+            img.alt = login;
+            img.onerror = () => { img.style.display = 'none'; };
+            el.replaceWith(img);
+        });
+    }
+}
+
+function renderCardGroupHeader(card, prs, isMerged, { name = null, badgesHtml = '', meta = null, endHtml = '' } = {}) {
+    const title = name || (card ? card.slug.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase()) : 'No Trello card');
     const repoCount = new Set(prs.map((p) => p.repository)).size;
     const counts = [`${prs.length} PR${prs.length !== 1 ? 's' : ''}`];
     if (repoCount > 1) { counts.push(`${repoCount} repos`); }
@@ -1405,9 +1407,9 @@ function renderCardGroupHeader(card, prs, isMerged) {
         ? `<span class="pr-group-title" data-url="${escapeHtml(card.url)}" title="Open the Trello card">${escapeHtml(title)}<span class="pr-group-title-icon">↗</span></span>`
         : `<span class="pr-group-title is-muted">${escapeHtml(title)}</span>`;
     return `<div class="pr-group-header${card ? '' : ' pr-group-header--none'}">
-        ${titleHtml}
-        <span class="pr-group-meta">${counts.join(' · ')}</span>
-        ${chips.length ? `<span class="pr-group-chips">${chips.join('')}</span>` : ''}
+        ${titleHtml}${badgesHtml}
+        <span class="pr-group-meta">${escapeHtml(meta ?? counts.join(' · '))}</span>
+        ${chips.length || endHtml ? `<span class="pr-group-chips">${chips.join('')}${endHtml}</span>` : ''}
     </div>`;
 }
 

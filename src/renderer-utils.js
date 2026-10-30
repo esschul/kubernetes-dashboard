@@ -1,5 +1,5 @@
 'use strict';
-/* exported escapeHtml, getStatusLabel, getImageTag, formatRelativeTime, getAgePillClass, formatDuration, isFailingStatus, getPipelineBranchType, getPipelineStatusClass, getPipelineStatusLabel, parseLogLine, logLineMatchesFilter, getLocalDateKey, isDependabotPr, isIacPr, getTrelloCardFromBranch */
+/* exported escapeHtml, getStatusLabel, getImageTag, formatRelativeTime, getAgePillClass, formatDuration, isFailingStatus, getPipelineBranchType, getPipelineStatusClass, getPipelineStatusLabel, parseLogLine, logLineMatchesFilter, getLocalDateKey, isDependabotPr, isIacPr, getTrelloCardFromBranch, groupTrelloCards */
 
 function getTrelloCardFromBranch(branch) {
     const match = /^(.+)_([A-Za-z0-9]{8})$/.exec(branch || '');
@@ -136,6 +136,37 @@ function logLineMatchesFilter(raw, filter) {
     return `${raw || ''}\n${ts} ${msg}`.toLowerCase().includes(needle);
 }
 
+function groupTrelloCards({ lists, cards }, { open = [], merged = [] }, { hiddenListIds = new Set(), commentLinks = () => [] } = {}) {
+    const byUrl = new Map();
+    const byCard = new Map();
+    for (const [pr, isMerged] of [...open.map((p) => [p, false]), ...merged.map((p) => [p, true])]) {
+        const entry = { pr, merged: isMerged };
+        byUrl.set(pr.url, entry);
+        const card = getTrelloCardFromBranch(pr.headRefName);
+        if (!card) { continue; }
+        if (!byCard.has(card.id)) { byCard.set(card.id, new Set()); }
+        byCard.get(card.id).add(pr.url);
+    }
+    const shortLinkOf = (card) => /trello\.com\/c\/([A-Za-z0-9]+)/.exec(card.shortUrl || '')?.[1];
+    return [...lists].reverse().filter((list) => !hiddenListIds.has(list.id)).map((list) => ({
+        list,
+        groups: cards.filter((card) => card.idList === list.id).map((card) => {
+            const urls = new Set(byCard.get(shortLinkOf(card)) || []);
+            const linked = [];
+            for (const link of commentLinks(card)) {
+                if (byUrl.has(link.url)) { urls.add(link.url); } else { linked.push(link); }
+            }
+            const entries = [...urls].map((url) => byUrl.get(url));
+            return {
+                card,
+                open: entries.filter((e) => !e.merged).map((e) => e.pr).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))),
+                merged: entries.filter((e) => e.merged).map((e) => e.pr).sort((a, b) => String(b.mergedAt).localeCompare(String(a.mergedAt))),
+                linked,
+            };
+        }),
+    }));
+}
+
 if (typeof module !== 'undefined') {
     module.exports = {
         escapeHtml,
@@ -154,5 +185,6 @@ if (typeof module !== 'undefined') {
         isIacPr,
         getLocalDateKey,
         getTrelloCardFromBranch,
+        groupTrelloCards,
     };
 }

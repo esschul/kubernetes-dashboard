@@ -17,6 +17,7 @@ const {
     isDependabotPr,
     getLocalDateKey,
     getTrelloCardFromBranch,
+    groupTrelloCards,
 } = require('./renderer-utils');
 
 function test(name, fn) {
@@ -312,4 +313,47 @@ test('returns null for branches without a card suffix', () => {
 test('returns null when branch is missing', () => {
     assert.equal(getTrelloCardFromBranch(undefined), null);
     assert.equal(getTrelloCardFromBranch(''), null);
+});
+
+// ── groupTrelloCards ──────────────────────────────────────────────────────────
+console.log('\ngroupTrelloCards');
+
+const board = {
+    lists: [{ id: 'backlog', name: 'Backlog' }, { id: 'dev', name: 'In development' }, { id: 'review', name: 'In review' }],
+    cards: [
+        { id: 'c1', idList: 'dev', name: 'Explore return options', shortUrl: 'https://trello.com/c/AbCd1234' },
+        { id: 'c2', idList: 'review', name: 'New credentials', shortUrl: 'https://trello.com/c/EfGh5678' },
+        { id: 'c3', idList: 'dev', name: 'No PRs yet', shortUrl: 'https://trello.com/c/IjKl9012' },
+    ],
+};
+
+test('puts the last board list first and keeps board order of cards', () => {
+    const sections = groupTrelloCards(board, {});
+    assert.deepEqual(sections.map((s) => s.list.id), ['review', 'dev', 'backlog']);
+    assert.deepEqual(sections[1].groups.map((g) => g.card.id), ['c1', 'c3']);
+});
+test('matches open and merged PRs to cards by branch shortLink', () => {
+    const sections = groupTrelloCards(board, {
+        open: [
+            { url: 'u1', headRefName: 'returns_AbCd1234', updatedAt: '2026-10-29T10:00:00Z' },
+            { url: 'u2', headRefName: 'returns-woo_AbCd1234', updatedAt: '2026-10-30T10:00:00Z' },
+            { url: 'u3', headRefName: 'feat/other' },
+        ],
+        merged: [{ url: 'u4', headRefName: 'returns-api_AbCd1234', mergedAt: '2026-10-29T08:00:00Z' }],
+    });
+    const group = sections[1].groups[0];
+    assert.deepEqual(group.open.map((p) => p.url), ['u2', 'u1']);
+    assert.deepEqual(group.merged.map((p) => p.url), ['u4']);
+    assert.deepEqual(sections[1].groups[1].open, []);
+});
+test('uses card comment links: known PRs become full rows, the rest stay links', () => {
+    const comments = { c2: [{ url: 'u9', label: 'pickup-point #2047' }, { url: 'old', label: 'iac #1', status: { cls: 'merged' } }] };
+    const sections = groupTrelloCards(board, { open: [{ url: 'u9', headRefName: 'creds' }] }, { commentLinks: (card) => comments[card.id] || [] });
+    const group = sections[0].groups[0];
+    assert.deepEqual(group.open.map((p) => p.url), ['u9']);
+    assert.deepEqual(group.linked.map((l) => l.url), ['old']);
+});
+test('skips hidden lists', () => {
+    const sections = groupTrelloCards(board, {}, { hiddenListIds: new Set(['backlog']) });
+    assert.deepEqual(sections.map((s) => s.list.id), ['review', 'dev']);
 });

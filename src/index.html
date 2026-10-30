@@ -330,6 +330,10 @@
                     <p class="status-panel" id="trelloStatusPanel">Loading…</p>
                 </div>
                 <div class="trello-topbar-right">
+                    <div class="env-switcher trello-mode-switch" id="trelloModeSwitch">
+                        <button class="env-btn trello-mode-btn" data-trello-mode="board">Board</button>
+                        <button class="env-btn trello-mode-btn" data-trello-mode="cards">Cards</button>
+                    </div>
                     <div class="trello-lists-dropdown-wrap" id="trelloListsDropdownWrap">
                         <button class="theme-button trello-lists-btn" id="trelloListsBtn" title="Filter lists">
                             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h6v-2H3v2zm0-5h12v-2H3v2zm0-7v2h18V6H3z"/></svg>
@@ -354,6 +358,7 @@
                 <p>Add a board URL in <a href="#" id="trelloGoToSettings">Settings → Trello</a>.</p>
             </div>
             <div class="trello-board is-heatmap" id="trelloBoard"></div>
+            <div class="pr-list trello-cards" id="trelloCards" hidden></div>
         </div>
 
         <!-- Help view -->

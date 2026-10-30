@@ -1,7 +1,10 @@
-/* global escapeHtml, loadConfig, formatRelativeTime, getAgePillClass */
+/* global escapeHtml, loadConfig, formatRelativeTime, getAgePillClass, groupTrelloCards, latestPrData, refreshPullRequests, prRefreshInProgress, renderCardGroupHeader, renderPrCard, fillPrAvatars, showPrCommentsModal */
 
 const TRELLO_HIDDEN_KEY = 'kube-dashboard:trello-hidden-lists';
 const TRELLO_SHOW_PRS_KEY = 'kube-dashboard:trello-show-prs';
+const TRELLO_MODE_KEY = 'kube-dashboard:trello-mode';
+let trelloMode = (() => { try { return localStorage.getItem(TRELLO_MODE_KEY) === 'cards' ? 'cards' : 'board'; } catch { return 'board'; } })();
+const trelloExpandedCards = new Set();
 let trelloShowPrs = (() => { try { return localStorage.getItem(TRELLO_SHOW_PRS_KEY) !== 'false'; } catch { return true; } })();
 
 let trelloBoardData = null;
@@ -116,7 +119,7 @@ function renderListsDropdown(lists) {
                 trelloHiddenLists.add(id);
             }
             saveTrelloHiddenLists();
-            renderTrelloColumns(trelloBoardData);
+            renderTrelloView(trelloBoardData);
         });
     });
 }
@@ -157,10 +160,7 @@ function renderTrelloColumns(data) {
             <div class="trello-column-header">${escapeHtml(list.name)} <span class="trello-column-count">${listCards.length}</span></div>
             <div class="trello-column-cards">`;
         for (const card of listCards) {
-            const labels = (card.labels || []).filter(l => l.color).map(l => {
-                const baseColor = l.color.replace(/_(dark|light)$/, '');
-                return `<span class="trello-label trello-label--${escapeHtml(baseColor)}">${escapeHtml(l.name || '')}</span>`;
-            }).join('');
+            const labels = renderTrelloLabels(card);
             const overdue = card.due && !card.dueComplete && new Date(card.due) < new Date();
             const due = card.due ? `<span class="trello-due${card.dueComplete ? ' trello-due--done' : overdue ? ' trello-due--overdue' : ''}">${formatDue(card.due)}</span>` : '';
             const prLinks = extractPrLinks(card);
@@ -191,12 +191,7 @@ function renderTrelloColumns(data) {
     html += '</div>';
     board.innerHTML = html;
 
-    const ageFilter = board.dataset.ageFilter;
-    if (ageFilter && ageFilter !== 'all') {
-        board.querySelectorAll('.trello-card').forEach(card => {
-            card.style.display = card.classList.contains(`card-age--${ageFilter}`) ? '' : 'none';
-        });
-    }
+    applyTrelloAgeFilter();
 
     board.querySelectorAll('.external-link[data-url]').forEach(el => {
         el.addEventListener('click', (e) => {
@@ -207,6 +202,138 @@ function renderTrelloColumns(data) {
     });
 }
 
+function renderTrelloLabels(card) {
+    return (card.labels || []).filter(l => l.color).map(l => {
+        const baseColor = l.color.replace(/_(dark|light)$/, '');
+        return `<span class="trello-label trello-label--${escapeHtml(baseColor)}">${escapeHtml(l.name || '')}</span>`;
+    }).join('');
+}
+
+function renderLinkedPrRows(linked) {
+    const byStatus = new Map();
+    for (const link of linked) {
+        const cls = link.status?.cls || 'open';
+        if (!byStatus.has(cls)) byStatus.set(cls, { label: link.status?.label || 'Open', links: [] });
+        byStatus.get(cls).links.push(link);
+    }
+    return [...byStatus].map(([cls, { label, links }]) => `<div class="trello-cards-linked">
+        <span class="trello-cards-linked-prs">${links.map(l => `<span class="trello-pr-link trello-pr-link--${escapeHtml(cls)} external-link" data-url="${escapeHtml(l.url)}">${escapeHtml(l.label)}</span>`).join('')}</span>
+        <span class="status-pill trello-cards-linked-status trello-cards-linked-status--${escapeHtml(cls)}">${escapeHtml(label)}</span>
+    </div>`).join('');
+}
+
+function renderTrelloCardGroup({ card, open, merged, linked }, members) {
+    const total = open.length + merged.length + linked.length;
+    const collapsible = open.length === 0 && total > 0;
+    const expanded = !collapsible || trelloExpandedCards.has(card.id);
+    const repos = new Set([...open, ...merged].map(p => p.repository)).size;
+    const meta = [`${total} PR${total !== 1 ? 's' : ''}`];
+    if (repos > 1) meta.push(`${repos} repos`);
+    if (collapsible) meta.push(linked.every(l => l.status?.cls === 'merged') ? 'all merged' : 'none open');
+    const assignees = (card.idMembers || []).map(id => members[id]).filter(Boolean);
+    if (assignees.length) meta.push(assignees.join(', '));
+    if (card.dateLastActivity) meta.push(formatRelativeTime(card.dateLastActivity));
+    const labels = renderTrelloLabels(card);
+    const toggle = collapsible ? `<button class="trello-cards-toggle" data-card-id="${escapeHtml(card.id)}" title="${expanded ? 'Collapse' : 'Show PRs'}">${expanded ? '▾' : '▸'}</button>` : '';
+    const header = renderCardGroupHeader({ url: card.shortUrl }, open, false, {
+        name: card.name,
+        badgesHtml: labels ? `<span class="trello-card-labels">${labels}</span>` : '',
+        meta: meta.join(' · '),
+        endHtml: toggle,
+    });
+    const rows = expanded ? [
+        ...open.map(pr => renderPrCard(pr, false, false, { variant: 'row' })),
+        ...merged.map(pr => renderPrCard(pr, true, false, { variant: 'row' })),
+        renderLinkedPrRows(linked),
+    ].join('') : '';
+    const ageClass = card.dateLastActivity ? cardAgeClass(card.dateLastActivity) : '';
+    return `<div class="trello-cards-group ${ageClass}">${header}${rows}</div>`;
+}
+
+function renderTrelloCards(data) {
+    const container = document.getElementById('trelloCards');
+    if (!data) { container.innerHTML = ''; return; }
+    if (!latestPrData && !prRefreshInProgress) refreshPullRequests();
+    const prs = {
+        open: latestPrData?.pullRequests || [],
+        merged: [...(latestPrData?.mergedPullRequests || []), ...(latestPrData?.mergedYesterdayPullRequests || [])],
+    };
+    const sections = groupTrelloCards(data, prs, { hiddenListIds: trelloHiddenLists, commentLinks: extractPrLinks });
+    const members = data.members || {};
+    const loading = latestPrData ? '' : '<p class="trello-cards-loading">Loading pull requests…</p>';
+    container.innerHTML = loading + sections.map(({ list, groups }) => {
+        const withPrs = groups.filter(g => g.open.length + g.merged.length + g.linked.length > 0);
+        const without = groups.filter(g => !withPrs.includes(g));
+        const empty = without.length ? `<div class="trello-cards-empty"><span>No PRs:</span> ${without.map(g =>
+            `<span class="trello-cards-empty-card external-link ${g.card.dateLastActivity ? cardAgeClass(g.card.dateLastActivity) : ''}" data-url="${escapeHtml(g.card.shortUrl)}">${escapeHtml(g.card.name)}</span>`).join('')}</div>` : '';
+        return `<section class="trello-cards-section">
+            <div class="trello-cards-section-title">${escapeHtml(list.name)} <span class="trello-column-count">${groups.length}</span></div>
+            ${withPrs.map(g => renderTrelloCardGroup(g, members)).join('')}
+            ${empty}
+        </section>`;
+    }).join('');
+    fillPrAvatars(container);
+    applyTrelloAgeFilter();
+}
+
+function applyTrelloAgeFilter() {
+    const age = document.getElementById('trelloBoard').dataset.ageFilter || 'all';
+    document.querySelectorAll('#trelloBoard .trello-card, #trelloCards .trello-cards-group, #trelloCards .trello-cards-empty-card').forEach(el => {
+        el.style.display = age === 'all' || el.classList.contains(`card-age--${age}`) ? '' : 'none';
+    });
+}
+
+function applyTrelloMode() {
+    document.querySelectorAll('.trello-mode-btn').forEach(b => b.classList.toggle('is-active', b.dataset.trelloMode === trelloMode));
+    document.getElementById('trelloBoard').hidden = trelloMode !== 'board';
+    document.getElementById('trelloCards').hidden = trelloMode !== 'cards';
+    document.getElementById('trelloPrsBtn').hidden = trelloMode !== 'board';
+    if (trelloBoardData) renderTrelloView(trelloBoardData);
+}
+
+function renderTrelloView(data) {
+    if (trelloMode === 'cards') renderTrelloCards(data);
+    else renderTrelloColumns(data);
+}
+
+let trelloCardsRenderQueued = false;
+window.renderTrelloCardsIfVisible = () => {
+    if (trelloMode !== 'cards' || !trelloBoardData || !isTrelloViewVisible() || trelloCardsRenderQueued) return;
+    trelloCardsRenderQueued = true;
+    requestAnimationFrame(() => {
+        trelloCardsRenderQueued = false;
+        renderTrelloCards(trelloBoardData);
+    });
+};
+
+document.getElementById('trelloModeSwitch').addEventListener('click', (e) => {
+    const btn = e.target.closest('.trello-mode-btn');
+    if (!btn) return;
+    trelloMode = btn.dataset.trelloMode;
+    try { localStorage.setItem(TRELLO_MODE_KEY, trelloMode); } catch { /* ignore */ }
+    applyTrelloMode();
+});
+
+document.getElementById('trelloCards').addEventListener('click', (e) => {
+    const toggle = e.target.closest('.trello-cards-toggle');
+    if (toggle) {
+        const id = toggle.dataset.cardId;
+        if (trelloExpandedCards.has(id)) trelloExpandedCards.delete(id); else trelloExpandedCards.add(id);
+        renderTrelloCards(trelloBoardData);
+        return;
+    }
+    const commentsPill = e.target.closest('.pr-comments-pill');
+    if (commentsPill) {
+        showPrCommentsModal(commentsPill.dataset.prKey);
+        return;
+    }
+    const link = e.target.closest('.external-link[data-url], .pr-group-title[data-url], .pr-pipeline-link[data-url], .pr-card[data-url]');
+    if (link) {
+        e.preventDefault();
+        window.kubeDashboard.openExternal(link.dataset.url);
+    }
+});
+
 function renderTrelloBoard(data) {
     const empty = document.getElementById('trelloEmptyState');
     empty.style.display = 'none';
@@ -216,7 +343,7 @@ function renderTrelloBoard(data) {
         return;
     }
     renderListsDropdown(data.lists);
-    renderTrelloColumns(data);
+    renderTrelloView(data);
 }
 
 async function refreshTrello() {
@@ -304,14 +431,11 @@ document.getElementById('trelloAgeFilterBar').addEventListener('click', (e) => {
     if (!chip) return;
     document.querySelectorAll('.trello-age-chip').forEach(c => c.classList.remove('is-active'));
     chip.classList.add('is-active');
-    const age = chip.dataset.age;
-    const board = document.getElementById('trelloBoard');
-    board.dataset.ageFilter = age;
-    board.querySelectorAll('.trello-card').forEach(card => {
-        const show = age === 'all' || card.classList.contains(`card-age--${age}`);
-        card.style.display = show ? '' : 'none';
-    });
+    document.getElementById('trelloBoard').dataset.ageFilter = chip.dataset.age;
+    applyTrelloAgeFilter();
 });
+
+applyTrelloMode();
 
 document.getElementById('trelloGoToSettings').addEventListener('click', (e) => {
     e.preventDefault();
