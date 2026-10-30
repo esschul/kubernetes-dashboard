@@ -122,7 +122,7 @@ A failed fetch sets `lastError` and keeps the last good data. The file is replac
 
 ### MCP server
 
-`mcp/server.js` serves the snapshot read-only over MCP (stdio, no dependencies). Run it from a clone of this repo – it is not part of the installed app.
+`mcp/server.js` serves the snapshot read-only over MCP (stdio, no dependencies). Run it from a clone of this repo – it is not part of the installed app. **Setup, skill and examples: [docs/MCP.md](docs/MCP.md).**
 
 ```bash
 claude mcp add kubernetes-dashboard -- node /path/to/kubernetes-dashboard/mcp/server.js
