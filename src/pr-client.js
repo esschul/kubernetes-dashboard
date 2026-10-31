@@ -186,9 +186,31 @@ function getLatestCommentActivity(pr) {
     return { commentActivityAt: timestamps.sort().at(-1), commentActivityCount: timestamps.length };
 }
 
+function countOpenCopilotThreads(threads) {
+    return (threads || []).filter((t) => !t.isResolved && !t.isOutdated && /copilot/i.test(t.comments?.nodes?.[0]?.author?.login || '')).length;
+}
+
+const COPILOT_RECOMMENDATIONS = [
+    [/approv/i, 'approve'],
+    [/changes/i, 'changes'],
+    [/closer look/i, 'look'],
+];
+
+function getCopilotRecommendation(reviews) {
+    const review = (reviews || []).find((r) => /copilot/i.test(r.author?.login || ''));
+    const heading = /^#{1,4}\s*(.+)$/m.exec(review?.body || '')?.[1];
+    if (!heading) { return null; }
+    const label = heading.replace(/^[^\p{L}]+/u, '').trim();
+    const level = COPILOT_RECOMMENDATIONS.find(([re]) => re.test(label))?.[1] || 'other';
+    return { level, label };
+}
+
 function normalizePr(pr, repository) {
     // checkStatus filled in later by enrichWithCheckStatus for recently-updated PRs
-    return { ...pr, ...getLatestCommentActivity(pr), checkStatus: 'none', checkStatusLabel: 'No checks', repository };
+    const { reviewThreads, copilotReviews, ...rest } = pr;
+    const copilotOpenThreads = reviewThreads ? countOpenCopilotThreads(reviewThreads.nodes) : (pr.copilotOpenThreads || 0);
+    const copilotRecommendation = copilotReviews ? getCopilotRecommendation(copilotReviews.nodes) : (pr.copilotRecommendation || null);
+    return { ...rest, ...getLatestCommentActivity(pr), copilotOpenThreads, copilotRecommendation, checkStatus: 'none', checkStatusLabel: 'No checks', repository };
 }
 
 // Cache the repo list — it rarely changes and costs a GraphQL API call each time
@@ -248,7 +270,7 @@ function dedupeByUrl(prs) {
     return prs.filter((pr) => { if (seen.has(pr.url)) { return false; } seen.add(pr.url); return true; });
 }
 
-const AUTHOR_SEARCH_FRESH_FIELDS = ['title', 'isDraft', 'updatedAt', 'mergedAt', 'reviewDecision', 'headRefOid', 'headRefName'];
+const AUTHOR_SEARCH_FRESH_FIELDS = ['title', 'isDraft', 'updatedAt', 'mergedAt', 'reviewDecision', 'headRefOid', 'headRefName', 'copilotOpenThreads', 'copilotRecommendation'];
 
 function isStalerThan(candidate, current) {
     return Boolean(candidate.updatedAt && current.updatedAt
@@ -313,7 +335,8 @@ const normalizeGql = (pr) => ({
     files: [],
 });
 
-const OPEN_GQL_FIELDS = `number title url isDraft createdAt updatedAt reviewDecision headRefOid headRefName author { login }`;
+const REVIEW_THREADS_GQL = 'reviewThreads(first: 30) { nodes { isResolved isOutdated comments(first: 1) { nodes { author { login } } } } } copilotReviews: latestReviews(first: 10) { nodes { author { login } body } }';
+const OPEN_GQL_FIELDS = `number title url isDraft createdAt updatedAt reviewDecision headRefOid headRefName author { login } ${REVIEW_THREADS_GQL}`;
 const MERGED_GQL_FIELDS = `number title url isDraft createdAt updatedAt mergedAt reviewDecision headRefName author { login }`;
 const AUTHOR_GQL_FIELDS = `${OPEN_GQL_FIELDS} mergedAt repository { nameWithOwner }`;
 
@@ -648,4 +671,4 @@ async function getMasterSha(org, repoName) {
     throw new Error(`Could not resolve master SHA for "${repoName}" (repo "${match.name}")`);
 }
 
-module.exports = { fetchPullRequests, statusesToRuns, mergeWithAuthorSearch, buildAuthoredPrsQuery, clearPrListCache, clearAllCaches, evictRepoDeltaCache, fetchCommitMessage, fetchMergedPrsForRange, fetchRepoList, getMasterSha };
+module.exports = { fetchPullRequests, statusesToRuns, countOpenCopilotThreads, getCopilotRecommendation, mergeWithAuthorSearch, buildAuthoredPrsQuery, clearPrListCache, clearAllCaches, evictRepoDeltaCache, fetchCommitMessage, fetchMergedPrsForRange, fetchRepoList, getMasterSha };

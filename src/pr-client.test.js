@@ -686,3 +686,37 @@ test('a failing status alone makes the PR fail, even with no check runs', () => 
     assert.equal(interpretCheckRuns(statusesToRuns([{ context: 'bring.checkout-plugin-woo', state: 'failure' }])).checkStatus, 'failure');
     assert.equal(interpretCheckRuns(statusesToRuns([])).checkStatus, 'none');
 });
+
+// ── countOpenCopilotThreads ──────────────────────────────────────────────────
+console.log('\ncountOpenCopilotThreads');
+const { countOpenCopilotThreads, getCopilotRecommendation } = require('./pr-client.js');
+const thread = (login, extra = {}) => ({ isResolved: false, isOutdated: false, comments: { nodes: [{ author: { login } }] }, ...extra });
+
+test('counts unresolved, current threads started by Copilot', () => {
+    assert.equal(countOpenCopilotThreads([
+        thread('copilot-pull-request-reviewer'),
+        thread('Copilot'),
+        thread('copilot-pull-request-reviewer', { isResolved: true }),
+        thread('copilot-pull-request-reviewer', { isOutdated: true }),
+        thread('esschul'),
+    ]), 2);
+});
+test('handles missing threads', () => {
+    assert.equal(countOpenCopilotThreads(undefined), 0);
+    assert.equal(countOpenCopilotThreads([{ isResolved: false, comments: { nodes: [] } }]), 0);
+});
+
+console.log('\ngetCopilotRecommendation');
+const review = (login, body) => ({ author: { login }, body });
+
+test('reads the recommendation heading from the Copilot review', () => {
+    assert.deepEqual(getCopilotRecommendation([review('esschul', '### LGTM'), review('copilot-pull-request-reviewer', '<!-- ccr-overview-v2 -->\n\n### 🟡 Changes recommended\n\nText')]),
+        { level: 'changes', label: 'Changes recommended' });
+    assert.equal(getCopilotRecommendation([review('copilot-pull-request-reviewer', '### 🟢 Approval recommended')]).level, 'approve');
+    assert.equal(getCopilotRecommendation([review('copilot-pull-request-reviewer', '### 🔵 Needs a closer look')]).level, 'look');
+});
+test('returns null without a Copilot review or heading', () => {
+    assert.equal(getCopilotRecommendation([review('esschul', '### 🟢 Approval recommended')]), null);
+    assert.equal(getCopilotRecommendation([review('copilot-pull-request-reviewer', 'Copilot reviewed 3 files')]), null);
+    assert.equal(getCopilotRecommendation(undefined), null);
+});
