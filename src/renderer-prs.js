@@ -880,8 +880,15 @@ async function refreshPullRequests(force = false) {
         refreshTestDeployments(config).catch(() => {});
         checkDependabotInactivity(config).catch((e) => console.error('[dependabot-check] uncaught:', e));
     } catch (err) {
-        document.getElementById('prList').innerHTML = `<div class="error-panel"><strong>Failed to load pull requests</strong><pre>${escapeHtml(err?.message || String(err))}</pre></div>`;
-        document.getElementById('prStatusPanel').textContent = 'Refresh failed';
+        const message = err?.message || String(err);
+        const statusPanel = document.getElementById('prStatusPanel');
+        if (latestPrData) {
+            renderPrView(latestPrData);
+            statusPanel.textContent = `Refresh failed, showing earlier data: ${message.split('\n')[0]}`;
+        } else {
+            document.getElementById('prList').innerHTML = `<div class="error-panel"><strong>Failed to load pull requests</strong><pre>${escapeHtml(message)}</pre></div>`;
+            statusPanel.textContent = 'Refresh failed';
+        }
     } finally {
         prRefreshInProgress = false;
         offProgress?.();

@@ -4747,10 +4747,15 @@ details[open] .log-stack-summary::before { transform: rotate(90deg); }
 }
 
 .pr-card .check-pill.is-success,
-.pr-card .status-pill.is-approved,
+.pr-card .status-pill.is-approved {
+    background: rgba(16, 185, 129, 0.08);
+    border-color: rgba(16, 185, 129, 0.35);
+    color: #047857;
+}
+
 :root[data-theme="dark"] .pr-card .check-pill.is-success,
 :root[data-theme="dark"] .pr-card .status-pill.is-approved {
-    background: var(--panel-muted);
-    border-color: var(--line);
-    color: var(--muted);
+    background: rgba(52, 211, 153, 0.1);
+    border-color: rgba(52, 211, 153, 0.35);
+    color: #6ee7b7;
 }
